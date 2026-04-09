@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "tsfast"
+requires-python = ">=3.8"
+dependencies = [
+    "maturin>=1.13.1",
+    "numpy>=1.20",
+    "pandas>=2.0.3",
+    "tsfel>=0.2.0",
+    "tsfresh>=0.20.3",
+]
+dynamic = ["version"]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "tsfast._tsfast"

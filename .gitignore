@@ -1,0 +1,6 @@
+/target
+/testdata
+/venv
+/python
+/cache
+__pycache__/

@@ -1,0 +1,21 @@
+[package]
+name = "tsfast"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "tsfast"
+crate-type = ["cdylib"]
+
+[dependencies]
+numpy = "0.28"
+pyo3 = { version = "0.28.3", features = ["extension-module"] }
+ndarray = "0.16"
+num-traits = "0.2"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "extraction_bench"
+harness = false
