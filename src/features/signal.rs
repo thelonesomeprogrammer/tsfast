@@ -1,4 +1,10 @@
-pub fn zero_crossing_rate(data: &[f64]) -> f64 {
+use crate::features::statistics::mean;
+use std::collections::HashMap;
+
+pub fn zero_crossing_rate(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
+    if let Some(&z) = precalc.get("zero_crossing_rate") {
+        return z;
+    }
     if data.len() < 2 {
         return 0.0;
     }
@@ -8,10 +14,15 @@ pub fn zero_crossing_rate(data: &[f64]) -> f64 {
             count += 1;
         }
     }
-    count as f64 / (data.len() as f64 - 1.0)
+    let zcr = count as f64 / (data.len() as f64 - 1.0);
+    precalc.insert("zero_crossing_rate", zcr);
+    zcr
 }
 
-pub fn peak_count(data: &[f64]) -> f64 {
+pub fn peak_count(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
+    if let Some(&p) = precalc.get("peak_count") {
+        return p;
+    }
     if data.len() < 3 {
         return 0.0;
     }
@@ -21,15 +32,21 @@ pub fn peak_count(data: &[f64]) -> f64 {
             count += 1;
         }
     }
-    count as f64
+    let peak = count as f64;
+    precalc.insert("peak_count", peak);
+    peak
 }
 
-pub fn autocorrelation(data: &[f64], lag: usize) -> f64 {
+fn autocorrelation(data: &[f64], lag: usize, precalc: &mut HashMap<&str, f64>) -> f64 {
     let n = data.len();
     if n <= lag {
         return 0.0;
     }
-    let m = crate::features::statistics::mean(data);
+    let m = if let Some(&m) = precalc.get("mean") {
+        m
+    } else {
+        mean(data, precalc)
+    };
     let mut num = 0.0;
     let mut den = 0.0;
     for i in 0..n {
@@ -45,82 +62,76 @@ pub fn autocorrelation(data: &[f64], lag: usize) -> f64 {
     num / den
 }
 
-pub fn autocorr_lag1(data: &[f64]) -> f64 {
-    autocorrelation(data, 1)
+pub fn autocorr_lag1(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
+    if let Some(&a) = precalc.get("autocorr_lag1") {
+        return a;
+    }
+    let autocorr = autocorrelation(data, 1, precalc);
+    precalc.insert("autocorr_lag1", autocorr);
+    autocorr
 }
 
-pub fn mean_abs_change(data: &[f64]) -> f64 {
+pub fn mean_abs_change(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
+    if let Some(&m) = precalc.get("mean_abs_change") {
+        return m;
+    }
     if data.len() < 2 {
         return 0.0;
     }
     let sum_diff: f64 = data.windows(2).map(|w| (w[1] - w[0]).abs()).sum();
-    sum_diff / (data.len() - 1) as f64
+    let mac = sum_diff / (data.len() - 1) as f64;
+    precalc.insert("mean_abs_change", mac);
+    mac
 }
 
-pub fn mean_change(data: &[f64]) -> f64 {
+pub fn mean_change(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
+    if let Some(&m) = precalc.get("mean_change") {
+        return m;
+    }
     if data.len() < 2 {
         return 0.0;
     }
     let sum_diff: f64 = data.windows(2).map(|w| w[1] - w[0]).sum();
-    sum_diff / (data.len() - 1) as f64
+    let mc = sum_diff / (data.len() - 1) as f64;
+    precalc.insert("mean_change", mc);
+    mc
 }
 
-pub fn cid_ce(data: &[f64]) -> f64 {
+pub fn cid_ce(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
+    if let Some(&c) = precalc.get("cid_ce") {
+        return c;
+    }
     if data.len() < 2 {
         return 0.0;
     }
     let ce: f64 = data.windows(2).map(|w| (w[1] - w[0]).powi(2)).sum();
-    ce.sqrt()
+    let ces = ce.sqrt();
+    precalc.insert("cid_ce", ces);
+    ces
 }
 
-pub fn npaa(data: &[f64], segments: usize, idx: usize) -> f64 {
-    let n = data.len();
-    if n == 0 || segments == 0 || idx >= segments { return f64::NAN; }
-    
-    let mean = crate::features::statistics::mean(data);
-    let std = crate::features::statistics::std(data);
-    let std = if std == 0.0 { 1.0 } else { std };
-    
-    let start = idx * n / segments;
-    let end = (idx + 1) * n / segments;
-    if start >= end { return f64::NAN; }
-    
-    let mut sum = 0.0;
-    for x in &data[start..end] {
-        sum += (*x - mean) / std;
+pub fn paa(data: &[f64], segments: usize, idx: usize, precalc: &mut HashMap<&str, f64>) -> f64 {
+    let key = format!("paa-{}-{}", segments, idx);
+    if let Some(&p) = precalc.get(key.as_str()) {
+        return p;
     }
-    sum / (end - start) as f64
-}
 
-pub fn paa(data: &[f64], segments: usize, idx: usize) -> f64 {
     let n = data.len();
-    if n == 0 || segments == 0 || idx >= segments { return f64::NAN; }
-    
+    if n == 0 || segments == 0 || idx >= segments {
+        return f64::NAN;
+    }
+
     let start = idx * n / segments;
     let end = (idx + 1) * n / segments;
-    if start >= end { return f64::NAN; }
-    
+    if start >= end {
+        return f64::NAN;
+    }
+
     let mut sum = 0.0;
     for x in &data[start..end] {
         sum += *x;
     }
-    sum / (end - start) as f64
-}
-
-pub fn npta(data: &[f64], segments: usize, idx: usize) -> f64 {
-    let n = data.len();
-    if n == 0 || segments == 0 || idx >= segments { return f64::NAN; }
-    
-    let mean = crate::features::statistics::mean(data);
-    let std = crate::features::statistics::std(data);
-    let std = if std == 0.0 { 1.0 } else { std };
-    
-    let start = idx * n / segments;
-    let end = (idx + 1) * n / segments;
-    
-    if end - start < 2 { return 0.0; }
-    
-    let norm_first = (data[start] - mean) / std;
-    let norm_last = (data[end - 1] - mean) / std;
-    (norm_last - norm_first) / (end - start - 1) as f64
+    let mean = sum / (end - start) as f64;
+    precalc.insert(Box::leak(key.into_boxed_str()), mean);
+    mean
 }

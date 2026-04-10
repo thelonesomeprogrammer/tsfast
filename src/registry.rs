@@ -1,7 +1,7 @@
+use crate::features::{energy, signal, statistics, trend};
 use std::collections::HashMap;
-use crate::features::{statistics, energy, signal, trend};
 
-pub type FeatureFn = fn(&[f64]) -> f64;
+pub type FeatureFn = fn(&[f64], &mut HashMap<&'static str, f64>) -> f64;
 pub type ExpandingFeatureFn = fn(&[f64], &mut [f64]);
 
 pub struct Registry {
@@ -26,7 +26,10 @@ impl Registry {
         batch.insert("energy", energy::energy as FeatureFn);
         batch.insert("rms", energy::rms as FeatureFn);
         batch.insert("root_mean_square", energy::rms as FeatureFn);
-        batch.insert("zero_crossing_rate", signal::zero_crossing_rate as FeatureFn);
+        batch.insert(
+            "zero_crossing_rate",
+            signal::zero_crossing_rate as FeatureFn,
+        );
         batch.insert("peak_count", signal::peak_count as FeatureFn);
         batch.insert("autocorr_lag1", signal::autocorr_lag1 as FeatureFn);
         batch.insert("mean_abs_change", signal::mean_abs_change as FeatureFn);
@@ -37,15 +40,30 @@ impl Registry {
 
         let mut expanding = HashMap::new();
         expanding.insert("mean", crate::expanding_inner::mean as ExpandingFeatureFn);
-        expanding.insert("variance", crate::expanding_inner::variance as ExpandingFeatureFn);
+        expanding.insert(
+            "variance",
+            crate::expanding_inner::variance as ExpandingFeatureFn,
+        );
         expanding.insert("std", crate::expanding_inner::std as ExpandingFeatureFn);
-        expanding.insert("energy", crate::expanding_inner::energy as ExpandingFeatureFn);
+        expanding.insert(
+            "energy",
+            crate::expanding_inner::energy as ExpandingFeatureFn,
+        );
         expanding.insert("rms", crate::expanding_inner::rms as ExpandingFeatureFn);
         expanding.insert("min", crate::expanding_inner::min as ExpandingFeatureFn);
         expanding.insert("max", crate::expanding_inner::max as ExpandingFeatureFn);
-        expanding.insert("autocorr_lag1", crate::expanding_inner::autocorr_lag1 as ExpandingFeatureFn);
-        expanding.insert("mean_abs_change", crate::expanding_inner::mean_abs_change as ExpandingFeatureFn);
-        expanding.insert("mean_change", crate::expanding_inner::mean_change as ExpandingFeatureFn);
+        expanding.insert(
+            "autocorr_lag1",
+            crate::expanding_inner::autocorr_lag1 as ExpandingFeatureFn,
+        );
+        expanding.insert(
+            "mean_abs_change",
+            crate::expanding_inner::mean_abs_change as ExpandingFeatureFn,
+        );
+        expanding.insert(
+            "mean_change",
+            crate::expanding_inner::mean_change as ExpandingFeatureFn,
+        );
 
         Self {
             batch_features: batch,

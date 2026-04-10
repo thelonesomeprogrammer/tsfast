@@ -1,4 +1,6 @@
-pub fn linear_regression(data: &[f64]) -> (f64, f64) {
+use std::collections::HashMap;
+
+fn linear_regression(data: &[f64]) -> (f64, f64) {
     let n = data.len();
     if n < 2 {
         return (0.0, 0.0);
@@ -22,10 +24,22 @@ pub fn linear_regression(data: &[f64]) -> (f64, f64) {
     (slope, intercept)
 }
 
-pub fn slope(data: &[f64]) -> f64 {
-    linear_regression(data).0
+pub fn slope(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
+    if let Some(&s) = precalc.get("slope") {
+        return s;
+    }
+    let (slope, intercept) = linear_regression(data);
+    precalc.insert("slope", slope);
+    precalc.insert("intercept", intercept);
+    slope
 }
 
-pub fn intercept(data: &[f64]) -> f64 {
-    linear_regression(data).1
+pub fn intercept(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
+    if let Some(&i) = precalc.get("intercept") {
+        return i;
+    }
+    let (slope, intercept) = linear_regression(data);
+    precalc.insert("slope", slope);
+    precalc.insert("intercept", intercept);
+    intercept
 }

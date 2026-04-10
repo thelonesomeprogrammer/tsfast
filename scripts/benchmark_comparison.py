@@ -16,7 +16,8 @@ from sklearn.metrics import accuracy_score, f1_score
 warnings.filterwarnings("ignore")
 
 # Configuration
-DATA_DIR = "testdata/Intrinsic data"
+#DATA_DIR = "testdata/Intrinsic data"
+DATA_DIR = "prev-data/Dataset/Intrinsic data"
 CATEGORIES = ["N", "NS", "OT", "UT"]
 SIGNAL_COL = 0
 CACHE_DIR = "cache"
@@ -42,8 +43,8 @@ def load_data():
     return X, np.array(y)
 
 def benchmark_tsfast(X):
-    #rust_features = ["mean", "std", "variance", "min", "max", "energy", "rms", "autocorr_lag1", "slope", "intercept", "npaa-10-0", "npaa-10-1", "npaa-10-2", "npaa-10-3", "npaa-10-4", "npaa-10-5", "npaa-10-6", "npaa-10-7", "npaa-10-8", "npaa-10-9"]
-    rust_features = ["paa-10-0", "paa-10-1", "paa-10-2", "paa-10-3", "paa-10-4", "paa-10-5", "paa-10-6", "paa-10-7", "paa-10-8", "paa-10-9"]
+    rust_features = ["mean", "std", "variance", "min", "max", "energy", "rms", "autocorr_lag1", "slope", "intercept"]
+    #rust_features = ["paa-10-0", "paa-10-1", "paa-10-2", "paa-10-3", "paa-10-4", "paa-10-5", "paa-10-6", "paa-10-7", "paa-10-8", "paa-10-9"]
     start = time.time()
     extracted = []
     for x in X:

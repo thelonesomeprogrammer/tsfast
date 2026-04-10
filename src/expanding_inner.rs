@@ -86,54 +86,60 @@ pub fn autocorr_lag1(data: &[f64], out: &mut [f64]) {
 
         let n = (i + 1) as f64;
         let m = sum_x / n;
-        
+
         // Numerator: sum_{j=1..i} (x_j - m)*(x_{j-1} - m)
         // = sum(x_j*x_{j-1}) - m*sum(x_j) - m*sum(x_{j-1}) + (n-1)*m^2
         // Wait, the sum for autocorr is usually over all i, but we only have i-1 pairs.
         // Let's use the definition: sum_{j=1}^{i} (x_j - m)(x_{j-1} - m) / sum_{j=0}^{i} (x_j - m)^2
-        
-        // Actually, many definitions use: 
+
+        // Actually, many definitions use:
         // num = sum_{j=1}^{i} (x_j - m)(x_{j-1} - m)
         // den = sum_{j=0}^{i} (x_j - m)^2 = sum(x_j^2) - n*m^2
-        
+
         let num = sum_xy - m * (sum_x - data[0]) - m * sum_x_lag + (n - 1.0) * m * m;
         let den = sum_x2 - n * m * m;
-        
+
         out[i] = if den == 0.0 { 0.0 } else { num / den };
     }
 }
 
 pub fn mean_abs_change(data: &[f64], out: &mut [f64]) {
     let n = data.len();
-    if n == 0 { return; }
+    if n == 0 {
+        return;
+    }
     out[0] = 0.0;
     let mut sum_diff = 0.0;
     for i in 1..n {
-        sum_diff += (data[i] - data[i-1]).abs();
+        sum_diff += (data[i] - data[i - 1]).abs();
         out[i] = sum_diff / i as f64;
     }
 }
 
 pub fn mean_change(data: &[f64], out: &mut [f64]) {
     let n = data.len();
-    if n == 0 { return; }
+    if n == 0 {
+        return;
+    }
     out[0] = 0.0;
     let mut sum_diff = 0.0;
     for i in 1..n {
-        sum_diff += data[i] - data[i-1];
+        sum_diff += data[i] - data[i - 1];
         out[i] = sum_diff / i as f64;
     }
 }
 
 pub fn expanding_npaa(data: &[f64], segments: usize, idx: usize, out: &mut [f64]) {
     let n_total = data.len();
-    if n_total == 0 { return; }
-    
+    if n_total == 0 {
+        return;
+    }
+
     let mut cumsum = Vec::with_capacity(n_total + 1);
     let mut cumsum_sq = Vec::with_capacity(n_total + 1);
     cumsum.push(0.0);
     cumsum_sq.push(0.0);
-    
+
     let mut sum = 0.0;
     let mut sum_sq = 0.0;
     for &x in data {
@@ -142,24 +148,24 @@ pub fn expanding_npaa(data: &[f64], segments: usize, idx: usize, out: &mut [f64]
         cumsum.push(sum);
         cumsum_sq.push(sum_sq);
     }
-    
+
     for i in 0..n_total {
         let n = i + 1;
         let start = idx * n / segments;
         let end = (idx + 1) * n / segments;
-        
+
         if start >= end || idx >= segments {
             out[i] = f64::NAN;
             continue;
         }
-        
+
         let m = cumsum[n] / n as f64;
         let var = (cumsum_sq[n] / n as f64) - m * m;
         let std = if var <= 0.0 { 1.0 } else { var.sqrt() };
-        
+
         let seg_sum = cumsum[end] - cumsum[start];
         let seg_len = (end - start) as f64;
-        
+
         let seg_mean = seg_sum / seg_len;
         out[i] = (seg_mean - m) / std;
     }
@@ -167,43 +173,47 @@ pub fn expanding_npaa(data: &[f64], segments: usize, idx: usize, out: &mut [f64]
 
 pub fn expanding_paa(data: &[f64], segments: usize, idx: usize, out: &mut [f64]) {
     let n_total = data.len();
-    if n_total == 0 { return; }
-    
+    if n_total == 0 {
+        return;
+    }
+
     let mut cumsum = Vec::with_capacity(n_total + 1);
     cumsum.push(0.0);
-    
+
     let mut sum = 0.0;
     for &x in data {
         sum += x;
         cumsum.push(sum);
     }
-    
+
     for i in 0..n_total {
         let n = i + 1;
         let start = idx * n / segments;
         let end = (idx + 1) * n / segments;
-        
+
         if start >= end || idx >= segments {
             out[i] = f64::NAN;
             continue;
         }
-        
+
         let seg_sum = cumsum[end] - cumsum[start];
         let seg_len = (end - start) as f64;
-        
+
         out[i] = seg_sum / seg_len;
     }
 }
 
 pub fn expanding_npta(data: &[f64], segments: usize, idx: usize, out: &mut [f64]) {
     let n_total = data.len();
-    if n_total == 0 { return; }
-    
+    if n_total == 0 {
+        return;
+    }
+
     let mut cumsum = Vec::with_capacity(n_total + 1);
     let mut cumsum_sq = Vec::with_capacity(n_total + 1);
     cumsum.push(0.0);
     cumsum_sq.push(0.0);
-    
+
     let mut sum = 0.0;
     let mut sum_sq = 0.0;
     for &x in data {
@@ -212,24 +222,24 @@ pub fn expanding_npta(data: &[f64], segments: usize, idx: usize, out: &mut [f64]
         cumsum.push(sum);
         cumsum_sq.push(sum_sq);
     }
-    
+
     for i in 0..n_total {
         let n = i + 1;
         let start = idx * n / segments;
         let end = (idx + 1) * n / segments;
-        
+
         if end - start < 2 || idx >= segments {
             out[i] = 0.0;
             continue;
         }
-        
+
         let m = cumsum[n] / n as f64;
         let var = (cumsum_sq[n] / n as f64) - m * m;
         let std = if var <= 0.0 { 1.0 } else { var.sqrt() };
-        
+
         let first = data[start];
         let last = data[end - 1];
-        
+
         out[i] = (last - first) / (std * (end - start - 1) as f64);
     }
 }
@@ -252,7 +262,9 @@ pub fn extract_expanding(
         } else if feat_name.starts_with("npaa-") {
             let parts: Vec<&str> = feat_name.split('-').collect();
             if parts.len() == 3 {
-                if let (Ok(segments), Ok(idx)) = (parts[1].parse::<usize>(), parts[2].parse::<usize>()) {
+                if let (Ok(segments), Ok(idx)) =
+                    (parts[1].parse::<usize>(), parts[2].parse::<usize>())
+                {
                     expanding_npaa(data, segments, idx, out_slice);
                     continue;
                 }
@@ -261,7 +273,9 @@ pub fn extract_expanding(
         } else if feat_name.starts_with("paa-") {
             let parts: Vec<&str> = feat_name.split('-').collect();
             if parts.len() == 3 {
-                if let (Ok(segments), Ok(idx)) = (parts[1].parse::<usize>(), parts[2].parse::<usize>()) {
+                if let (Ok(segments), Ok(idx)) =
+                    (parts[1].parse::<usize>(), parts[2].parse::<usize>())
+                {
                     expanding_paa(data, segments, idx, out_slice);
                     continue;
                 }
@@ -270,7 +284,9 @@ pub fn extract_expanding(
         } else if feat_name.starts_with("npta-") {
             let parts: Vec<&str> = feat_name.split('-').collect();
             if parts.len() == 3 {
-                if let (Ok(segments), Ok(idx)) = (parts[1].parse::<usize>(), parts[2].parse::<usize>()) {
+                if let (Ok(segments), Ok(idx)) =
+                    (parts[1].parse::<usize>(), parts[2].parse::<usize>())
+                {
                     expanding_npta(data, segments, idx, out_slice);
                     continue;
                 }
@@ -279,7 +295,7 @@ pub fn extract_expanding(
         } else if let Some(batch_fn) = registry.batch_features.get(feat_name) {
             // Fallback for features that don't have an optimized expanding version.
             for i in 0..n_samples {
-                out_slice[i] = batch_fn(&data[0..=i]);
+                //out_slice[i] = batch_fn(&data[0..=i]);
             }
         } else {
             out_slice.fill(f64::NAN);
