@@ -12,6 +12,7 @@ numpy = "0.28"
 pyo3 = { version = "0.28.3", features = ["extension-module"] }
 ndarray = "0.16"
 num-traits = "0.2"
+rayon = "1.10"
 
 [dev-dependencies]
 criterion = "0.5"

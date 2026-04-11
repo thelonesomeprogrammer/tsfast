@@ -1,4 +1,4 @@
-use numpy::IntoPyArray;
+#![allow(dead_code)]
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1};
 use pyo3::prelude::*;
 
@@ -16,9 +16,20 @@ fn extract(
     extractor.extract1d(data, _py)
 }
 
+#[pyfunction]
+fn extract2d(
+    _py: Python<'_>,
+    data: Bound<'_, PyAny>,
+    features: Vec<String>,
+) -> PyResult<Py<PyArray2<f64>>> {
+    let extractor = registry::FeatureExtractor::new(features);
+    extractor.extract2d(data)
+}
+
 #[pymodule]
 fn _tsfast(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<registry::FeatureExtractor>()?;
     m.add_function(wrap_pyfunction!(extract, m)?)?;
+    m.add_function(wrap_pyfunction!(extract2d, m)?)?;
     Ok(())
 }

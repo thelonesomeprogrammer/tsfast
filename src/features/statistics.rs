@@ -44,6 +44,25 @@ pub fn median(data: &[f64], cache: &mut Cache) {
     cache.median = Some(median);
 }
 
+pub fn median_from_sorted(sorted_data: &[f64]) -> f64 {
+    let n = sorted_data.len();
+    if n == 0 { return f64::NAN; }
+    let mid = n / 2;
+    if n % 2 == 1 {
+        sorted_data[mid]
+    } else {
+        (sorted_data[mid - 1] + sorted_data[mid]) / 2.0
+    }
+}
+
+pub fn iqr_from_sorted(sorted_data: &[f64]) -> f64 {
+    let n = sorted_data.len();
+    if n < 2 { return 0.0; }
+    let q1 = median_from_sorted(&sorted_data[..n / 2]);
+    let q3 = median_from_sorted(&sorted_data[(n + 1) / 2..]);
+    if q1.is_nan() || q3.is_nan() { 0.0 } else { q3 - q1 }
+}
+
 fn sub_median(v: &mut [f64]) -> f64 {
     if v.is_empty() {
         return f64::NAN;
