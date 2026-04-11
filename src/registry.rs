@@ -1,10 +1,11 @@
-use crate::features::signal::paa;
+use crate::features::{
+    energy::{energy, rms},
+    signal::{autocorr_lag1, cid_ce, mean_abs_change, mean_change, peak_count, zero_crossing_rate},
+    statistics::{entropy, iqr, kurtosis, mad, max, mean, median, min, skew, variance},
+    trend::{intercept, slope},
+};
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::prelude::*;
-use std::collections::HashMap;
-
-pub type FeatureFn = fn(&[f64], &mut HashMap<&'static str, f64>) -> f64;
-pub type ExpandingFeatureFn = fn(&[f64], &mut [f64]);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
 pub enum Feature {
@@ -31,6 +32,84 @@ pub enum Feature {
     Slope,
     Intercept,
     Paa(u16, u16),
+}
+
+pub struct Cache {
+    pub mean: Option<f64>,
+    pub variance: Option<f64>,
+    pub std: Option<f64>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub median: Option<f64>,
+    pub skew: Option<f64>,
+    pub kurtosis: Option<f64>,
+    pub mad: Option<f64>,
+    pub iqr: Option<f64>,
+    pub entropy: Option<f64>,
+    pub energy: Option<f64>,
+    pub rms: Option<f64>,
+    pub autocorr_lag1: Option<f64>,
+    pub mean_abs_change: Option<f64>,
+    pub mean_change: Option<f64>,
+    pub cid_ce: Option<f64>,
+    pub slope: Option<f64>,
+    pub intercept: Option<f64>,
+}
+
+impl Cache {
+    fn new() -> Self {
+        Self {
+            mean: None,
+            variance: None,
+            std: None,
+            min: None,
+            max: None,
+            median: None,
+            skew: None,
+            kurtosis: None,
+            mad: None,
+            iqr: None,
+            entropy: None,
+            energy: None,
+            rms: None,
+            autocorr_lag1: None,
+            mean_abs_change: None,
+            mean_change: None,
+            cid_ce: None,
+            slope: None,
+            intercept: None,
+        }
+    }
+    fn to_vec_with(&self, features: &[Feature]) -> Vec<f64> {
+        features
+            .iter()
+            .map(|feat| match feat {
+                Feature::Mean => self.mean.unwrap_or(f64::NAN),
+                Feature::Variance => self.variance.unwrap_or(f64::NAN),
+                Feature::Std => self.std.unwrap_or(f64::NAN),
+                Feature::Min => self.min.unwrap_or(f64::NAN),
+                Feature::Max => self.max.unwrap_or(f64::NAN),
+                Feature::Median => self.median.unwrap_or(f64::NAN),
+                Feature::Skew => self.skew.unwrap_or(f64::NAN),
+                Feature::Kurtosis => self.kurtosis.unwrap_or(f64::NAN),
+                Feature::Mad => self.mad.unwrap_or(f64::NAN),
+                Feature::Iqr => self.iqr.unwrap_or(f64::NAN),
+                Feature::Entropy => self.entropy.unwrap_or(f64::NAN),
+                Feature::Energy => self.energy.unwrap_or(f64::NAN),
+                Feature::Rms => self.rms.unwrap_or(f64::NAN),
+                Feature::RootMeanSquare => self.rms.unwrap_or(f64::NAN),
+                Feature::ZeroCrossingRate => f64::NAN,
+                Feature::PeakCount => f64::NAN,
+                Feature::AutocorrLag1 => self.autocorr_lag1.unwrap_or(f64::NAN),
+                Feature::MeanAbsChange => self.mean_abs_change.unwrap_or(f64::NAN),
+                Feature::MeanChange => self.mean_change.unwrap_or(f64::NAN),
+                Feature::CidCe => self.cid_ce.unwrap_or(f64::NAN),
+                Feature::Slope => self.slope.unwrap_or(f64::NAN),
+                Feature::Intercept => self.intercept.unwrap_or(f64::NAN),
+                Feature::Paa(_, _) => f64::NAN,
+            })
+            .collect()
+    }
 }
 
 #[pyclass]
@@ -90,49 +169,52 @@ impl FeatureExtractor {
         }
         let features = feature_enums.clone();
         feature_enums.dedup();
-        build_calculation_order(&features);
+        let calculation_order = build_calculation_order(feature_enums);
 
-        Self { features }
+        Self {
+            features,
+            calculation_order,
+        }
     }
     fn extract(
         &self,
         data: PyReadonlyArray1<'_, f64>,
-        features: Vec<String>,
         _py: Python<'_>,
     ) -> PyResult<Py<PyArray1<f64>>> {
         let data_slice = data.as_slice()?;
 
-        pub fn extract(data: &[f64], features: &[&str], registry: &Registry) -> Vec<f64> {
-            let mut sorted_features = features.to_vec();
+        let mut cache = Cache::new();
 
-            let mut computed = HashMap::new();
-
-            for feat_name in &sorted_features {
-                if computed.contains_key(feat_name) {
-                    continue;
-                }
-
-                if let Some(feat_fn) = registry.batch_features.get(feat_name) {
-                    feat_fn(data, &mut computed);
-                } else if feat_name.starts_with("paa-") {
-                    let parts: Vec<&str> = feat_name.split('-').collect();
-                    if parts.len() == 3
-                        && let (Ok(segments), Ok(idx)) =
-                            (parts[1].parse::<usize>(), parts[2].parse::<usize>())
-                    {
-                        paa(data, segments, idx, &mut computed);
-                    }
-                }
+        for feat_name in &self.calculation_order {
+            match feat_name {
+                Feature::Mean => mean(data_slice, &mut cache),
+                Feature::Variance => variance(data_slice, &mut cache),
+                Feature::Std => cache.std = cache.variance.map(|v| v.sqrt()),
+                Feature::Min => min(data_slice, &mut cache),
+                Feature::Max => max(data_slice, &mut cache),
+                Feature::Median => median(data_slice, &mut cache),
+                Feature::Skew => skew(data_slice, &mut cache),
+                Feature::Kurtosis => kurtosis(data_slice, &mut cache),
+                Feature::Mad => mad(data_slice, &mut cache),
+                Feature::Iqr => iqr(data_slice, &mut cache),
+                Feature::Entropy => entropy(data_slice, &mut cache),
+                Feature::Energy => energy(data_slice, &mut cache),
+                Feature::Rms | Feature::RootMeanSquare => rms(data_slice, &mut cache),
+                Feature::AutocorrLag1 => autocorr_lag1(data_slice, &mut cache),
+                Feature::MeanAbsChange => mean_abs_change(data_slice, &mut cache),
+                Feature::MeanChange => mean_change(data_slice, &mut cache),
+                Feature::CidCe => cid_ce(data_slice, &mut cache),
+                Feature::Slope => slope(data_slice, &mut cache),
+                Feature::Intercept => intercept(data_slice, &mut cache),
+                Feature::ZeroCrossingRate => zero_crossing_rate(data_slice, &mut cache),
+                Feature::PeakCount => peak_count(data_slice, &mut cache),
+                Feature::Paa(sec, bin) => paa(data_slice, *sec as usize, *bin as usize, &mut cache),
             }
-
-            // Return results in the original requested order
-            features
-                .iter()
-                .map(|&f| *computed.get(f).unwrap_or(&f64::NAN))
-                .collect()
         }
 
-        Ok(result.into_pyarray(_py).unbind())
+        // Return results in the original requested order
+        let featu = cache.to_vec_with(&self.features);
+        Ok(PyArray1::from_vec(_py, featu).to_owned())
     }
 }
 
@@ -213,5 +295,6 @@ fn build_calculation_order(features: Vec<Feature>) -> Vec<Feature> {
             calculation_order.remove(idx);
         }
     }
+    calculation_order.dedup();
     calculation_order
 }
