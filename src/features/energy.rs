@@ -1,24 +1,13 @@
-use std::collections::HashMap;
+use crate::registry::Cache;
 
-pub fn energy(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
-    if let Some(&e) = precalc.get("energy") {
-        return e;
-    }
+pub fn energy(data: &[f64], cache: &mut Cache) {
     let energy = data.iter().map(|&x| x * x).sum();
-    precalc.insert("energy", energy);
-    energy
+    cache.energy = Some(energy);
 }
 
-pub fn rms(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
-    if data.is_empty() {
-        return 0.0;
-    }
-    let energy = if let Some(&e) = precalc.get("energy") {
-        e
-    } else {
-        energy(data, precalc)
-    };
+pub fn rms(data: &[f64], cache: &mut Cache) {
+    energy(data, cache);
+    let energy = cache.energy.unwrap();
     let rms = (energy / data.len() as f64).sqrt();
-    precalc.insert("rms", rms);
-    rms
+    cache.rms = Some(rms);
 }

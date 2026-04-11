@@ -1,10 +1,7 @@
-use std::collections::HashMap;
+use crate::registry::Cache;
 
 fn linear_regression(data: &[f64]) -> (f64, f64) {
     let n = data.len();
-    if n < 2 {
-        return (0.0, 0.0);
-    }
     let n_f = n as f64;
     let sum_x = n_f * (n_f - 1.0) / 2.0;
     let sum_x2 = n_f * (n_f - 1.0) * (2.0 * n_f - 1.0) / 6.0;
@@ -16,30 +13,19 @@ fn linear_regression(data: &[f64]) -> (f64, f64) {
         sum_xy += x * y;
     }
     let denominator = n_f * sum_x2 - sum_x * sum_x;
-    if denominator == 0.0 {
-        return (0.0, 0.0);
-    }
     let slope = (n_f * sum_xy - sum_x * sum_y) / denominator;
     let intercept = (sum_y - slope * sum_x) / n_f;
     (slope, intercept)
 }
 
-pub fn slope(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
-    if let Some(&s) = precalc.get("slope") {
-        return s;
-    }
+pub fn slope(data: &[f64], cache: &mut Cache) {
     let (slope, intercept) = linear_regression(data);
-    precalc.insert("slope", slope);
-    precalc.insert("intercept", intercept);
-    slope
+    cache.slope = Some(slope);
+    cache.intercept = Some(intercept);
 }
 
-pub fn intercept(data: &[f64], precalc: &mut HashMap<&str, f64>) -> f64 {
-    if let Some(&i) = precalc.get("intercept") {
-        return i;
-    }
+pub fn intercept(data: &[f64], cache: &mut Cache) {
     let (slope, intercept) = linear_regression(data);
-    precalc.insert("slope", slope);
-    precalc.insert("intercept", intercept);
-    intercept
+    cache.slope = Some(slope);
+    cache.intercept = Some(intercept);
 }

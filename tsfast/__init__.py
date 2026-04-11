@@ -1,3 +1,3 @@
-from ._tsfast import extract, extract_expanding
+from ._tsfast import FeatureExtractor, extract, extract_expanding
 
-__all__ = ["extract", "extract_expanding"]
+__all__ = ["FeatureExtractor", "extract", "extract_expanding"]

@@ -1,5 +1,4 @@
 use crate::registry::Cache;
-use std::collections::HashMap;
 
 pub fn mean(data: &[f64], cache: &mut Cache) {
     let mean = data.iter().sum::<f64>() / data.len() as f64;
@@ -46,6 +45,9 @@ pub fn median(data: &[f64], cache: &mut Cache) {
 }
 
 fn sub_median(v: &mut [f64]) -> f64 {
+    if v.is_empty() {
+        return f64::NAN;
+    }
     let mid = v.len() / 2;
 
     v.select_nth_unstable_by(mid, |a, b| a.partial_cmp(b).unwrap());
@@ -95,6 +97,10 @@ pub fn kurtosis(data: &[f64], cache: &mut Cache) {
 
 pub fn mad(data: &[f64], cache: &mut Cache) {
     if let Some(med) = cache.median {
+        if med.is_nan() {
+            cache.mad = Some(f64::NAN);
+            return;
+        }
         let mut deviations: Vec<f64> = data.iter().map(|&x| (x - med).abs()).collect();
         let mad = sub_median(deviations.as_mut_slice());
         cache.mad = Some(mad);
@@ -104,9 +110,17 @@ pub fn mad(data: &[f64], cache: &mut Cache) {
 pub fn iqr(data: &[f64], cache: &mut Cache) {
     let mut data = data.to_vec();
     let n = data.len();
+    if n < 2 {
+        cache.iqr = Some(0.0);
+        return;
+    }
     let q1 = sub_median(&mut data[..n / 2]);
     let q3 = sub_median(&mut data[(n + 1) / 2..]);
-    let iqr = q3 - q1;
+    let iqr = if q1.is_nan() || q3.is_nan() {
+        0.0
+    } else {
+        q3 - q1
+    };
     cache.iqr = Some(iqr);
 }
 
@@ -155,22 +169,26 @@ mod tests {
 
     #[test]
     fn test_mean() {
-        let mut precalc = HashMap::new();
+        let mut cache = Cache::new();
         let data = [1.0, 2.0, 3.0, 4.0, 5.0];
-        assert_eq!(mean(&data, &mut precalc), 3.0);
+        mean(&data, &mut cache);
+        assert_eq!(cache.mean.unwrap(), 3.0);
     }
 
     #[test]
     fn test_variance() {
-        let mut precalc = HashMap::new();
+        let mut cache = Cache::new();
         let data = [1.0, 2.0, 3.0, 4.0, 5.0];
-        assert_eq!(variance(&data, &mut precalc), 2.0);
+        variance(&data, &mut cache);
+        assert_eq!(cache.variance.unwrap(), 2.0);
     }
 
     #[test]
     fn test_std() {
-        let mut precalc = HashMap::new();
+        let mut cache = Cache::new();
         let data = [1.0, 2.0, 3.0, 4.0, 5.0];
-        assert_eq!(std(&data, &mut precalc), 2.0_f64.sqrt());
+        variance(&data, &mut cache);
+        std(&data, &mut cache);
+        assert_eq!(cache.std.unwrap(), 2.0_f64.sqrt());
     }
 }

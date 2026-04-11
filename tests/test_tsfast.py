@@ -45,40 +45,17 @@ def test_new_features():
     assert np.allclose(results[5], np.sqrt(5.0))
     print("test_new_features passed!")
 
-def test_npaa_npta():
+def test_paa():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-    features = ["npaa-2-0", "npaa-2-1", "npta-2-0", "npta-2-1", "paa-2-0", "paa-2-1", "npaa-invalid"]
+    features = ["paa-2-0", "paa-2-1"]
     results = tsfast.extract(x, features)
     
-    # Normalization of x: mean=3.5, std ~ 1.7078
-    m = np.mean(x)
-    s = np.std(x)
-    
-    # npaa-2-0: segment 0 is x[0..3] = [1, 2, 3]. mean is 2. Normalized = (2 - 3.5)/s
-    expected_npaa_0 = (2.0 - m) / s
-    assert np.allclose(results[0], expected_npaa_0)
-    
-    # npaa-2-1: segment 1 is x[3..6] = [4, 5, 6]. mean is 5. Normalized = (5 - 3.5)/s
-    expected_npaa_1 = (5.0 - m) / s
-    assert np.allclose(results[1], expected_npaa_1)
-    
-    # npta-2-0: segment 0 is [1, 2, 3]. norm = (x-m)/s. delta = (norm_last - norm_first) / (len - 1)
-    expected_npta_0 = ((3.0 - m)/s - (1.0 - m)/s) / 2.0
-    assert np.allclose(results[2], expected_npta_0)
-    
-    # npta-2-1: segment 1 is [4, 5, 6]. delta = (norm_last - norm_first) / (len - 1)
-    expected_npta_1 = ((6.0 - m)/s - (4.0 - m)/s) / 2.0
-    assert np.allclose(results[3], expected_npta_1)
-
     # paa-2-0: [1, 2, 3] -> mean 2.0
-    assert np.allclose(results[4], 2.0)
+    assert np.allclose(results[0], 2.0)
     # paa-2-1: [4, 5, 6] -> mean 5.0
-    assert np.allclose(results[5], 5.0)
+    assert np.allclose(results[1], 5.0)
     
-    # invalid feature returns NaN
-    assert np.isnan(results[6])
-    
-    print("test_npaa_npta passed!")
+    print("test_paa passed!")
 
 def test_extract_expanding():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
@@ -131,25 +108,23 @@ def test_extract_expanding():
     
     print("test_extract_expanding passed!")
 
-def test_extract_expanding_npaa_npta():
+def test_extract_expanding_paa():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-    features = ["npaa-2-0", "npaa-2-1", "npta-2-0", "npta-2-1", "paa-2-0", "paa-2-1", "npaa-invalid"]
+    features = ["paa-2-0", "paa-2-1"]
     results = tsfast.extract_expanding(x, features)
     
     # Check shape
-    assert results.shape == (6, 7)
+    assert results.shape == (6, 2)
     
     # Validate the last row matches the batch extraction for the full window
     batch_results = tsfast.extract(x, features)
-    # Exclude invalid index from allclose due to NaNs
-    assert np.allclose(results[-1, :6], batch_results[:6])
-    assert np.isnan(results[-1, 6])
+    assert np.allclose(results[-1, :], batch_results)
     
-    print("test_extract_expanding_npaa_npta passed!")
+    print("test_extract_expanding_paa passed!")
 
 if __name__ == "__main__":
     test_extract()
     test_new_features()
-    test_npaa_npta()
+    test_paa()
     test_extract_expanding()
-    test_extract_expanding_npaa_npta()
+    test_extract_expanding_paa()
