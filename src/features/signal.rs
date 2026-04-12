@@ -58,10 +58,87 @@ pub fn mean_change(data: &[f64], cache: &mut Cache) {
     cache.mean_change = Some(mc);
 }
 
+pub fn abs_sum_change(data: &[f64], cache: &mut Cache) {
+    let sum_diff: f64 = data.windows(2).map(|w| (w[1] - w[0]).abs()).sum();
+    cache.abs_sum_change = Some(sum_diff);
+}
+
+pub fn c3(data: &[f64], lag: usize, cache: &mut Cache) {
+    let n = data.len();
+    if n <= 2 * lag {
+        cache.c3.insert(lag as u16, 0.0);
+        return;
+    }
+    let mut sum = 0.0;
+    for i in 0..n - 2 * lag {
+        sum += data[i + 2 * lag] * data[i + lag] * data[i];
+    }
+    cache.c3.insert(lag as u16, sum / (n - 2 * lag) as f64);
+}
+
 pub fn cid_ce(data: &[f64], cache: &mut Cache) {
     let ce: f64 = data.windows(2).map(|w| (w[1] - w[0]).powi(2)).sum();
     let ces = ce.sqrt();
     cache.cid_ce = Some(ces);
+}
+
+pub fn auc(data: &[f64], cache: &mut Cache) {
+    let mut area = 0.0;
+    for i in 0..data.len() - 1 {
+        area += (data[i].abs() + data[i + 1].abs()) / 2.0;
+    }
+    cache.auc = Some(area);
+}
+
+pub fn slope_sign_change(data: &[f64], cache: &mut Cache) {
+    let mut count = 0;
+    for i in 1..data.len() - 1 {
+        let diff1 = data[i] - data[i - 1];
+        let diff2 = data[i + 1] - data[i];
+        if (diff1 > 0.0 && diff2 < 0.0) || (diff1 < 0.0 && diff2 > 0.0) {
+            count += 1;
+        }
+    }
+    cache.slope_sign_change = Some(count as f64);
+}
+
+pub fn turning_points(data: &[f64], cache: &mut Cache) {
+    let mut count = 0;
+    for i in 1..data.len() - 1 {
+        if (data[i] > data[i - 1] && data[i] > data[i + 1])
+            || (data[i] < data[i - 1] && data[i] < data[i + 1])
+        {
+            count += 1;
+        }
+    }
+    cache.turning_points = Some(count as f64);
+}
+
+pub fn zero_crossing_derivations(data: &[f64], cache: &mut Cache) {
+    let mut intervals = Vec::new();
+    let mut last_crossing = None;
+
+    for i in 1..data.len() {
+        if (data[i - 1] < 0.0 && data[i] >= 0.0) || (data[i - 1] >= 0.0 && data[i] < 0.0) {
+            if let Some(last) = last_crossing {
+                intervals.push((i - last) as f64);
+            }
+            last_crossing = Some(i);
+        }
+    }
+
+    if intervals.is_empty() {
+        cache.zero_crossing_mean = Some(0.0);
+        cache.zero_crossing_std = Some(0.0);
+        return;
+    }
+
+    let n = intervals.len() as f64;
+    let mean = intervals.iter().sum::<f64>() / n;
+    let variance = intervals.iter().map(|&x| (x - mean).powi(2)).sum::<f64>() / n;
+
+    cache.zero_crossing_mean = Some(mean);
+    cache.zero_crossing_std = Some(variance.sqrt());
 }
 
 pub fn paa(data: &[f64], segments: usize, idx: usize, cache: &mut Cache) {

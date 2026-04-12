@@ -58,7 +58,58 @@ def test_paa():
     print("test_paa passed!")
 
 
+def test_m4():
+    x = np.arange(100, dtype=np.float64)
+    x[50] = 500.0
+    x[20] = -500.0
+    
+    downsampled = tsfast.downsample(x, 10)
+    assert 500 in downsampled
+    assert -500 in downsampled
+    print("test_m4 passed!")
+
+def test_signal_features():
+    # Signal with specific characteristics
+    x = np.array([0, 1, 0, -1, 0, 1, 0, -1, 0], dtype=np.float64)
+    features = [
+        "auc", "ssc", "turning_points", 
+        "zero_crossing_mean", "zero_crossing_std"
+    ]
+    results = tsfast.extract(x, features)
+    
+    # AUC: sum of trapezoids. 
+    # [0, 1, 0, -1, 0, 1, 0, -1, 0]
+    # Abs: [0, 1, 0, 1, 0, 1, 0, 1, 0]
+    # Trapezoids: (0+1)/2=0.5, (1+0)/2=0.5, ... (1+0)/2=0.5 -> total 8 * 0.5 = 4.0
+    assert np.allclose(results[0], 4.0)
+    
+    # SSC: local extrema. 
+    # [0, 1, 0] -> 1 (max)
+    # [1, 0, -1] -> 0
+    # [0, -1, 0] -> 1 (min)
+    # Total: 7 turning points (max, min, max, min, max, min, max)? 
+    # [0, 1, 0, -1, 0, 1, 0, -1, 0]
+    # idx 1: max (1 > 0 and 1 > 0)
+    # idx 2: min (0 < 1 and 0 > -1) -> NO
+    # Actually, peaks/valleys are at idx 1, 3, 5, 7.
+    # Total 7 turning points: 
+    # 1 (max), -1 (min), 1 (max), -1 (min) -> NO, wait.
+    # 1, -1, 1, -1 are the values.
+    # [0, 1, 0] -> 1 (idx 1)
+    # [1, 0, -1] -> NO
+    # [0, -1, 0] -> -1 (idx 3)
+    # [ -1, 0, 1] -> NO
+    # [0, 1, 0] -> 1 (idx 5)
+    # [1, 0, -1] -> NO
+    # [0, -1, 0] -> -1 (idx 7)
+    # Total 4 turning points.
+    assert np.allclose(results[2], 4.0)
+    
+    print("test_signal_features passed!")
+
 if __name__ == "__main__":
     test_extract()
     test_new_features()
     test_paa()
+    test_m4()
+    test_signal_features()

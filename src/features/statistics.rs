@@ -143,6 +143,95 @@ pub fn iqr(data: &[f64], cache: &mut Cache) {
     cache.iqr = Some(iqr);
 }
 
+pub fn variation_coefficient(data: &[f64], cache: &mut Cache) {
+    if cache.mean.is_none() {
+        mean(data, cache);
+    }
+    if cache.std.is_none() {
+        if cache.variance.is_none() {
+            variance(data, cache);
+        }
+        std(data, cache);
+    }
+
+    if let (Some(m), Some(s)) = (cache.mean, cache.std) {
+        if m != 0.0 {
+            cache.variation_coefficient = Some(s / m);
+        } else {
+            cache.variation_coefficient = Some(0.0);
+        }
+    }
+}
+
+pub fn mean_abs_deviation(data: &[f64], cache: &mut Cache) {
+    if cache.mean.is_none() {
+        mean(data, cache);
+    }
+    if let Some(m) = cache.mean {
+        let n = data.len();
+        let sum_abs_dev: f64 = data.iter().map(|&x| (x - m).abs()).sum();
+        cache.mean_abs_deviation = Some(sum_abs_dev / n as f64);
+    }
+}
+
+pub fn count_above_mean(data: &[f64], cache: &mut Cache) {
+    if cache.mean.is_none() {
+        mean(data, cache);
+    }
+    if let Some(m) = cache.mean {
+        let count = data.iter().filter(|&&x| x > m).count();
+        cache.count_above_mean = Some(count as f64);
+    }
+}
+
+pub fn count_below_mean(data: &[f64], cache: &mut Cache) {
+    if cache.mean.is_none() {
+        mean(data, cache);
+    }
+    if let Some(m) = cache.mean {
+        let count = data.iter().filter(|&&x| x < m).count();
+        cache.count_below_mean = Some(count as f64);
+    }
+}
+
+pub fn longest_strike_above_mean(data: &[f64], cache: &mut Cache) {
+    if cache.mean.is_none() {
+        mean(data, cache);
+    }
+    if let Some(m) = cache.mean {
+        let mut max_strike = 0;
+        let mut current_strike = 0;
+        for &x in data {
+            if x > m {
+                current_strike += 1;
+            } else {
+                max_strike = max_strike.max(current_strike);
+                current_strike = 0;
+            }
+        }
+        cache.longest_strike_above_mean = Some(max_strike.max(current_strike) as f64);
+    }
+}
+
+pub fn longest_strike_below_mean(data: &[f64], cache: &mut Cache) {
+    if cache.mean.is_none() {
+        mean(data, cache);
+    }
+    if let Some(m) = cache.mean {
+        let mut max_strike = 0;
+        let mut current_strike = 0;
+        for &x in data {
+            if x < m {
+                current_strike += 1;
+            } else {
+                max_strike = max_strike.max(current_strike);
+                current_strike = 0;
+            }
+        }
+        cache.longest_strike_below_mean = Some(max_strike.max(current_strike) as f64);
+    }
+}
+
 pub fn entropy(data: &[f64], cache: &mut Cache) {
     let n = data.len();
 
