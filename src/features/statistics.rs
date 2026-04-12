@@ -46,7 +46,9 @@ pub fn median(data: &[f64], cache: &mut Cache) {
 
 pub fn median_from_sorted(sorted_data: &[f64]) -> f64 {
     let n = sorted_data.len();
-    if n == 0 { return f64::NAN; }
+    if n == 0 {
+        return f64::NAN;
+    }
     let mid = n / 2;
     if n % 2 == 1 {
         sorted_data[mid]
@@ -57,10 +59,16 @@ pub fn median_from_sorted(sorted_data: &[f64]) -> f64 {
 
 pub fn iqr_from_sorted(sorted_data: &[f64]) -> f64 {
     let n = sorted_data.len();
-    if n < 2 { return 0.0; }
+    if n < 2 {
+        return 0.0;
+    }
     let q1 = median_from_sorted(&sorted_data[..n / 2]);
     let q3 = median_from_sorted(&sorted_data[(n + 1) / 2..]);
-    if q1.is_nan() || q3.is_nan() { 0.0 } else { q3 - q1 }
+    if q1.is_nan() || q3.is_nan() {
+        0.0
+    } else {
+        q3 - q1
+    }
 }
 
 fn sub_median(v: &mut [f64]) -> f64 {
@@ -160,17 +168,6 @@ pub fn variation_coefficient(data: &[f64], cache: &mut Cache) {
         } else {
             cache.variation_coefficient = Some(0.0);
         }
-    }
-}
-
-pub fn mean_abs_deviation(data: &[f64], cache: &mut Cache) {
-    if cache.mean.is_none() {
-        mean(data, cache);
-    }
-    if let Some(m) = cache.mean {
-        let n = data.len();
-        let sum_abs_dev: f64 = data.iter().map(|&x| (x - m).abs()).sum();
-        cache.mean_abs_deviation = Some(sum_abs_dev / n as f64);
     }
 }
 

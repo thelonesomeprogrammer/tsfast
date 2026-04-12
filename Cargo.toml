@@ -13,6 +13,7 @@ pyo3 = { version = "0.28.3", features = ["extension-module"] }
 ndarray = { version = "0.16", features = ["rayon"] }
 num-traits = "0.2"
 rayon = "1.10"
+arrow = { version = "58.1.0", features = ["pyarrow"] }
 
 [dev-dependencies]
 criterion = "0.5"
