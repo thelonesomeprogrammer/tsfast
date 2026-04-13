@@ -15,12 +15,12 @@ from sklearn.metrics import accuracy_score, f1_score
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
-
+COLNAMES = ["Time (ms)", "Nset (1/min)", "Torque (Nm)", "Current (V)", "Angle (deg)", "Depth (mm)"]
 # Configuration
-#DATA_DIR = "testdata/Intrinsic data"
-DATA_DIR = "prev-data/Dataset/Intrinsic data"
+DATA_DIR = "testdata/Intrinsic data"
+#DATA_DIR = "prev-data/Dataset/Intrinsic data"
 CATEGORIES = ["N", "NS", "OT", "UT"]
-SIGNAL_COL = 0
+SIGNAL_COL = [2,3]
 CACHE_DIR = "cache"
 
 if not os.path.exists(CACHE_DIR):
@@ -39,22 +39,29 @@ def load_data():
         for f in files:
             df = pd.read_csv(os.path.join(cat_dir, f))
             df = df.iloc[:, SIGNAL_COL].values.astype(float)
+            df = df.T
             dfs.append(df)
             y.append(cat)
     return dfs, np.array(y)
 
 def benchmark_tsfast(X):
     # process_2d_floats returns these 14 features in this order
-    rust_features = [
-        "total_sum", "min_value", "max_value", "mean", "std_dev", 
-        "skewness", "kurtosis", "variation_coefficient", "rms", 
-        "energy", "variance", "mean_abs_change", "mean_change", "abs_sum_change"
-    ]
+
+    #rust_features = [ "total_sum", "mean", "variance", "std", "min", "max", "skew", "kurtosis", "mad", "iqr", "entropy", "energy", "rms", "root_mean_square", "zero_crossing_rate", "peak_count", "autocorr_lag1", "mean_abs_change", "mean_change", "cid_ce", "slope", "intercept", "abs_sum_change", "count_above_mean", "count_below_mean", "longest_strike_above_mean", "longest_strike_below_mean", "variation_coefficient", "auc", "slope_sign_change", "turning_points", "zero_crossing_mean", "zero_crossing_std", "paa-10-0", "paa-10-1", "paa-10-2", "paa-10-3", "paa-10-4", "paa-10-5", "paa-10-6", "paa-10-7", "paa-10-8", "paa-10-9"]
+
+    rust_features = ["paa-10-0", "paa-10-1", "paa-10-2", "paa-10-3", "paa-10-4", "paa-10-5", "paa-10-6", "paa-10-7", "paa-10-8", "paa-10-9"]
+
+    #rust_features = ["total_sum", "min_value", "max_value", "mean", "std_dev", "skewness", "kurtosis", "variation_coefficient", "rms", "energy", "variance", "mean_abs_change", "mean_change", "abs_sum_change"]
+
     start = time.time()
     extrat = tsfast.ArrowExtractor(rust_features)
     extracted = []
+    names=[]
+    for i in SIGNAL_COL:
+        names.append(COLNAMES[i])
+
     for x in X:
-        batch = pa.RecordBatch.from_arrays([pa.array(x.astype(np.float32))], names=["signal"])
+        batch = pa.RecordBatch.from_arrays([pa.array(i.astype(np.float32)) for i in x], names=names)
         res_batch = extrat.process_2d_floats(batch)
         
         df = res_batch.to_pandas()
@@ -75,8 +82,11 @@ def get_tsfel_features(X):
     start = time.time()
     extracted = []
     for x in X:
-        feat_vals = tsfel.time_series_features_extractor(cfg, x, fs=100, verbose=0)
-        extracted.append(feat_vals.values[0])
+        extrac = []
+        for x2 in x:
+            feat_vals = tsfel.time_series_features_extractor(cfg, x2, fs=100, verbose=0)
+            extrac.append(feat_vals.values[0])
+        extracted.append(np.array(extrac).flatten())
     res = (np.array(extracted), time.time() - start)
     with open(cache_path, "wb") as f:
         pickle.dump(res, f)
@@ -136,8 +146,8 @@ if __name__ == "__main__":
     acc_tsfast, f1_tsfast = run_ml(feats_tsfast, y, "tsfast")
     
     print("\nBenchmarking TSFEL...")
-    #feats_tsfel, time_tsfel = get_tsfel_features(X_raw)
-    #acc_tsfel, f1_tsfel = run_ml(feats_tsfel, y, "TSFEL")
+    feats_tsfel, time_tsfel = get_tsfel_features(X_raw)
+    acc_tsfel, f1_tsfel = run_ml(feats_tsfel, y, "TSFEL")
     
     print("\nBenchmarking tsfresh...")
     #feats_tsfresh, time_tsfresh = get_tsfresh_features(X_raw)
@@ -145,7 +155,7 @@ if __name__ == "__main__":
     
     print("\n--- Results ---")
     print(f"tsfast:  Time={time_tsfast:.4f}s, Accuracy={acc_tsfast:.4f}, Features={feats_tsfast.shape[1]}")
-    #print(f"TSFEL:   Time={time_tsfel:.4f}s, Accuracy={acc_tsfel:.4f}, Features={feats_tsfel.shape[1]}")
+    print(f"TSFEL:   Time={time_tsfel:.4f}s, Accuracy={acc_tsfel:.4f}, Features={feats_tsfel.shape[1]}")
     #print(f"tsfresh: Time={time_tsfresh:.4f}s, Accuracy={acc_tsfresh:.4f}, Features={feats_tsfresh.shape[1]}")
     
     with open("benchmark_results_full.txt", "w") as f:
