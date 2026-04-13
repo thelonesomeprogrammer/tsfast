@@ -24,6 +24,7 @@ fn downsample(
 #[pymodule]
 fn _tsfast(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<registry::FeatureExtractor>()?;
+    m.add_class::<extract::ArrowExtractor>()?;
     m.add_function(wrap_pyfunction!(downsample, m)?)?;
     Ok(())
 }

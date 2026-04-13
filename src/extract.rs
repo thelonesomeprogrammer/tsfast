@@ -9,7 +9,8 @@ use std::simd::num::SimdFloat;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
-pub enum Feature {
+pub enum ArrowFeature {
+    TotalSum,
     Mean,
     Variance,
     Std,
@@ -49,51 +50,52 @@ pub enum Feature {
 }
 
 #[pyclass]
-pub struct FeatureExtractor {
-    pub features: Vec<Feature>,
+pub struct ArrowExtractor {
+    pub features: Vec<ArrowFeature>,
 }
 
 #[pymethods]
-impl FeatureExtractor {
+impl ArrowExtractor {
     #[new]
     pub fn new(feature_str: Vec<String>) -> Self {
         let mut features = Vec::new();
         for i in feature_str {
             match i.as_str() {
-                "mean" => features.push(Feature::Mean),
-                "variance" => features.push(Feature::Variance),
-                "std" => features.push(Feature::Std),
-                "min" => features.push(Feature::Min),
-                "max" => features.push(Feature::Max),
-                "median" => features.push(Feature::Median),
-                "skew" => features.push(Feature::Skew),
-                "kurtosis" => features.push(Feature::Kurtosis),
-                "mad" => features.push(Feature::Mad),
-                "iqr" => features.push(Feature::Iqr),
-                "entropy" => features.push(Feature::Entropy),
-                "energy" => features.push(Feature::Energy),
-                "rms" => features.push(Feature::Rms),
-                "root_mean_square" => features.push(Feature::RootMeanSquare),
-                "zero_crossing_rate" => features.push(Feature::ZeroCrossingRate),
-                "peak_count" => features.push(Feature::PeakCount),
-                "autocorr_lag1" => features.push(Feature::AutocorrLag1),
-                "mean_abs_change" => features.push(Feature::MeanAbsChange),
-                "mean_change" => features.push(Feature::MeanChange),
-                "cid_ce" => features.push(Feature::CidCe),
-                "slope" => features.push(Feature::Slope),
-                "intercept" => features.push(Feature::Intercept),
-                "abs_sum_change" => features.push(Feature::AbsSumChange),
-                "count_above_mean" => features.push(Feature::CountAboveMean),
-                "count_below_mean" => features.push(Feature::CountBelowMean),
-                "longest_strike_above_mean" => features.push(Feature::LongestStrikeAboveMean),
-                "longest_strike_below_mean" => features.push(Feature::LongestStrikeBelowMean),
-                "variation_coefficient" => features.push(Feature::VariationCoefficient),
-                "mean_abs_deviation" => features.push(Feature::MeanAbsDeviation),
-                "auc" => features.push(Feature::Auc),
-                "slope_sign_change" => features.push(Feature::SlopeSignChange),
-                "turning_points" => features.push(Feature::TurningPoints),
-                "zero_crossing_mean" => features.push(Feature::ZeroCrossingMean),
-                "zero_crossing_std" => features.push(Feature::ZeroCrossingStd),
+                "total_sum" => features.push(ArrowFeature::TotalSum),
+                "mean" => features.push(ArrowFeature::Mean),
+                "variance" => features.push(ArrowFeature::Variance),
+                "std" | "std_dev" => features.push(ArrowFeature::Std),
+                "min" | "min_value" => features.push(ArrowFeature::Min),
+                "max" | "max_value" => features.push(ArrowFeature::Max),
+                "median" => features.push(ArrowFeature::Median),
+                "skew" | "skewness" => features.push(ArrowFeature::Skew),
+                "kurtosis" => features.push(ArrowFeature::Kurtosis),
+                "mad" => features.push(ArrowFeature::Mad),
+                "iqr" => features.push(ArrowFeature::Iqr),
+                "entropy" => features.push(ArrowFeature::Entropy),
+                "energy" => features.push(ArrowFeature::Energy),
+                "rms" => features.push(ArrowFeature::Rms),
+                "root_mean_square" => features.push(ArrowFeature::RootMeanSquare),
+                "zero_crossing_rate" => features.push(ArrowFeature::ZeroCrossingRate),
+                "peak_count" => features.push(ArrowFeature::PeakCount),
+                "autocorr_lag1" => features.push(ArrowFeature::AutocorrLag1),
+                "mean_abs_change" => features.push(ArrowFeature::MeanAbsChange),
+                "mean_change" => features.push(ArrowFeature::MeanChange),
+                "cid_ce" => features.push(ArrowFeature::CidCe),
+                "slope" => features.push(ArrowFeature::Slope),
+                "intercept" => features.push(ArrowFeature::Intercept),
+                "abs_sum_change" => features.push(ArrowFeature::AbsSumChange),
+                "count_above_mean" => features.push(ArrowFeature::CountAboveMean),
+                "count_below_mean" => features.push(ArrowFeature::CountBelowMean),
+                "longest_strike_above_mean" => features.push(ArrowFeature::LongestStrikeAboveMean),
+                "longest_strike_below_mean" => features.push(ArrowFeature::LongestStrikeBelowMean),
+                "variation_coefficient" => features.push(ArrowFeature::VariationCoefficient),
+                "mean_abs_deviation" => features.push(ArrowFeature::MeanAbsDeviation),
+                "auc" => features.push(ArrowFeature::Auc),
+                "slope_sign_change" => features.push(ArrowFeature::SlopeSignChange),
+                "turning_points" => features.push(ArrowFeature::TurningPoints),
+                "zero_crossing_mean" => features.push(ArrowFeature::ZeroCrossingMean),
+                "zero_crossing_std" => features.push(ArrowFeature::ZeroCrossingStd),
                 e => {
                     if let Some(arg) = e.strip_prefix("paa-") {
                         let params: Vec<&str> = arg.split('-').collect();
@@ -101,13 +103,13 @@ impl FeatureExtractor {
                             && let (Ok(n), Ok(m)) =
                                 (params[0].parse::<u16>(), params[1].parse::<u16>())
                         {
-                            features.push(Feature::Paa(n, m));
+                            features.push(ArrowFeature::Paa(n, m));
                             continue;
                         }
                     } else if let Some(arg) = e.strip_prefix("c3-") {
                         let param = arg.trim();
                         if let Ok(n) = param.parse::<u16>() {
-                            features.push(Feature::C3(n));
+                            features.push(ArrowFeature::C3(n));
                             continue;
                         }
                     }
@@ -123,25 +125,36 @@ impl FeatureExtractor {
         &self,
         batch: PyArrowType<RecordBatch>,
     ) -> PyResult<PyArrowType<RecordBatch>> {
-        // PyArrowType acts as a transparent wrapper. Extract the underlying RecordBatch.
         let record_batch = batch.0;
+        let n_cols = record_batch.num_columns();
 
-        let mut results = Vec::with_capacity(record_batch.num_columns());
+        // 14 fixed features for now
+        let mut total_sums = Vec::with_capacity(n_cols);
+        let mut min_values = Vec::with_capacity(n_cols);
+        let mut max_values = Vec::with_capacity(n_cols);
+        let mut means = Vec::with_capacity(n_cols);
+        let mut std_devs = Vec::with_capacity(n_cols);
+        let mut skewnesses = Vec::with_capacity(n_cols);
+        let mut kurtosises = Vec::with_capacity(n_cols);
+        let mut vcs = Vec::with_capacity(n_cols);
+        let mut rmss = Vec::with_capacity(n_cols);
+        let mut energies = Vec::with_capacity(n_cols);
+        let mut variances = Vec::with_capacity(n_cols);
+        let mut macs = Vec::with_capacity(n_cols);
+        let mut mean_changes = Vec::with_capacity(n_cols);
+        let mut mac_sums = Vec::with_capacity(n_cols);
 
-        const LANES: usize = 4; // f32x4 processes 4 floats at a time
+        const LANES: usize = 4;
 
-        // Treat the RecordBatch as a 2D grid: iterate over columns, then rows.
         for col in record_batch.columns() {
-            // Enforce the f64 constraint
             if col.data_type() != &DataType::Float32 && col.data_type() != &DataType::Float64 {
-                return Err(PyTypeError::new_err("All columns must be Float64."));
+                return Err(PyTypeError::new_err("All columns must be Float32 or Float64."));
             }
 
-            // Safely downcast the generic array into a specific Float64Array
             let float_array = col
                 .as_any()
                 .downcast_ref::<Float32Array>()
-                .ok_or_else(|| PyTypeError::new_err("Failed to downcast column to Float64Array"))?;
+                .ok_or_else(|| PyTypeError::new_err("Failed to downcast column to Float32Array"))?;
 
             let mut total_sum: f32 = 0.0;
             let mut min_value: f32 = f32::INFINITY;
@@ -184,54 +197,62 @@ impl FeatureExtractor {
 
             let mac_sum = mac_sum_vec.reduce_sum();
             let mc_sum = mc_sum_vec.reduce_sum();
-
-            let mac = mac_sum / n;
-            let mean_change = mc_sum / n;
-
             let variance = m2 / (n - 1.0);
             let std_dev = variance.sqrt();
-            let skewness = (m3 / n) / variance.powf(1.5);
-            let kurtosis = (m4 / n) / (variance * variance);
-            let vc = std_dev / mean;
-            let rms = (energy / n).sqrt();
-            results.push(Arc::new(Float32Array::from_iter([
-                total_sum,
-                min_value,
-                max_value,
-                mean,
-                std_dev,
-                skewness,
-                kurtosis,
-                vc,
-                rms,
-                energy,
-                variance,
-                mac,
-                mean_change,
-                mac_sum,
-            ])) as Arc<dyn arrow::array::Array>);
+
+            total_sums.push(total_sum);
+            min_values.push(min_value);
+            max_values.push(max_value);
+            means.push(mean);
+            std_devs.push(std_dev);
+            skewnesses.push((m3 / n) / variance.powf(1.5));
+            kurtosises.push((m4 / n) / (variance * variance));
+            vcs.push(std_dev / mean);
+            rmss.push((energy / n).sqrt());
+            energies.push(energy);
+            variances.push(variance);
+            macs.push(mac_sum / n);
+            mean_changes.push(mc_sum / n);
+            mac_sums.push(mac_sum);
         }
 
-        let return_batch = RecordBatch::try_new(
-            Arc::new(Schema::new(vec![
-                Field::new("total_sum", DataType::Float32, false),
-                Field::new("min_value", DataType::Float32, false),
-                Field::new("max_value", DataType::Float32, false),
-                Field::new("mean", DataType::Float32, false),
-                Field::new("std_dev", DataType::Float32, false),
-                Field::new("skewness", DataType::Float32, false),
-                Field::new("kurtosis", DataType::Float32, false),
-                Field::new("variation_coefficient", DataType::Float32, false),
-                Field::new("rms", DataType::Float32, false),
-                Field::new("energy", DataType::Float32, false),
-                Field::new("variance", DataType::Float32, false),
-                Field::new("mean_abs_change", DataType::Float32, false),
-                Field::new("mean_change", DataType::Float32, false),
-                Field::new("abs_sum_change", DataType::Float32, false),
-            ])),
-            results,
-        )
-        .map_err(|e| PyTypeError::new_err(format!("Failed to create return RecordBatch: {}", e)))?;
+        let schema = Schema::new(vec![
+            Field::new("total_sum", DataType::Float32, false),
+            Field::new("min_value", DataType::Float32, false),
+            Field::new("max_value", DataType::Float32, false),
+            Field::new("mean", DataType::Float32, false),
+            Field::new("std_dev", DataType::Float32, false),
+            Field::new("skewness", DataType::Float32, false),
+            Field::new("kurtosis", DataType::Float32, false),
+            Field::new("variation_coefficient", DataType::Float32, false),
+            Field::new("rms", DataType::Float32, false),
+            Field::new("energy", DataType::Float32, false),
+            Field::new("variance", DataType::Float32, false),
+            Field::new("mean_abs_change", DataType::Float32, false),
+            Field::new("mean_change", DataType::Float32, false),
+            Field::new("abs_sum_change", DataType::Float32, false),
+        ]);
+
+        let results: Vec<Arc<dyn arrow::array::Array>> = vec![
+            Arc::new(Float32Array::from(total_sums)),
+            Arc::new(Float32Array::from(min_values)),
+            Arc::new(Float32Array::from(max_values)),
+            Arc::new(Float32Array::from(means)),
+            Arc::new(Float32Array::from(std_devs)),
+            Arc::new(Float32Array::from(skewnesses)),
+            Arc::new(Float32Array::from(kurtosises)),
+            Arc::new(Float32Array::from(vcs)),
+            Arc::new(Float32Array::from(rmss)),
+            Arc::new(Float32Array::from(energies)),
+            Arc::new(Float32Array::from(variances)),
+            Arc::new(Float32Array::from(macs)),
+            Arc::new(Float32Array::from(mean_changes)),
+            Arc::new(Float32Array::from(mac_sums)),
+        ];
+
+        let return_batch = RecordBatch::try_new(Arc::new(schema), results)
+            .map_err(|e| PyTypeError::new_err(format!("Failed to create return RecordBatch: {}", e)))?;
+
         Ok(PyArrowType(return_batch))
     }
 }

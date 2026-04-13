@@ -6,6 +6,7 @@ import pandas as pd
 import tsfast
 import tsfel
 import pickle
+import pyarrow as pa
 from tsfresh import extract_features
 from tsfresh.feature_extraction import EfficientFCParameters
 from sklearn.ensemble import RandomForestClassifier
@@ -26,7 +27,7 @@ if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
 
 def load_data():
-    X = []
+    dfs = []
     y = []
     print("Loading FULL dataset...")
     for cat in CATEGORIES:
@@ -37,18 +38,30 @@ def load_data():
         print(f"  {cat}: loading {len(files)} files")
         for f in files:
             df = pd.read_csv(os.path.join(cat_dir, f))
-            signal = df.iloc[:, 0].values.astype(np.float64)
-            X.append(signal)
+            df = df.iloc[:, SIGNAL_COL].values.astype(float)
+            dfs.append(df)
             y.append(cat)
-    return X, np.array(y)
+    return dfs, np.array(y)
 
 def benchmark_tsfast(X):
-    rust_features = ["mean", "std", "variance", "min", "max", "energy", "rms", "autocorr_lag1", "slope", "intercept", "mad", "iqr"]
+    # process_2d_floats returns these 14 features in this order
+    rust_features = [
+        "total_sum", "min_value", "max_value", "mean", "std_dev", 
+        "skewness", "kurtosis", "variation_coefficient", "rms", 
+        "energy", "variance", "mean_abs_change", "mean_change", "abs_sum_change"
+    ]
     start = time.time()
-    extrat = tsfast.FeatureExtractor(rust_features)
-    extracted = extrat.extract2d(list(X))
+    extrat = tsfast.ArrowExtractor(rust_features)
+    extracted = []
+    for x in X:
+        batch = pa.RecordBatch.from_arrays([pa.array(x.astype(np.float32))], names=["signal"])
+        res_batch = extrat.process_2d_floats(batch)
+        
+        df = res_batch.to_pandas()
+        extracted.append(df.values[0])
+
     end = time.time()
-    return extracted, end - start
+    return np.array(extracted), end - start
 
 def get_tsfel_features(X):
     cache_path = os.path.join(CACHE_DIR, "tsfel_features.pkl")

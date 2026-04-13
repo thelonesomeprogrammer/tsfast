@@ -2,11 +2,12 @@ use crate::features::{
     energy::{energy, rms},
     signal::{
         abs_sum_change, auc, autocorr_lag1, c3, cid_ce, mean_abs_change, mean_change, paa,
-        peak_count, slope_sign_change, turning_points, zero_crossing_derivations, zero_crossing_rate,
+        peak_count, slope_sign_change, turning_points, zero_crossing_derivations,
+        zero_crossing_rate,
     },
     statistics::{
         count_above_mean, count_below_mean, entropy, iqr, kurtosis, longest_strike_above_mean,
-        longest_strike_below_mean, mad, max, mean, mean_abs_deviation, median, min, skew, variance,
+        longest_strike_below_mean, mad, max, mean, median, min, skew, variance,
         variation_coefficient,
     },
     trend::{intercept, slope},
@@ -56,7 +57,6 @@ pub enum Feature {
     LongestStrikeAboveMean,
     LongestStrikeBelowMean,
     VariationCoefficient,
-    MeanAbsDeviation,
     C3(u16),
     Auc,
     SlopeSignChange,
@@ -93,7 +93,6 @@ pub struct Cache {
     pub longest_strike_above_mean: Option<f64>,
     pub longest_strike_below_mean: Option<f64>,
     pub variation_coefficient: Option<f64>,
-    pub mean_abs_deviation: Option<f64>,
     pub auc: Option<f64>,
     pub slope_sign_change: Option<f64>,
     pub turning_points: Option<f64>,
@@ -133,7 +132,6 @@ impl Cache {
             longest_strike_above_mean: None,
             longest_strike_below_mean: None,
             variation_coefficient: None,
-            mean_abs_deviation: None,
             auc: None,
             slope_sign_change: None,
             turning_points: None,
@@ -171,10 +169,13 @@ impl Cache {
                 Feature::AbsSumChange => self.abs_sum_change.unwrap_or(f64::NAN),
                 Feature::CountAboveMean => self.count_above_mean.unwrap_or(f64::NAN),
                 Feature::CountBelowMean => self.count_below_mean.unwrap_or(f64::NAN),
-                Feature::LongestStrikeAboveMean => self.longest_strike_above_mean.unwrap_or(f64::NAN),
-                Feature::LongestStrikeBelowMean => self.longest_strike_below_mean.unwrap_or(f64::NAN),
+                Feature::LongestStrikeAboveMean => {
+                    self.longest_strike_above_mean.unwrap_or(f64::NAN)
+                }
+                Feature::LongestStrikeBelowMean => {
+                    self.longest_strike_below_mean.unwrap_or(f64::NAN)
+                }
                 Feature::VariationCoefficient => self.variation_coefficient.unwrap_or(f64::NAN),
-                Feature::MeanAbsDeviation => self.mean_abs_deviation.unwrap_or(f64::NAN),
                 Feature::Auc => self.auc.unwrap_or(f64::NAN),
                 Feature::SlopeSignChange => self.slope_sign_change.unwrap_or(f64::NAN),
                 Feature::TurningPoints => self.turning_points.unwrap_or(f64::NAN),
@@ -224,8 +225,12 @@ impl FeatureExtractor {
                 "slope" => feature_enums.push(Feature::Slope),
                 "intercept" => feature_enums.push(Feature::Intercept),
                 "abssumchange" | "abs_sum_change" => feature_enums.push(Feature::AbsSumChange),
-                "countabovemean" | "count_above_mean" => feature_enums.push(Feature::CountAboveMean),
-                "countbelowmean" | "count_below_mean" => feature_enums.push(Feature::CountBelowMean),
+                "countabovemean" | "count_above_mean" => {
+                    feature_enums.push(Feature::CountAboveMean)
+                }
+                "countbelowmean" | "count_below_mean" => {
+                    feature_enums.push(Feature::CountBelowMean)
+                }
                 "longeststrikeabovemean" | "longest_strike_above_mean" => {
                     feature_enums.push(Feature::LongestStrikeAboveMean)
                 }
@@ -235,16 +240,11 @@ impl FeatureExtractor {
                 "variationcoefficient" | "variation_coefficient" => {
                     feature_enums.push(Feature::VariationCoefficient)
                 }
-                "meanabsdeviation" | "mean_abs_deviation" => {
-                    feature_enums.push(Feature::MeanAbsDeviation)
-                }
                 "auc" => feature_enums.push(Feature::Auc),
                 "slopesignchange" | "slope_sign_change" | "ssc" => {
                     feature_enums.push(Feature::SlopeSignChange)
                 }
-                "turning_points" | "turningpoints" => {
-                    feature_enums.push(Feature::TurningPoints)
-                }
+                "turning_points" | "turningpoints" => feature_enums.push(Feature::TurningPoints),
                 "zero_crossing_mean" | "zerocrossingmean" => {
                     feature_enums.push(Feature::ZeroCrossingMean)
                 }
@@ -265,7 +265,9 @@ impl FeatureExtractor {
                     }
                     if st.contains("c3") {
                         let parts: Vec<&str> = st.split('-').collect();
-                        if parts.len() == 2 && parts[0] == "c3" && let Ok(lag) = parts[1].parse::<u16>()
+                        if parts.len() == 2
+                            && parts[0] == "c3"
+                            && let Ok(lag) = parts[1].parse::<u16>()
                         {
                             feature_enums.push(Feature::C3(lag));
                             continue;
@@ -393,7 +395,6 @@ impl FeatureExtractor {
                 | Feature::LongestStrikeAboveMean
                 | Feature::LongestStrikeBelowMean
                 | Feature::VariationCoefficient
-                | Feature::MeanAbsDeviation
                 | Feature::Auc
                 | Feature::SlopeSignChange
                 | Feature::TurningPoints
@@ -741,7 +742,6 @@ impl FeatureExtractor {
         cache.count_below_mean = Some(count_below as f64);
         cache.longest_strike_above_mean = Some(max_strike_above as f64);
         cache.longest_strike_below_mean = Some(max_strike_below as f64);
-        cache.mean_abs_deviation = Some(sum_abs_dev / n_f);
         if m != 0.0 {
             cache.variation_coefficient = Some(cache.std.unwrap() / m);
         } else {
@@ -865,8 +865,7 @@ fn build_calculation_order(features: Vec<Feature>) -> Vec<Feature> {
             Feature::CountAboveMean
             | Feature::CountBelowMean
             | Feature::LongestStrikeAboveMean
-            | Feature::LongestStrikeBelowMean
-            | Feature::MeanAbsDeviation => {
+            | Feature::LongestStrikeBelowMean => {
                 calculation_order.push(Feature::Mean);
                 calculation_order.push(feat);
             }
@@ -928,7 +927,6 @@ fn extract(data: &[f64], feature: &Feature, cache: &mut Cache) {
         Feature::LongestStrikeAboveMean => longest_strike_above_mean(data, cache),
         Feature::LongestStrikeBelowMean => longest_strike_below_mean(data, cache),
         Feature::VariationCoefficient => variation_coefficient(data, cache),
-        Feature::MeanAbsDeviation => mean_abs_deviation(data, cache),
         Feature::Auc => auc(data, cache),
         Feature::SlopeSignChange => slope_sign_change(data, cache),
         Feature::TurningPoints => turning_points(data, cache),
