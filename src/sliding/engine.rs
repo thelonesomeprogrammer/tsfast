@@ -1,10 +1,11 @@
-use crate::common::{ColumnState, LANES};
+use crate::common::ColumnState;
+use crate::common::LANES;
 use crate::types::{FastBitArray, Feature};
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
 
-pub(crate) struct StaticEngine<'a> {
+pub(crate) struct SlidingEngine<'a> {
     pub(crate) compute: FastBitArray,
     pub(crate) features: &'a [Feature],
     pub(crate) unique_paa_totals: &'a [u16],
@@ -12,7 +13,7 @@ pub(crate) struct StaticEngine<'a> {
     pub(crate) paa_boundaries: &'a [Vec<usize>],
 }
 
-impl<'a> StaticEngine<'a> {
+impl<'a> SlidingEngine<'a> {
     #[inline(always)]
     pub(crate) fn process_column(&self, values: &[f32]) -> Vec<f32> {
         let n = values.len() as f32;

@@ -11,12 +11,9 @@ use std::sync::Arc;
 
 pub mod depend;
 pub mod extractor;
-pub mod state;
-
-pub const LANES: usize = 4;
 
 use depend::map_features_to_indices;
-use extractor::ColumnProcessor;
+use extractor::StaticEngine;
 
 #[pyclass]
 pub struct Extractor {
@@ -91,7 +88,7 @@ impl Extractor {
                     .downcast_ref::<Float32Array>()
                     .expect("Failed to downcast column to Float32Array");
 
-                let processor = ColumnProcessor {
+                let processor = StaticEngine {
                     compute,
                     features,
                     unique_paa_totals,

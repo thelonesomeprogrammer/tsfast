@@ -1,8 +1,10 @@
 #![feature(portable_simd)]
 use pyo3::prelude::*;
 
-mod static_ext;
+mod common;
+mod expanding;
 mod sliding;
+mod static_ext;
 mod types;
 
 #[pymodule]

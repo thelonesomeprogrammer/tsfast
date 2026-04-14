@@ -1,10 +1,11 @@
-use crate::common::{ColumnState, LANES};
+use crate::common::ColumnState;
+use crate::common::LANES;
 use crate::types::{FastBitArray, Feature};
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
 
-pub(crate) struct StaticEngine<'a> {
+pub(crate) struct ExpandingEngine<'a> {
     pub(crate) compute: FastBitArray,
     pub(crate) features: &'a [Feature],
     pub(crate) unique_paa_totals: &'a [u16],
@@ -12,34 +13,38 @@ pub(crate) struct StaticEngine<'a> {
     pub(crate) paa_boundaries: &'a [Vec<usize>],
 }
 
-impl<'a> StaticEngine<'a> {
+impl<'a> ExpandingEngine<'a> {
     #[inline(always)]
-    pub(crate) fn process_column(&self, values: &[f32]) -> Vec<f32> {
+    pub(crate) fn process_expanding(
+        &self,
+        values: &[f32],
+        idx: usize,
+        state: &mut ColumnState,
+    ) -> Vec<f32> {
         let n = values.len() as f32;
-        if n == 0.0 {
-            return vec![0.0; self.features.len()];
-        }
-
-        let mut state = ColumnState::new(self.unique_paa_totals, self.unique_c3_lags, values[0]);
 
         // SIMD Pass 1
-        let rem_start = self.process_simd_chunks(values, &mut state);
+        let rem_start = self.process_simd_chunks(values, idx, state);
 
         // Remainder Pass 1
-        self.process_remainder(values, rem_start, &mut state);
+        self.process_remainder(values, rem_start, state);
 
         // Post-processing and Pass 2
         self.finalize_results(values, n, state)
     }
 
     #[inline(always)]
-    fn process_simd_chunks(&self, values: &[f32], state: &mut ColumnState) -> usize {
+    fn process_simd_chunks(
+        &self,
+        values: &[f32],
+        global_idx: usize,
+        state: &mut ColumnState,
+    ) -> usize {
         let chunks = values.chunks_exact(LANES);
         let rem_start = (values.len() / LANES) * LANES;
 
-        for (chunk_idx, i) in chunks.enumerate() {
+        for i in chunks {
             let chunk = f32x4::from_slice(i);
-            let global_idx = chunk_idx * LANES;
             let offset = global_idx as f32;
 
             if self.compute[0] {
@@ -96,6 +101,7 @@ impl<'a> StaticEngine<'a> {
                 state.prev_last = i[LANES - 1];
             }
 
+            // this need to be indexed for window and not global
             if self.compute[16] {
                 let left = f32x4::from_array([
                     if global_idx > 0 {
@@ -126,26 +132,7 @@ impl<'a> StaticEngine<'a> {
                 state.sum_ix += (indices * chunk).reduce_sum();
             }
 
-            if self.compute[23] {
-                for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
-                    let b = &self.paa_boundaries[t_idx];
-                    let seg_idx = &mut state.current_paa_segs[t_idx];
-                    if global_idx + LANES <= b[*seg_idx + 1] {
-                        state.paa_sums[t_idx][*seg_idx] += chunk.reduce_sum();
-                    } else {
-                        for (j, v) in i.iter().enumerate().take(LANES) {
-                            let idx = global_idx + j;
-                            while *seg_idx < state.paa_sums[t_idx].len() - 1
-                                && idx >= b[*seg_idx + 1]
-                            {
-                                *seg_idx += 1;
-                            }
-                            state.paa_sums[t_idx][*seg_idx] += v;
-                        }
-                    }
-                }
-            }
-
+            // this also needs to be indexed for window and not global
             if self.compute[30] {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
@@ -228,16 +215,6 @@ impl<'a> StaticEngine<'a> {
             if self.compute[21] {
                 state.sum_ix += (i as f32) * val;
             }
-            if self.compute[23] {
-                for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
-                    let b = &self.paa_boundaries[t_idx];
-                    let seg_idx = &mut state.current_paa_segs[t_idx];
-                    while *seg_idx < state.paa_sums[t_idx].len() - 1 && i >= b[*seg_idx + 1] {
-                        *seg_idx += 1;
-                    }
-                    state.paa_sums[t_idx][*seg_idx] += val;
-                }
-            }
             if self.compute[30] {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
@@ -250,7 +227,13 @@ impl<'a> StaticEngine<'a> {
     }
 
     #[inline(always)]
-    fn finalize_results(&self, values: &[f32], n: f32, state: ColumnState) -> Vec<f32> {
+    fn finalize_results(
+        &self,
+        values: &[f32],
+        n: f32,
+        state: &mut ColumnState,
+        running_sorted: &mut Vec<f32>,
+    ) -> Vec<f32> {
         let mean = state.total_sum / n;
         let mac_sum = state.mac_sum_vec.reduce_sum();
         let mc_sum = state.mc_sum_vec.reduce_sum();
@@ -272,47 +255,21 @@ impl<'a> StaticEngine<'a> {
         let mut zc_std = 0.0;
 
         if self.compute[37] {
-            if self.compute[6] {
-                let mut copy = values.to_vec();
-                let n_size = copy.len();
-                let mid = n_size / 2;
-                median = *copy
-                    .select_nth_unstable_by(mid, |a, b| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .1;
+            if self.compute[6] || self.compute[10] {
+                running_sorted.extend_from_slice(values);
+                running_sorted
+                    .sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let n_size = running_sorted.len();
+                if self.compute[6] {
+                    let mid = n_size / 2;
+                    median = running_sorted[mid];
+                }
                 if self.compute[10] {
                     let q1_idx = (n_size as f32 * 0.25) as usize;
                     let q3_idx = (n_size as f32 * 0.75) as usize;
-                    let q1 = *copy
-                        .select_nth_unstable_by(q1_idx, |a, b| {
-                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                        })
-                        .1;
-                    let q3 = *copy
-                        .select_nth_unstable_by(q3_idx, |a, b| {
-                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                        })
-                        .1;
+                    let q1 = running_sorted[q1_idx];
+                    let q3 = running_sorted[q3_idx];
                     iqr = q3 - q1;
-                }
-                if self.compute[11] {
-                    let range = state.max_value - state.min_value;
-                    if range > 1e-9 {
-                        let bins = 10;
-                        let mut counts = vec![0usize; bins];
-                        for &v in values {
-                            let b =
-                                (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
-                            counts[b.min(bins - 1)] += 1;
-                        }
-                        for &c in &counts {
-                            if c > 0 {
-                                let p = c as f32 / n;
-                                entropy -= p * p.ln();
-                            }
-                        }
-                    }
                 }
             }
 
@@ -321,9 +278,60 @@ impl<'a> StaticEngine<'a> {
             let mut m3_vec = f32x4::splat(0.0);
             let mut m4_vec = f32x4::splat(0.0);
             let mut mad_sum_vec = f32x4::splat(0.0);
+            let range = state.max_value - state.min_value;
+            let bins = 10;
+            let mut counts = vec![0usize; bins];
 
-            for chunk in values.chunks_exact(LANES) {
+            for (i, chunk) in values.chunks_exact(LANES).enumerate() {
+                if self.compute[11] && range > 1e-9 {
+                    for &v in chunk {
+                        let b = (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
+                        counts[b.min(bins - 1)] += 1;
+                    }
+                }
+
+                if self.compute.any([25, 26, 27, 28]) {
+                    for &val in chunk {
+                        if val > mean {
+                            count_a += 1;
+                            current_strike_a += 1;
+                            max_strike_a = max_strike_a.max(current_strike_a);
+                            current_strike_b = 0;
+                        } else if val < mean {
+                            count_b += 1;
+                            current_strike_b += 1;
+                            max_strike_b = max_strike_b.max(current_strike_b);
+                            current_strike_a = 0;
+                        } else {
+                            current_strike_a = 0;
+                            current_strike_b = 0;
+                        }
+                    }
+                }
+
                 let c = f32x4::from_slice(chunk);
+
+                if self.compute[23] {
+                    let global_idx = i * LANES;
+                    for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
+                        let b = &self.paa_boundaries[t_idx];
+                        let seg_idx = &mut state.current_paa_segs[t_idx];
+                        if global_idx + LANES <= b[*seg_idx + 1] {
+                            state.paa_sums[t_idx][*seg_idx] += c.reduce_sum();
+                        } else {
+                            for (j, v) in chunk.iter().enumerate().take(LANES) {
+                                let idx = global_idx + j;
+                                while *seg_idx < state.paa_sums[t_idx].len() - 1
+                                    && idx >= b[*seg_idx + 1]
+                                {
+                                    *seg_idx += 1;
+                                }
+                                state.paa_sums[t_idx][*seg_idx] += v;
+                            }
+                        }
+                    }
+                }
+
                 let diff = c - mean_vec;
                 if self.compute[2] {
                     let d2 = diff * diff;
@@ -339,13 +347,35 @@ impl<'a> StaticEngine<'a> {
                     mad_sum_vec += diff.abs();
                 }
             }
+
+            if self.compute[11] && range > 1e-9 {
+                for &c in &counts {
+                    if c > 0 {
+                        let p = c as f32 / n;
+                        entropy -= p * p.ln();
+                    }
+                }
+            }
+
             m2 = m2_vec.reduce_sum();
             m3 = m3_vec.reduce_sum();
             m4 = m4_vec.reduce_sum();
             mad_sum = mad_sum_vec.reduce_sum();
 
             let rem_start = (values.len() / LANES) * LANES;
-            for &val in &values[rem_start..] {
+            for (i, &val) in values[rem_start..].iter().enumerate() {
+                if self.compute[23] {
+                    let i = rem_start + i;
+                    for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
+                        let b = &self.paa_boundaries[t_idx];
+                        let seg_idx = &mut state.current_paa_segs[t_idx];
+                        while *seg_idx < state.paa_sums[t_idx].len() - 1 && i >= b[*seg_idx + 1] {
+                            *seg_idx += 1;
+                        }
+                        state.paa_sums[t_idx][*seg_idx] += val;
+                    }
+                }
+
                 let diff = val - mean;
                 if self.compute[2] {
                     let d2 = diff * diff;
@@ -359,25 +389,6 @@ impl<'a> StaticEngine<'a> {
                 }
                 if self.compute[9] {
                     mad_sum += diff.abs();
-                }
-            }
-
-            if self.compute.any([25, 26, 27, 28]) {
-                for &val in values {
-                    if val > mean {
-                        count_a += 1;
-                        current_strike_a += 1;
-                        max_strike_a = max_strike_a.max(current_strike_a);
-                        current_strike_b = 0;
-                    } else if val < mean {
-                        count_b += 1;
-                        current_strike_b += 1;
-                        max_strike_b = max_strike_b.max(current_strike_b);
-                        current_strike_a = 0;
-                    } else {
-                        current_strike_a = 0;
-                        current_strike_b = 0;
-                    }
                 }
             }
 
