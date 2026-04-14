@@ -1,4 +1,3 @@
-from ._tsfast import FeatureExtractor, ArrowExtractor, downsample
-from .extractor import Extractor
+from ._tsfast import Extractor
 
-__all__ = ["FeatureExtractor", "ArrowExtractor", "downsample", "Extractor"]
+__all__ = ["Extractor"]

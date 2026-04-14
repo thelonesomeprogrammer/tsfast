@@ -17,8 +17,8 @@ from sklearn.metrics import accuracy_score, f1_score
 warnings.filterwarnings("ignore")
 COLNAMES = ["Time (ms)", "Nset (1/min)", "Torque (Nm)", "Current (V)", "Angle (deg)", "Depth (mm)"]
 # Configuration
-DATA_DIR = "testdata/Intrinsic data"
-#DATA_DIR = "prev-data/Dataset/Intrinsic data"
+#DATA_DIR = "testdata/Intrinsic data"
+DATA_DIR = "prev-data/Dataset/Intrinsic data"
 CATEGORIES = ["N", "NS", "OT", "UT"]
 SIGNAL_COL = [2,3]
 CACHE_DIR = "cache"
@@ -54,7 +54,7 @@ def benchmark_tsfast(X):
     #rust_features = ["total_sum", "min_value", "max_value", "mean", "std_dev", "skewness", "kurtosis", "variation_coefficient", "rms", "energy", "variance", "mean_abs_change", "mean_change", "abs_sum_change"]
 
     start = time.time()
-    extrat = tsfast.ArrowExtractor(rust_features)
+    extrat = tsfast.Extractor(rust_features)
     extracted = []
     names=[]
     for i in SIGNAL_COL:
