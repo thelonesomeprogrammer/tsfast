@@ -1,6 +1,7 @@
 use crate::common::ColumnState;
 use crate::common::LANES;
 use crate::types::{FastBitArray, Feature};
+use smallvec::{SmallVec, smallvec};
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;

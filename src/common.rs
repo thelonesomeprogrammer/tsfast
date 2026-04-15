@@ -1,3 +1,4 @@
+use smallvec::SmallVec;
 use std::simd::f32x4;
 
 pub const LANES: usize = 4;
@@ -16,7 +17,7 @@ pub struct ColumnState {
     pub sum_ix: f32,
     pub auc_sum: f32,
     pub peaks: u32,
-    pub zc_indices: Vec<f32>,
+    pub zc_indices: SmallVec<[f32; 32]>,
     pub paa_sums: Vec<Vec<f32>>,
     pub current_paa_segs: Vec<usize>,
     pub c3_sums: Vec<f64>,
@@ -40,7 +41,7 @@ impl ColumnState {
             sum_ix: 0.0,
             auc_sum: 0.0,
             peaks: 0,
-            zc_indices: Vec::new(),
+            zc_indices: SmallVec::new(),
             paa_sums: unique_paa_totals
                 .iter()
                 .map(|&total| vec![0.0; total as usize])
@@ -60,13 +61,13 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
         match feat {
             Feature::TotalSum => bits.set_batch([0]),
             Feature::Mean => bits.set_batch([0, 1]),
-            Feature::Variance => bits.set_batch([0, 12]),
-            Feature::Std => bits.set_batch([0, 12, 3]),
+            Feature::Variance => bits.set_batch([0, 1, 2, 12, 37]),
+            Feature::Std => bits.set_batch([0, 1, 2, 3, 12, 37]),
             Feature::Min => bits.set_batch([4]),
             Feature::Max => bits.set_batch([5]),
             Feature::Median => bits.set_batch([6, 37]),
-            Feature::Skew => bits.set_batch([0, 12, 7]),
-            Feature::Kurtosis => bits.set_batch([0, 12, 8]),
+            Feature::Skew => bits.set_batch([0, 1, 2, 7, 12, 37]),
+            Feature::Kurtosis => bits.set_batch([0, 1, 2, 8, 12, 37]),
             Feature::Mad => bits.set_batch([0, 1, 9, 37]),
             Feature::Iqr => bits.set_batch([4, 5, 6, 10, 37]),
             Feature::Entropy => bits.set_batch([4, 5, 6, 10, 11, 37]),
@@ -87,7 +88,7 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::CountBelowMean => bits.set_batch([0, 1, 26, 37]),
             Feature::LongestStrikeAboveMean => bits.set_batch([0, 1, 27, 37]),
             Feature::LongestStrikeBelowMean => bits.set_batch([0, 1, 28, 37]),
-            Feature::VariationCoefficient => bits.set_batch([0, 12, 3, 29, 37]),
+            Feature::VariationCoefficient => bits.set_batch([0, 1, 2, 3, 12, 29, 37]),
             Feature::C3(_) => bits.set_batch([30]),
             Feature::Auc => bits.set_batch([31]),
             Feature::SlopeSignChange => bits.set_batch([16, 32]),

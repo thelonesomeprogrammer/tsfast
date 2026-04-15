@@ -419,8 +419,8 @@ impl<'a> StaticEngine<'a> {
                 Feature::AutocorrLag1 if var > 1e-9 => {
                     (state.sum_prod / (n - 1.0) - mean * mean) / var
                 }
-                Feature::MeanAbsChange => mac_sum / n,
-                Feature::MeanChange => mc_sum / n,
+                Feature::MeanAbsChange if n > 1.0 => mac_sum / (n - 1.0),
+                Feature::MeanChange if n > 1.0 => mc_sum / (n - 1.0),
                 Feature::CidCe => state.sum_sq_diff.sqrt(),
                 Feature::Slope => {
                     let mean_i = (n - 1.0) * 0.5;
