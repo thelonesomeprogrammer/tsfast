@@ -18,35 +18,37 @@ impl<'a> ExpandingEngine<'a> {
     pub(crate) fn process_expanding(
         &mut self,
         values: &[f32],
-        idx: usize,
+        global_idx: usize,
         state: &mut ColumnState,
         full_series: &mut Vec<f32>,
         running_sorted: &mut Vec<f32>,
     ) -> Vec<f32> {
-        let n = values.len() as f32;
+        // 1. Pass 1: Update incremental state with NEW values
+        let rem_start = self.process_simd_chunks(values, global_idx, state, full_series);
+        self.process_remainder(values, rem_start, global_idx, state, full_series);
 
-        // SIMD Pass 1
-        let rem_start = self.process_simd_chunks(values, idx, state);
+        // 2. Append to full_series for context in future calls and Pass 2
+        full_series.extend_from_slice(values);
+        let total_n = full_series.len() as f32;
 
-        // Remainder Pass 1
-        self.process_remainder(values, rem_start, state);
-
-        // Post-processing and Pass 2
-        self.finalize_results(values, n, state, running_sorted, full_series)
+        // 3. Pass 2: Finalize results over FULL series for mean-dependent features
+        self.finalize_results(total_n, state, running_sorted, full_series)
     }
 
     #[inline(always)]
     fn process_simd_chunks(
         &self,
         values: &[f32],
-        global_idx: usize,
+        global_start_idx: usize,
         state: &mut ColumnState,
+        full_series: &[f32],
     ) -> usize {
         let chunks = values.chunks_exact(LANES);
         let rem_start = (values.len() / LANES) * LANES;
 
-        for i in chunks {
+        for (c_idx, i) in chunks.enumerate() {
             let chunk = f32x4::from_slice(i);
+            let global_idx = global_start_idx + c_idx * LANES;
             let offset = global_idx as f32;
 
             if self.compute[0] {
@@ -103,30 +105,18 @@ impl<'a> ExpandingEngine<'a> {
                 state.prev_last = i[LANES - 1];
             }
 
-            // this need to be indexed for window and not global
             if self.compute[16] {
-                let left = f32x4::from_array([
-                    if global_idx > 0 {
-                        values[global_idx - 1]
-                    } else {
-                        values[0]
-                    },
-                    values[global_idx],
-                    values[global_idx + 1],
-                    values[global_idx + 2],
-                ]);
-                let right = f32x4::from_array([
-                    values[global_idx + 1],
-                    values[global_idx + 2],
-                    values[global_idx + 3],
-                    if global_idx + 4 < values.len() {
-                        values[global_idx + 4]
-                    } else {
-                        values[values.len() - 1]
-                    },
-                ]);
-                let mask = chunk.simd_gt(left) & chunk.simd_gt(right);
-                state.peaks += mask.to_bitmask().count_ones();
+                for j in 0..LANES {
+                    let idx = global_idx + j;
+                    if idx > 0 && idx < global_start_idx + values.len() - 1 {
+                        let prev = if idx > global_start_idx { values[idx - 1 - global_start_idx] } else { full_series[idx - 1] };
+                        let next = values[idx + 1 - global_start_idx];
+                        let val = i[j];
+                        if val > prev && val > next {
+                            state.peaks += 1;
+                        }
+                    }
+                }
             }
 
             if self.compute[21] {
@@ -134,23 +124,16 @@ impl<'a> ExpandingEngine<'a> {
                 state.sum_ix += (indices * chunk).reduce_sum();
             }
 
-            // this also needs to be indexed for window and not global
             if self.compute[30] {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
-                    if global_idx >= 2 * l {
-                        let chunk_il =
-                            f32x4::from_slice(&values[global_idx - l..global_idx - l + 4]);
-                        let chunk_i2l =
-                            f32x4::from_slice(&values[global_idx - 2 * l..global_idx - 2 * l + 4]);
-                        state.c3_sums[l_idx] += (chunk * chunk_il * chunk_i2l).reduce_sum() as f64;
-                    } else {
-                        for j in 0..LANES {
-                            let idx = global_idx + j;
-                            if idx >= 2 * l {
-                                state.c3_sums[l_idx] +=
-                                    (values[idx] * values[idx - l] * values[idx - 2 * l]) as f64;
-                            }
+                    for j in 0..LANES {
+                        let idx = global_idx + j;
+                        if idx >= 2 * l {
+                            let val = i[j];
+                            let v_l = if idx - l < global_start_idx { full_series[idx - l] } else { values[idx - l - global_start_idx] };
+                            let v_2l = if idx - 2 * l < global_start_idx { full_series[idx - 2 * l] } else { values[idx - 2 * l - global_start_idx] };
+                            state.c3_sums[l_idx] += (val * v_l * v_2l) as f64;
                         }
                     }
                 }
@@ -160,9 +143,17 @@ impl<'a> ExpandingEngine<'a> {
     }
 
     #[inline(always)]
-    fn process_remainder(&self, values: &[f32], rem_start: usize, state: &mut ColumnState) {
+    fn process_remainder(
+        &self,
+        values: &[f32],
+        rem_start: usize,
+        global_start_idx: usize,
+        state: &mut ColumnState,
+        full_series: &[f32],
+    ) {
         for i in rem_start..values.len() {
             let val = values[i];
+            let global_idx = global_start_idx + i;
             if self.compute[0] {
                 state.total_sum += val;
             }
@@ -182,8 +173,9 @@ impl<'a> ExpandingEngine<'a> {
                     state.sum_quads += sq * sq;
                 }
             }
-            if i > 0 {
-                let diff = val - values[i - 1];
+            if global_idx > 0 {
+                let prev = if i > 0 { values[i - 1] } else { state.prev_last };
+                let diff = val - prev;
                 if self.compute[18] {
                     state.mac_sum_vec += f32x4::from_array([diff.abs(), 0.0, 0.0, 0.0]);
                 }
@@ -194,53 +186,53 @@ impl<'a> ExpandingEngine<'a> {
                     state.sum_sq_diff += diff * diff;
                 }
                 if self.compute[17] {
-                    state.sum_prod += val * values[i - 1];
+                    state.sum_prod += val * prev;
                 }
                 if self.compute[31] {
-                    state.auc_sum += (val + values[i - 1]) * 0.5;
+                    state.auc_sum += (val + prev) * 0.5;
                 }
-                if self.compute[15] && (val < 0.0) != (values[i - 1] < 0.0) {
+                if self.compute[15] && (val < 0.0) != (prev < 0.0) {
                     state.zcr_count += 1;
                     if self.compute[36] {
-                        state.zc_indices.push(i as f32);
+                        state.zc_indices.push(global_idx as f32);
+                    }
+                }
+                
+                if self.compute[16] && i < values.len() - 1 {
+                    let next = values[i + 1];
+                    if val > prev && val > next {
+                        state.peaks += 1;
                     }
                 }
             }
-            if self.compute[16]
-                && i > 0
-                && i < values.len() - 1
-                && val > values[i - 1]
-                && val > values[i + 1]
-            {
-                state.peaks += 1;
-            }
             if self.compute[21] {
-                state.sum_ix += (i as f32) * val;
+                state.sum_ix += (global_idx as f32) * val;
             }
             if self.compute[30] {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
-                    if i >= 2 * l {
-                        state.c3_sums[l_idx] += (val * values[i - l] * values[i - 2 * l]) as f64;
+                    if global_idx >= 2 * l {
+                        let v_l = if global_idx - l < global_start_idx { full_series[global_idx - l] } else { values[global_idx - l - global_start_idx] };
+                        let v_2l = if global_idx - 2 * l < global_start_idx { full_series[global_idx - 2 * l] } else { values[global_idx - 2 * l - global_start_idx] };
+                        state.c3_sums[l_idx] += (val * v_l * v_2l) as f64;
                     }
                 }
             }
+            state.prev_last = val;
         }
     }
 
     #[inline(always)]
     fn finalize_results(
         &self,
-        values: &[f32],
         n: f32,
         state: &mut ColumnState,
         running_sorted: &mut Vec<f32>,
-        full_series: &mut Vec<f32>,
+        full_series: &[f32],
     ) -> Vec<f32> {
         let mean = state.total_sum / n;
         let mac_sum = state.mac_sum_vec.reduce_sum();
         let mc_sum = state.mc_sum_vec.reduce_sum();
-        full_series.extend_from_slice(values);
 
         let mut m2 = 0.0;
         let mut m3 = 0.0;
@@ -260,19 +252,17 @@ impl<'a> ExpandingEngine<'a> {
 
         if self.compute[37] {
             if self.compute[6] || self.compute[10] {
-                running_sorted.extend_from_slice(values);
-                running_sorted
-                    .sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                if running_sorted.len() < full_series.len() {
+                    running_sorted.extend_from_slice(&full_series[running_sorted.len()..]);
+                    running_sorted.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                }
                 let n_size = running_sorted.len();
                 if self.compute[6] {
-                    let mid = n_size / 2;
-                    median = running_sorted[mid];
+                    median = running_sorted[n_size / 2];
                 }
                 if self.compute[10] {
-                    let q1_idx = (n_size as f32 * 0.25) as usize;
-                    let q3_idx = (n_size as f32 * 0.75) as usize;
-                    let q1 = running_sorted[q1_idx];
-                    let q3 = running_sorted[q3_idx];
+                    let q1 = running_sorted[(n_size as f32 * 0.25) as usize];
+                    let q3 = running_sorted[(n_size as f32 * 0.75) as usize];
                     iqr = q3 - q1;
                 }
             }
@@ -314,42 +304,14 @@ impl<'a> ExpandingEngine<'a> {
                 }
 
                 let c = f32x4::from_slice(chunk);
-
-                if self.compute[23] {
-                    let global_idx = i * LANES;
-                    for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
-                        let b = &self.paa_boundaries[t_idx];
-                        let seg_idx = &mut state.current_paa_segs[t_idx];
-                        if global_idx + LANES <= b[*seg_idx + 1] {
-                            state.paa_sums[t_idx][*seg_idx] += c.reduce_sum();
-                        } else {
-                            for (j, v) in chunk.iter().enumerate().take(LANES) {
-                                let idx = global_idx + j;
-                                while *seg_idx < state.paa_sums[t_idx].len() - 1
-                                    && idx >= b[*seg_idx + 1]
-                                {
-                                    *seg_idx += 1;
-                                }
-                                state.paa_sums[t_idx][*seg_idx] += v;
-                            }
-                        }
-                    }
-                }
-
                 let diff = c - mean_vec;
                 if self.compute[2] {
                     let d2 = diff * diff;
                     m2_vec += d2;
-                    if self.compute[7] {
-                        m3_vec += d2 * diff;
-                    }
-                    if self.compute[8] {
-                        m4_vec += d2 * d2;
-                    }
+                    if self.compute[7] { m3_vec += d2 * diff; }
+                    if self.compute[8] { m4_vec += d2 * d2; }
                 }
-                if self.compute[9] {
-                    mad_sum_vec += diff.abs();
-                }
+                if self.compute[9] { mad_sum_vec += diff.abs(); }
             }
 
             if self.compute[11] && range > 1e-9 {
@@ -367,43 +329,38 @@ impl<'a> ExpandingEngine<'a> {
             mad_sum = mad_sum_vec.reduce_sum();
 
             let rem_start = (full_series.len() / LANES) * LANES;
-            for (i, &val) in full_series[rem_start..].iter().enumerate() {
-                if self.compute[23] {
-                    let i = rem_start + i;
-                    for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
-                        let b = &self.paa_boundaries[t_idx];
-                        let seg_idx = &mut state.current_paa_segs[t_idx];
-                        while *seg_idx < state.paa_sums[t_idx].len() - 1 && i >= b[*seg_idx + 1] {
-                            *seg_idx += 1;
-                        }
-                        state.paa_sums[t_idx][*seg_idx] += val;
-                    }
-                }
-
+            for i in rem_start..full_series.len() {
+                let val = full_series[i];
                 let diff = val - mean;
                 if self.compute[2] {
                     let d2 = diff * diff;
                     m2 += d2;
-                    if self.compute[7] {
-                        m3 += d2 * diff;
-                    }
-                    if self.compute[8] {
-                        m4 += d2 * d2;
-                    }
+                    if self.compute[7] { m3 += d2 * diff; }
+                    if self.compute[8] { m4 += d2 * d2; }
                 }
-                if self.compute[9] {
-                    mad_sum += diff.abs();
+                if self.compute[9] { mad_sum += diff.abs(); }
+                if self.compute.any([25, 26, 27, 28]) {
+                    if val > mean {
+                        count_a += 1;
+                        current_strike_a += 1;
+                        max_strike_a = max_strike_a.max(current_strike_a);
+                        current_strike_b = 0;
+                    } else if val < mean {
+                        count_b += 1;
+                        current_strike_b += 1;
+                        max_strike_b = max_strike_b.max(current_strike_b);
+                        current_strike_a = 0;
+                    } else {
+                        current_strike_a = 0;
+                        current_strike_b = 0;
+                    }
                 }
             }
 
             if self.compute[34] && !state.zc_indices.is_empty() {
                 zc_mean = state.zc_indices.iter().sum::<f32>() / state.zc_indices.len() as f32;
                 if self.compute[35] {
-                    let zc_m2 = state
-                        .zc_indices
-                        .iter()
-                        .map(|&idx| (idx - zc_mean).powi(2))
-                        .sum::<f32>();
+                    let zc_m2 = state.zc_indices.iter().map(|&idx| (idx - zc_mean).powi(2)).sum::<f32>();
                     zc_std = (zc_m2 / state.zc_indices.len() as f32).sqrt();
                 }
             }
@@ -431,9 +388,7 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::Rms | Feature::RootMeanSquare => (state.energy / n).sqrt(),
                 Feature::ZeroCrossingRate => state.zcr_count as f32 / n,
                 Feature::PeakCount => state.peaks as f32,
-                Feature::AutocorrLag1 if var > 1e-9 => {
-                    (state.sum_prod / (n - 1.0) - mean * mean) / var
-                }
+                Feature::AutocorrLag1 if var > 1e-9 => (state.sum_prod / (n - 1.0) - mean * mean) / var,
                 Feature::MeanAbsChange => mac_sum / n,
                 Feature::MeanChange => mc_sum / n,
                 Feature::CidCe => state.sum_sq_diff.sqrt(),
@@ -462,26 +417,18 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::C3(lag) => {
                     let l_idx = self.unique_c3_lags.iter().position(|&l| l == *lag).unwrap();
                     let l = *lag as usize;
-                    if values.len() > 2 * l {
-                        (state.c3_sums[l_idx] / (values.len() - 2 * l) as f64) as f32
-                    } else {
-                        0.0
-                    }
+                    if full_series.len() > 2 * l {
+                        (state.c3_sums[l_idx] / (full_series.len() - 2 * l) as f64) as f32
+                    } else { 0.0 }
                 }
                 Feature::Paa(total, index) => {
-                    let t_idx = self
-                        .unique_paa_totals
-                        .iter()
-                        .position(|&t| t == *total)
-                        .unwrap();
+                    let t_idx = self.unique_paa_totals.iter().position(|&t| t == *total).unwrap();
                     let b = &self.paa_boundaries[t_idx];
                     let start = b[*index as usize];
                     let end = b[*index as usize + 1];
                     if start < end {
                         state.paa_sums[t_idx][*index as usize] / (end - start) as f32
-                    } else {
-                        0.0
-                    }
+                    } else { 0.0 }
                 }
                 _ => 0.0,
             })

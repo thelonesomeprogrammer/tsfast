@@ -1,7 +1,7 @@
 use std::simd::f32x4;
 
 pub const LANES: usize = 4;
-pub(crate) struct ColumnState {
+pub struct ColumnState {
     pub total_sum: f32,
     pub min_value: f32,
     pub max_value: f32,
