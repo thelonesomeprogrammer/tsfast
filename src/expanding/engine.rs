@@ -16,10 +16,12 @@ pub(crate) struct ExpandingEngine<'a> {
 impl<'a> ExpandingEngine<'a> {
     #[inline(always)]
     pub(crate) fn process_expanding(
-        &self,
+        &mut self,
         values: &[f32],
         idx: usize,
         state: &mut ColumnState,
+        full_series: &mut Vec<f32>,
+        running_sorted: &mut Vec<f32>,
     ) -> Vec<f32> {
         let n = values.len() as f32;
 
@@ -30,7 +32,7 @@ impl<'a> ExpandingEngine<'a> {
         self.process_remainder(values, rem_start, state);
 
         // Post-processing and Pass 2
-        self.finalize_results(values, n, state)
+        self.finalize_results(values, n, state, running_sorted, full_series)
     }
 
     #[inline(always)]
@@ -233,10 +235,12 @@ impl<'a> ExpandingEngine<'a> {
         n: f32,
         state: &mut ColumnState,
         running_sorted: &mut Vec<f32>,
+        full_series: &mut Vec<f32>,
     ) -> Vec<f32> {
         let mean = state.total_sum / n;
         let mac_sum = state.mac_sum_vec.reduce_sum();
         let mc_sum = state.mc_sum_vec.reduce_sum();
+        full_series.extend_from_slice(values);
 
         let mut m2 = 0.0;
         let mut m3 = 0.0;
@@ -282,7 +286,7 @@ impl<'a> ExpandingEngine<'a> {
             let bins = 10;
             let mut counts = vec![0usize; bins];
 
-            for (i, chunk) in values.chunks_exact(LANES).enumerate() {
+            for (i, chunk) in full_series.chunks_exact(LANES).enumerate() {
                 if self.compute[11] && range > 1e-9 {
                     for &v in chunk {
                         let b = (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
@@ -362,8 +366,8 @@ impl<'a> ExpandingEngine<'a> {
             m4 = m4_vec.reduce_sum();
             mad_sum = mad_sum_vec.reduce_sum();
 
-            let rem_start = (values.len() / LANES) * LANES;
-            for (i, &val) in values[rem_start..].iter().enumerate() {
+            let rem_start = (full_series.len() / LANES) * LANES;
+            for (i, &val) in full_series[rem_start..].iter().enumerate() {
                 if self.compute[23] {
                     let i = rem_start + i;
                     for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {

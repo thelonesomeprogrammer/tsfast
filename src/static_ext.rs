@@ -9,10 +9,9 @@ use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::sync::Arc;
 
-pub mod depend;
 pub mod extractor;
 
-use depend::map_features_to_indices;
+use crate::common::map_features_to_indices;
 use extractor::StaticEngine;
 
 #[pyclass]
