@@ -64,4 +64,4 @@ print(f"Expanding shape: {expanding_results.shape}")
 
 ## License
 
-MIT
+GPLv3
