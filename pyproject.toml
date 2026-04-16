@@ -6,11 +6,15 @@ build-backend = "maturin"
 name = "tsfast"
 requires-python = ">=3.8"
 dependencies = [
-    "maturin>=1.13.1",
+    "maturin[zig]>=1.13.1",
     "numpy>=1.20",
     "pandas>=2.0.3",
+    "pyarrow>=17.0.0",
+    "pytest>=8.3.5",
+    "scipy>=1.10.0",
     "tsfel>=0.2.0",
     "tsfresh>=0.20.3",
+    "ziglang>=0.15.2",
 ]
 dynamic = ["version"]
 
