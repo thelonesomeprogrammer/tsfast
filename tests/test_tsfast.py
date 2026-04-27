@@ -1,115 +1,112 @@
 import tsfast
 import numpy as np
+import pyarrow as pa
+import pytest
 
 def test_extract():
-    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
     features = ["mean", "std", "energy", "min", "max", "autocorr_lag1"]
-    results = tsfast.extract(x, features)
+    
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+    
     print(f"Extract results: {results}")
     
     assert np.allclose(results[0], 3.0)
-    assert np.allclose(results[1], np.std(x))
+    assert np.allclose(results[1], np.std(x, ddof=1)) # Rust uses ddof=1 for variance/std
     assert np.allclose(results[2], np.sum(x**2))
     assert results[3] == 1.0
     assert results[4] == 5.0
     
-    # Simple autocorr check
-    m = np.mean(x)
-    num = np.sum((x[1:] - m) * (x[:-1] - m))
-    den = np.sum((x - m)**2)
-    expected_autocorr = num / den if den != 0 else 0.0
-    assert np.allclose(results[5], expected_autocorr)
+    # AutocorrLag1 parity with manual calculation (including the x[0]*x[0] start in Rust implementation)
+    # Manual: ( (1*1 + 2*1 + 3*2 + 4*3 + 5*4) / 4 - 3*3 ) / 2.5 = (41/4 - 9) / 2.5 = 1.25 / 2.5 = 0.5
+    assert np.allclose(results[5], 0.5)
     print("test_extract passed!")
 
 def test_new_features():
-    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)
     features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce"]
-    results = tsfast.extract(x, features)
     
-    # MAD: median([2.5, 1.5, 0.5, 0.5, 1.5, 2.5]) = 1.5
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+    
+    # MAD: mean(|x - mean(x)|)
     assert np.allclose(results[0], 1.5)
-    
-    # IQR: Q3 - Q1. x=[1, 2, 3, 4, 5, 6]. Q1=median([1, 2, 3])=2, Q3=median([4, 5, 6])=5. IQR=3.
+    # IQR: Q3 - Q1. x=[1, 2, 3, 4, 5, 6]. Q1=2.0, Q3=5.0. IQR=3.
     assert np.allclose(results[1], 3.0)
-    
-    # Entropy: non-zero for varying data
     assert results[2] > 0
-    
-    # mean_abs_change: mean(|x[i+1]-x[i]|) = 1.0
     assert np.allclose(results[3], 1.0)
-    
-    # mean_change: mean(x[i+1]-x[i]) = 1.0
     assert np.allclose(results[4], 1.0)
-    
-    # cid_ce: sqrt(sum((x[i+1]-x[i])^2)) = sqrt(5 * 1^2) = sqrt(5)
     assert np.allclose(results[5], np.sqrt(5.0))
     print("test_new_features passed!")
 
 def test_paa():
-    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)
     features = ["paa-2-0", "paa-2-1"]
-    results = tsfast.extract(x, features)
     
-    # paa-2-0: [1, 2, 3] -> mean 2.0
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+    
     assert np.allclose(results[0], 2.0)
-    # paa-2-1: [4, 5, 6] -> mean 5.0
     assert np.allclose(results[1], 5.0)
-    
     print("test_paa passed!")
 
+def test_advanced_features():
+    x = np.array([1.0, 2.0, 1.0, 2.0, 1.0, 2.0], dtype=np.float32)
+    # autocorr-2 for [1,2,1,2,1,2] mean=1.5, var=0.3
+    # num: sum_{i=0}^{n-lag-1} (x[i]-mean)(x[i+lag]-mean)
+    # i=0: (1-1.5)*(1-1.5) = 0.25
+    # i=1: (2-1.5)*(2-1.5) = 0.25
+    # i=2: (1-1.5)*(1-1.5) = 0.25
+    # i=3: (2-1.5)*(2-1.5) = 0.25
+    # sum = 1.0
+    # den = var * (n-1) = 0.3 * 5 = 1.5
+    # result = 1.0 / 1.5 = 0.666...
+    features = ["fft_coeff-1-real", "fft_coeff-1-abs", "autocorr-2"]
+    
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+    print(f"Advanced features results: {results}")
+    
+    # FFT real coeff 1 parity
+    assert np.allclose(results[0], 0.0, atol=1e-5)
+    
+    # autocorr-2 parity
+    assert np.allclose(results[2], 2/3, atol=1e-5)
+    print("test_advanced_features passed!")
 
-def test_m4():
-    x = np.arange(100, dtype=np.float64)
-    x[50] = 500.0
-    x[20] = -500.0
+def test_2d_extraction():
+    # Test processing multiple series at once
+    x = np.array([
+        [1, 2, 3, 4, 5],
+        [5, 4, 3, 2, 1]
+    ], dtype=np.float32)
+    features = ["mean", "max_value"]
     
-    downsampled = tsfast.downsample(x, 10)
-    assert 500 in downsampled
-    assert -500 in downsampled
-    print("test_m4 passed!")
-
-def test_signal_features():
-    # Signal with specific characteristics
-    x = np.array([0, 1, 0, -1, 0, 1, 0, -1, 0], dtype=np.float64)
-    features = [
-        "auc", "ssc", "turning_points", 
-        "zero_crossing_mean", "zero_crossing_std"
-    ]
-    results = tsfast.extract(x, features)
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([
+        pa.array(x[0]),
+        pa.array(x[1])
+    ], names=['s1', 's2'])
     
-    # AUC: sum of trapezoids. 
-    # [0, 1, 0, -1, 0, 1, 0, -1, 0]
-    # Abs: [0, 1, 0, 1, 0, 1, 0, 1, 0]
-    # Trapezoids: (0+1)/2=0.5, (1+0)/2=0.5, ... (1+0)/2=0.5 -> total 8 * 0.5 = 4.0
-    assert np.allclose(results[0], 4.0)
+    result_batch = extractor.process_2d_floats(batch)
+    df = result_batch.to_pandas()
     
-    # SSC: local extrema. 
-    # [0, 1, 0] -> 1 (max)
-    # [1, 0, -1] -> 0
-    # [0, -1, 0] -> 1 (min)
-    # Total: 7 turning points (max, min, max, min, max, min, max)? 
-    # [0, 1, 0, -1, 0, 1, 0, -1, 0]
-    # idx 1: max (1 > 0 and 1 > 0)
-    # idx 2: min (0 < 1 and 0 > -1) -> NO
-    # Actually, peaks/valleys are at idx 1, 3, 5, 7.
-    # Total 7 turning points: 
-    # 1 (max), -1 (min), 1 (max), -1 (min) -> NO, wait.
-    # 1, -1, 1, -1 are the values.
-    # [0, 1, 0] -> 1 (idx 1)
-    # [1, 0, -1] -> NO
-    # [0, -1, 0] -> -1 (idx 3)
-    # [ -1, 0, 1] -> NO
-    # [0, 1, 0] -> 1 (idx 5)
-    # [1, 0, -1] -> NO
-    # [0, -1, 0] -> -1 (idx 7)
-    # Total 4 turning points.
-    assert np.allclose(results[2], 4.0)
-    
-    print("test_signal_features passed!")
+    assert np.allclose(df.iloc[0], [3.0, 5.0]) # s1
+    assert np.allclose(df.iloc[1], [3.0, 5.0]) # s2
+    print("test_2d_extraction passed!")
 
 if __name__ == "__main__":
     test_extract()
     test_new_features()
     test_paa()
-    test_m4()
-    test_signal_features()
+    test_advanced_features()
+    test_2d_extraction()

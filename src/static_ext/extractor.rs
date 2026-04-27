@@ -504,15 +504,19 @@ impl<'a> StaticEngine<'a> {
                 Feature::LastLocMax => last_max_idx as f32 / n,
                 Feature::FirstLocMin => first_min_idx as f32 / n,
                 Feature::LastLocMin => last_min_idx as f32 / n,
-                Feature::Autocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
+                Feature::Autocorr(lag) => {
                     let l = *lag as usize;
-                    let mut sum = 0.0;
-                    for i in 0..values.len() - l {
-                        sum += (values[i] - mean) * (values[i + l] - mean);
-                    }
-                    let m2 = var * (n - 1.0);
-                    if m2.abs() > 1e-9 {
-                        sum / m2
+                    if var > 1e-9 && values.len() > l {
+                        let mut sum = 0.0;
+                        for i in 0..values.len() - l {
+                            sum += (values[i] - mean) * (values[i + l] - mean);
+                        }
+                        let m2 = var * (n - 1.0);
+                        if m2.abs() > 1e-9 {
+                            sum / m2
+                        } else {
+                            0.0
+                        }
                     } else {
                         0.0
                     }
