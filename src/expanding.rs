@@ -16,6 +16,7 @@ pub struct ExpandingExtractor {
     pub compute: FastBitArray,
     pub unique_paa_totals: Vec<u16>,
     pub unique_c3_lags: Vec<u16>,
+    pub unique_autocorr_lags: Vec<u16>,
     pub paa_boundaries: Vec<Vec<usize>>,
     // State per column
     pub states: Vec<ColumnState>,
@@ -30,28 +31,44 @@ impl ExpandingExtractor {
         let mut features = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
+        let mut unique_autocorr_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
             let feat = Feature::from(i);
-            if let Feature::Paa(total, _) = feat {
-                unique_paa_totals.insert(total);
-            } else if let Feature::C3(lag) = feat {
-                unique_c3_lags.insert(lag);
+            match feat {
+                Feature::Paa(total, _) => {
+                    unique_paa_totals.insert(total);
+                }
+                Feature::C3(lag) => {
+                    unique_c3_lags.insert(lag);
+                }
+                Feature::Autocorr(lag) => {
+                    unique_autocorr_lags.insert(lag);
+                }
+                Feature::PartialAutocorr(lag) => {
+                    // PACF also needs autocorrelations up to lag
+                    for l in 1..=lag {
+                        unique_autocorr_lags.insert(l);
+                    }
+                }
+                _ => {}
             }
             features.push(feat);
         }
         let compute = map_features_to_indices(&features);
         let unique_paa_totals: Vec<u16> = unique_paa_totals.into_iter().collect();
         let unique_c3_lags: Vec<u16> = unique_c3_lags.into_iter().collect();
+        let unique_autocorr_lags: Vec<u16> = unique_autocorr_lags.into_iter().collect();
 
         Self {
             features,
             compute,
             unique_paa_totals,
             unique_c3_lags,
+            unique_autocorr_lags,
             paa_boundaries: Vec::new(),
             states: (0..n_cols)
-                .map(|_| ColumnState::new(&[], &[], 0.0))
+                .map(|_| ColumnState::new(&[], &[], &[], 0.0))
                 .collect(), // Initial placeholder
             histories: vec![Vec::new(); n_cols],
             sorted_histories: vec![Vec::new(); n_cols],
@@ -75,6 +92,7 @@ impl ExpandingExtractor {
                 self.states.push(ColumnState::new(
                     &self.unique_paa_totals,
                     &self.unique_c3_lags,
+                    &self.unique_autocorr_lags,
                     0.0,
                 ));
                 self.histories.push(Vec::new());
@@ -82,51 +100,62 @@ impl ExpandingExtractor {
             }
         }
 
-        let mut column_results = Vec::with_capacity(n_cols);
-
-        for col_idx in 0..n_cols {
-            let array = record_batch
-                .column(col_idx)
-                .as_any()
-                .downcast_ref::<Float32Array>()
-                .ok_or_else(|| PyTypeError::new_err("Expected Float32Array"))?;
-
-            let values = array.values();
-
-            // If this is the first update for this column, initialize prev_last
-            if self.histories[col_idx].is_empty() {
-                self.states[col_idx] =
-                    ColumnState::new(&self.unique_paa_totals, &self.unique_c3_lags, values[0]);
-            }
-
-            // PAA boundaries recalculation
-            let total_n = self.histories[col_idx].len() + values.len();
-            let mut current_paa_boundaries = Vec::new();
-            for &total in &self.unique_paa_totals {
+        // Pre-calculate PAA boundaries once for all columns
+        let total_n = self.histories[0].len() + n_rows;
+        let current_paa_boundaries: Vec<Vec<usize>> = self
+            .unique_paa_totals
+            .iter()
+            .map(|&total| {
                 let mut b = Vec::with_capacity(total as usize + 1);
                 for i in 0..=total {
                     b.push((i as f32 * total_n as f32 / total as f32) as usize);
                 }
-                current_paa_boundaries.push(b);
-            }
+                b
+            })
+            .collect();
 
-            let mut engine = ExpandingEngine {
-                compute: self.compute,
-                features: &self.features,
-                unique_paa_totals: &self.unique_paa_totals,
-                unique_c3_lags: &self.unique_c3_lags,
-                paa_boundaries: &current_paa_boundaries,
-            };
+        use rayon::prelude::*;
 
-            let res = engine.process_expanding(
-                values,
-                self.histories[col_idx].len(),
-                &mut self.states[col_idx],
-                &mut self.histories[col_idx],
-                &mut self.sorted_histories[col_idx],
-            );
-            column_results.push(res);
-        }
+        let column_results: Vec<Vec<f32>> = self.states[..n_cols]
+            .par_iter_mut()
+            .zip(self.histories[..n_cols].par_iter_mut())
+            .zip(self.sorted_histories[..n_cols].par_iter_mut())
+            .zip(record_batch.columns().par_iter())
+            .map(|(((state, history), sorted_history), column)| {
+                let array = column
+                    .as_any()
+                    .downcast_ref::<Float32Array>()
+                    .expect("Expected Float32Array");
+
+                let values = array.values();
+
+                if history.is_empty() {
+                    *state = ColumnState::new(
+                        &self.unique_paa_totals,
+                        &self.unique_c3_lags,
+                        &self.unique_autocorr_lags,
+                        values[0],
+                    );
+                }
+
+                let mut engine = ExpandingEngine {
+                    compute: self.compute,
+                    features: &self.features,
+                    unique_paa_totals: &self.unique_paa_totals,
+                    unique_c3_lags: &self.unique_c3_lags,
+                    unique_autocorr_lags: &self.unique_autocorr_lags,
+                    paa_boundaries: &current_paa_boundaries,
+                };
+
+                engine.process_expanding(
+                    values,
+                    history.len(),
+                    state,
+                    history,
+                    sorted_history,
+                )
+            })
+            .collect();
 
         let mut fields = Vec::with_capacity(self.features.len());
         for feat in &self.features {

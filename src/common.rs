@@ -21,11 +21,29 @@ pub struct ColumnState {
     pub paa_sums: Vec<Vec<f32>>,
     pub current_paa_segs: Vec<usize>,
     pub c3_sums: Vec<f64>,
+    pub autocorr_sums: Vec<f64>,
+    pub prefix_sums: Vec<f32>,
     pub prev_last: f32,
+    pub abs_max: f32,
+    pub first_max_idx: usize,
+    pub last_max_idx: usize,
+    pub first_min_idx: usize,
+    pub last_min_idx: usize,
+    // Incremental moments (Welford's or similar)
+    pub n: f32,
+    pub mean: f32,
+    pub m2: f32,
+    pub m3: f32,
+    pub m4: f32,
 }
 
 impl ColumnState {
-    pub fn new(unique_paa_totals: &[u16], unique_c3_lags: &[u16], first_val: f32) -> Self {
+    pub fn new(
+        unique_paa_totals: &[u16],
+        unique_c3_lags: &[u16],
+        unique_autocorr_lags: &[u16],
+        first_val: f32,
+    ) -> Self {
         Self {
             total_sum: 0.0,
             min_value: f32::INFINITY,
@@ -48,7 +66,19 @@ impl ColumnState {
                 .collect(),
             current_paa_segs: vec![0usize; unique_paa_totals.len()],
             c3_sums: vec![0.0; unique_c3_lags.len()],
+            autocorr_sums: vec![0.0; unique_autocorr_lags.len()],
+            prefix_sums: Vec::new(),
             prev_last: first_val,
+            abs_max: 0.0,
+            first_max_idx: 0,
+            last_max_idx: 0,
+            first_min_idx: 0,
+            last_min_idx: 0,
+            n: 0.0,
+            mean: 0.0,
+            m2: 0.0,
+            m3: 0.0,
+            m4: 0.0,
         }
     }
 }
@@ -95,6 +125,17 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::TurningPoints => bits.set_batch([16, 33]),
             Feature::ZeroCrossingMean => bits.set_batch([0, 1, 15, 34, 36, 37]),
             Feature::ZeroCrossingStd => bits.set_batch([0, 1, 15, 34, 35, 36, 37]),
+            Feature::AbsMax => bits.set_batch([38]),
+            Feature::FirstLocMax => bits.set_batch([5, 39]),
+            Feature::LastLocMax => bits.set_batch([5, 40]),
+            Feature::FirstLocMin => bits.set_batch([4, 41]),
+            Feature::LastLocMin => bits.set_batch([4, 42]),
+            Feature::Autocorr(_) => bits.set_batch([0, 1, 12, 43, 37]),
+            Feature::PartialAutocorr(_) => bits.set_batch([0, 1, 12, 44, 37]),
+            Feature::TimeReversalAsymmetry(_) => bits.set_batch([45, 37]),
+            Feature::FftCoefficient(_, _) => bits.set_batch([46, 37]),
+            Feature::ApproxEntropy(_, _) => bits.set_batch([47, 37]),
+            Feature::AggLinearTrend(_, _, _) => bits.set_batch([48, 37]),
         }
     }
     bits
