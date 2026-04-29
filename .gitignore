@@ -4,3 +4,6 @@
 /python
 /cache
 __pycache__/
+
+prev-data/
+_tsfast.cpython-*.so

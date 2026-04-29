@@ -1,7 +1,7 @@
+use num_complex::Complex;
+use realfft::num_complex;
 use smallvec::SmallVec;
 use std::simd::f32x4;
-use realfft::num_complex;
-use num_complex::Complex;
 
 pub const LANES: usize = 4;
 
@@ -43,18 +43,18 @@ impl SlidingDFT {
     }
 }
 pub struct ColumnState {
-    pub total_sum: f64,
+    pub total_sum: f32,
     pub min_value: f32,
     pub max_value: f32,
-    pub energy: f64,
-    pub sum_cubes: f64,
-    pub sum_quads: f64,
-    pub mac_sum: f64,
-    pub mc_sum: f64,
-    pub sum_sq_diff: f64,
-    pub sum_prod: f64,
-    pub sum_ix: f64,
-    pub auc_sum: f64,
+    pub energy: f32,
+    pub sum_cubes: f32,
+    pub sum_quads: f32,
+    pub mac_sum: f32,
+    pub mc_sum: f32,
+    pub sum_sq_diff: f32,
+    pub sum_prod: f32,
+    pub sum_ix: f32,
+    pub auc_sum: f32,
     pub mac_sum_vec: f32x4,
     pub mc_sum_vec: f32x4,
     pub zcr_count: u32,
@@ -62,10 +62,12 @@ pub struct ColumnState {
     pub zc_indices: SmallVec<[f32; 32]>,
     pub paa_sums: Vec<Vec<f32>>,
     pub current_paa_segs: Vec<usize>,
-    pub c3_sums: Vec<f64>,
-    pub autocorr_sums: Vec<f64>,
+    pub c3_sums: Vec<f32>,
+    pub autocorr_sums: Vec<f32>,
     pub prefix_sums: Vec<f32>,
     pub prev_last: f32,
+    pub prev_val: f32,
+    pub prev_prev_val: f32,
     pub abs_max: f32,
     pub first_max_idx: usize,
     pub last_max_idx: usize,
@@ -99,7 +101,7 @@ pub fn next_good_fft_size(n: usize) -> usize {
         return n;
     }
 
-    let limit = (n as f64 * 1.05) as usize;
+    let limit = (n as f32 * 1.05) as usize;
     for candidate in n..=limit {
         if is_smooth(candidate) {
             return candidate;
@@ -155,6 +157,8 @@ impl ColumnState {
             autocorr_sums: vec![0.0; unique_autocorr_lags.len()],
             prefix_sums: Vec::new(),
             prev_last: first_val,
+            prev_val: first_val,
+            prev_prev_val: first_val,
             abs_max: 0.0,
             first_max_idx: 0,
             last_max_idx: 0,
@@ -198,7 +202,8 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::Max => bits.set_batch([5]),
             Feature::Median => bits.set_batch([6, 37]),
             Feature::Skew => bits.set_batch([0, 1, 2, 7, 12, 37]),
-            Feature::Kurtosis => bits.set_batch([0, 1, 2, 8, 12, 37]),
+            Feature::UnbiasedFisherKurtosis => bits.set_batch([0, 1, 2, 8, 12, 37]),
+            Feature::BiasedFisherKurtosis => bits.set_batch([0, 1, 2, 8, 12, 37]),
             Feature::Mad => bits.set_batch([0, 1, 9, 37]),
             Feature::Iqr => bits.set_batch([4, 5, 6, 10, 37]),
             Feature::Entropy => bits.set_batch([4, 5, 6, 10, 11, 37]),
@@ -208,6 +213,7 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::ZeroCrossingRate => bits.set_batch([15]),
             Feature::PeakCount => bits.set_batch([16]),
             Feature::AutocorrLag1 => bits.set_batch([0, 1, 12, 17]),
+            Feature::AutocorrFirst1e => bits.set_batch([0, 1, 12, 43, 37]),
             Feature::MeanAbsChange => bits.set_batch([0, 1, 18]),
             Feature::MeanChange => bits.set_batch([0, 1, 19]),
             Feature::CidCe => bits.set_batch([0, 1, 20]),
@@ -231,7 +237,13 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::LastLocMax => bits.set_batch([5, 40]),
             Feature::FirstLocMin => bits.set_batch([4, 41]),
             Feature::LastLocMin => bits.set_batch([4, 42]),
-            Feature::Autocorr(_) => bits.set_batch([0, 1, 2, 12, 43, 37]),
+            Feature::Autocorr(lag) => {
+                if *lag == 1 {
+                    bits.set_batch([0, 1, 12, 17, 37]);
+                } else {
+                    bits.set_batch([0, 1, 2, 12, 43, 37]);
+                }
+            }
             Feature::PartialAutocorr(_) => bits.set_batch([0, 1, 2, 12, 44, 37]),
             Feature::TimeReversalAsymmetry(_) => bits.set_batch([45, 37]),
             Feature::FftCoefficient(_, _) => bits.set_batch([46, 37]),

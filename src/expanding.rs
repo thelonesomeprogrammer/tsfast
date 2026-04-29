@@ -79,12 +79,19 @@ impl ExpandingExtractor {
         Self {
             features,
             compute,
-            unique_paa_totals,
-            unique_c3_lags,
-            unique_autocorr_lags,
+            unique_paa_totals: unique_paa_totals.clone(),
+            unique_c3_lags: unique_c3_lags.clone(),
+            unique_autocorr_lags: unique_autocorr_lags.clone(),
             paa_boundaries: Vec::new(),
             states: (0..n_cols)
-                .map(|_| ColumnState::new(&[], &[], &[], 0.0))
+                .map(|_| {
+                    ColumnState::new(
+                        &unique_paa_totals,
+                        &unique_c3_lags,
+                        &unique_autocorr_lags,
+                        0.0,
+                    )
+                })
                 .collect(), // Initial placeholder
             histories: vec![Vec::new(); n_cols],
             sorted_histories: vec![Vec::new(); n_cols],

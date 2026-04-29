@@ -38,7 +38,7 @@ impl<'a> ExpandingEngine<'a> {
         // Update prefix sums before extending full_series or after?
         // Let's do it after extending full_series to be consistent.
         full_series.extend_from_slice(values);
-        
+
         if state.prefix_sums.is_empty() && !full_series.is_empty() {
             let mut s = 0.0;
             state.prefix_sums.reserve(full_series.len());
@@ -151,12 +151,12 @@ impl<'a> ExpandingEngine<'a> {
         for (i, &val) in values[..rem_start].iter().enumerate() {
             let global_idx = global_start_idx + i;
 
-            if self.compute[16] && i > 0 && i < values.len() - 1 {
-                let prev = values[i - 1];
-                let next = values[i + 1];
-                if val > prev && val > next {
+            if self.compute[16] {
+                if state.prev_val > state.prev_prev_val && state.prev_val > val {
                     state.peaks += 1;
                 }
+                state.prev_prev_val = state.prev_val;
+                state.prev_val = val;
             }
 
             if self.compute[30] {
@@ -173,7 +173,7 @@ impl<'a> ExpandingEngine<'a> {
                         } else {
                             values[global_idx - 2 * l - global_start_idx]
                         };
-                        state.c3_sums[l_idx] += (val * v_l * v_2l) as f64;
+                        state.c3_sums[l_idx] += val * v_l * v_2l;
                     }
                 }
             }
@@ -187,7 +187,7 @@ impl<'a> ExpandingEngine<'a> {
                         } else {
                             values[global_idx - l - global_start_idx]
                         };
-                        state.autocorr_sums[l_idx] += (val * v_l) as f64;
+                        state.autocorr_sums[l_idx] += val * v_l;
                     }
                 }
             }
@@ -269,10 +269,14 @@ impl<'a> ExpandingEngine<'a> {
                         state.zc_indices.push(global_idx as f32);
                     }
                 }
-                if self.compute[16] {
-                    // This is a simple peak check, but wait, it needs next value too.
-                    // Actually the previous peak implementation was also flawed as it didn't have next value for the last element.
+            }
+
+            if self.compute[16] {
+                if state.prev_val > state.prev_prev_val && state.prev_val > val {
+                    state.peaks += 1;
                 }
+                state.prev_prev_val = state.prev_val;
+                state.prev_val = val;
             }
 
             if self.compute[30] {
@@ -289,7 +293,7 @@ impl<'a> ExpandingEngine<'a> {
                         } else {
                             values[global_idx - 2 * l - global_start_idx]
                         };
-                        state.c3_sums[l_idx] += (val * v_l * v_2l) as f64;
+                        state.c3_sums[l_idx] += val * v_l * v_2l;
                     }
                 }
             }
@@ -303,7 +307,7 @@ impl<'a> ExpandingEngine<'a> {
                         } else {
                             values[global_idx - l - global_start_idx]
                         };
-                        state.autocorr_sums[l_idx] += (val * v_l) as f64;
+                        state.autocorr_sums[l_idx] += val * v_l;
                     }
                 }
             }
@@ -350,8 +354,9 @@ impl<'a> ExpandingEngine<'a> {
         if self.compute.any([6, 10, 49, 63]) {
             if running_sorted.len() < full_series.len() {
                 let mut new_elements: Vec<f32> = full_series[running_sorted.len()..].to_vec();
-                new_elements.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                
+                new_elements
+                    .sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
                 if running_sorted.is_empty() {
                     *running_sorted = new_elements;
                 } else {
@@ -375,12 +380,27 @@ impl<'a> ExpandingEngine<'a> {
             let n_size = running_sorted.len();
             if n_size > 0 {
                 if self.compute[6] {
-                    median = running_sorted[n_size / 2];
+                    if n_size % 2 == 1 {
+                        median = running_sorted[n_size / 2];
+                    } else {
+                        let mid = n_size / 2;
+                        median = (running_sorted[mid] + running_sorted[mid - 1]) / 2.0;
+                    }
                 }
                 if self.compute[10] {
-                    let q1 = running_sorted[(n_size as f32 * 0.25) as usize];
-                    let q3 = running_sorted[(n_size as f32 * 0.75) as usize];
-                    iqr = q3 - q1;
+                    let n_f = n_size as f32;
+                    let get_q = |q: f32, data: &[f32]| -> f32 {
+                        if data.is_empty() { return 0.0; }
+                        let idx = q * (n_f - 1.0);
+                        let i = idx.floor() as usize;
+                        let f = idx - i as f32;
+                        if i >= data.len() - 1 {
+                            data[data.len() - 1]
+                        } else {
+                            (1.0 - f) * data[i] + f * data[i + 1]
+                        }
+                    };
+                    iqr = get_q(0.75, running_sorted) - get_q(0.25, running_sorted);
                 }
             }
         }
@@ -393,7 +413,8 @@ impl<'a> ExpandingEngine<'a> {
 
         if self.compute.any_fft() {
             let n_total = full_series.len();
-            let should_update = state.last_fft_n == 0 || (n_total - state.last_fft_n) >= self.fft_update_period;
+            let should_update =
+                state.last_fft_n == 0 || (n_total - state.last_fft_n) >= self.fft_update_period;
 
             if should_update {
                 if let Some(r2c) = &self.r2c {
@@ -404,9 +425,15 @@ impl<'a> ExpandingEngine<'a> {
                     state.fft_in_buffer[..n_total].copy_from_slice(full_series);
                     let complex_len = r2c.complex_len();
                     if state.fft_out_buffer.len() < complex_len {
-                        state.fft_out_buffer.resize(complex_len, num_complex::Complex::new(0.0, 0.0));
+                        state
+                            .fft_out_buffer
+                            .resize(complex_len, num_complex::Complex::new(0.0, 0.0));
                     }
-                    r2c.process(&mut state.fft_in_buffer, &mut state.fft_out_buffer[..complex_len]).unwrap();
+                    r2c.process(
+                        &mut state.fft_in_buffer,
+                        &mut state.fft_out_buffer[..complex_len],
+                    )
+                    .unwrap();
                     fft_complex = state.fft_out_buffer[..complex_len].to_vec();
                     spectrum = fft_complex.iter().map(|c| c.norm()).collect();
                 } else if self.compute.any([54, 55, 56, 57, 60, 64]) {
@@ -432,21 +459,33 @@ impl<'a> ExpandingEngine<'a> {
             if !spectrum.is_empty() {
                 let spec_sum: f32 = spectrum.iter().sum();
                 if spec_sum > 0.0 {
-                    freq_centroid = spectrum.iter().enumerate().map(|(i, &mag)| i as f32 * mag).sum::<f32>() / spec_sum;
+                    freq_centroid = spectrum
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &mag)| i as f32 * mag)
+                        .sum::<f32>()
+                        / spec_sum;
 
                     if spectrum.len() > 1 {
                         let spec_sum_no_first: f32 = spectrum[1..].iter().sum();
                         if spec_sum_no_first > 0.0 {
-                            spectral_decrease = spectrum[1..].iter().enumerate()
+                            spectral_decrease = spectrum[1..]
+                                .iter()
+                                .enumerate()
                                 .map(|(i, &mag)| (mag - spectrum[0]) / (i + 1) as f32)
-                                .sum::<f32>() / spec_sum_no_first;
+                                .sum::<f32>()
+                                / spec_sum_no_first;
                         }
 
                         let m_n = spectrum.len() as f32;
                         let sum_x: f32 = (0..spectrum.len()).map(|i| i as f32).sum();
                         let sum_y: f32 = spectrum.iter().sum();
                         let sum_xx: f32 = (0..spectrum.len()).map(|i| (i as f32).powi(2)).sum();
-                        let sum_xy: f32 = spectrum.iter().enumerate().map(|(i, &mag)| i as f32 * mag).sum();
+                        let sum_xy: f32 = spectrum
+                            .iter()
+                            .enumerate()
+                            .map(|(i, &mag)| i as f32 * mag)
+                            .sum();
                         let s_xx = sum_xx - (sum_x * sum_x) / m_n;
                         let s_xy = sum_xy - (sum_x * sum_y) / m_n;
                         if s_xx.abs() > 1e-9 {
@@ -462,10 +501,10 @@ impl<'a> ExpandingEngine<'a> {
             let range = state.max_value - state.min_value;
             let bins = ENTROPY_BINS;
             let mut counts: [usize; ENTROPY_BINS] = [0; ENTROPY_BINS];
-            
+
             let mean_vec = f32x4::splat(mean);
             let mut mad_sum_vec = f32x4::splat(0.0);
-            
+
             for chunk in full_series.chunks_exact(LANES) {
                 let c = f32x4::from_slice(chunk);
                 if self.compute[9] {
@@ -478,7 +517,7 @@ impl<'a> ExpandingEngine<'a> {
                 if self.compute[26] {
                     count_b += c.simd_lt(mean_vec).to_bitmask().count_ones() as usize;
                 }
-                
+
                 for &v in chunk {
                     if self.compute[11] && range > 1e-9 {
                         let b = (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
@@ -502,7 +541,7 @@ impl<'a> ExpandingEngine<'a> {
                 }
             }
             mad_sum = mad_sum_vec.reduce_sum();
-            
+
             let rem_start = (full_series.len() / LANES) * LANES;
             for &v in &full_series[rem_start..] {
                 if self.compute[9] {
@@ -569,8 +608,19 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::Min => state.min_value,
                 Feature::Max => state.max_value,
                 Feature::Median => median,
-                Feature::Skew if var > 1e-9 => (m3 / n) / var.powf(1.5),
-                Feature::Kurtosis if var > 1e-9 => (m4 / n) / (var * var) - 3.0,
+                Feature::Skew if var > 1e-9 => {
+                    let mu2 = m2 / n;
+                    (m3 / n) / mu2.powf(1.5)
+                }
+                Feature::UnbiasedFisherKurtosis if var > 1e-9 && n > 3.0 => {
+                    let mu2 = m2 / n;
+                    let g2 = (m4 / n) / (mu2 * mu2) - 3.0;
+                    ((n - 1.0) / ((n - 2.0) * (n - 3.0))) * ((n + 1.0) * g2 + 6.0)
+                }
+                Feature::BiasedFisherKurtosis if var > 1e-9 => {
+                    let mu2 = m2 / n;
+                    (m4 / n) / (mu2 * mu2) - 3.0
+                }
                 Feature::Mad => mad_sum / n,
                 Feature::Iqr => iqr,
                 Feature::Entropy => entropy,
@@ -578,8 +628,52 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::Rms | Feature::RootMeanSquare => (state.energy / n).sqrt(),
                 Feature::ZeroCrossingRate => state.zcr_count as f32 / n,
                 Feature::PeakCount => state.peaks as f32,
-                Feature::AutocorrLag1 if var > 1e-9 => {
-                    (state.sum_prod / (n - 1.0) - mean * mean) / var
+                Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
+                    let x0 = full_series[0];
+                    let xn = full_series[full_series.len() - 1];
+                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn) + (n - 1.0) * mean * mean;
+                    cov / m2
+                }
+                Feature::AutocorrFirst1e => {
+                    let n_val = full_series.len();
+                    if n_val > 1 {
+                        let n2 = n_val * 2;
+                        let fft_size_ac = crate::common::next_good_fft_size(n2);
+                        let mut planner = realfft::RealFftPlanner::<f32>::new();
+                        let r2c_ac = planner.plan_fft_forward(fft_size_ac);
+                        let c2r_ac = planner.plan_fft_inverse(fft_size_ac);
+
+                        let mut indata = vec![0.0; fft_size_ac];
+                        for (i, &v) in full_series.iter().enumerate() {
+                            indata[i] = v - mean;
+                        }
+                        let mut outdata = r2c_ac.make_output_vec();
+                        r2c_ac.process(&mut indata, &mut outdata).unwrap();
+
+                        for c in &mut outdata {
+                            *c = realfft::num_complex::Complex::new(c.norm_sqr(), 0.0);
+                        }
+
+                        let mut outdata_inv = c2r_ac.make_output_vec();
+                        c2r_ac.process(&mut outdata, &mut outdata_inv).unwrap();
+
+                        let m2_val = if n > 1.0 { state.energy - (state.total_sum * state.total_sum) / n } else { 0.0 };
+                        if m2_val.abs() > 1e-9 {
+                            let scale = 1.0 / (fft_size_ac as f32);
+                            let threshold = 0.36787944;
+                            let mut found = false;
+                            let mut first_lag = 0.0;
+                            for l in 1..n_val {
+                                let val = (outdata_inv[l] * scale) / m2_val;
+                                if val < threshold {
+                                    first_lag = l as f32;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if found { first_lag } else { 0.0 }
+                        } else { 0.0 }
+                    } else { 0.0 }
                 }
                 Feature::MeanAbsChange if n > 1.0 => mac_sum / (n - 1.0),
                 Feature::MeanChange if n > 1.0 => mc_sum / (n - 1.0),
@@ -610,7 +704,7 @@ impl<'a> ExpandingEngine<'a> {
                     let l_idx = self.unique_c3_lags.iter().position(|&l| l == *lag).unwrap();
                     let l = *lag as usize;
                     if full_series.len() > 2 * l {
-                        (state.c3_sums[l_idx] / (full_series.len() - 2 * l) as f64) as f32
+                        state.c3_sums[l_idx] / (full_series.len() - 2 * l) as f32
                     } else {
                         0.0
                     }
@@ -637,9 +731,9 @@ impl<'a> ExpandingEngine<'a> {
                 }
                 Feature::AbsMax => state.abs_max,
                 Feature::FirstLocMax => state.first_max_idx as f32 / n,
-                Feature::LastLocMax => state.last_max_idx as f32 / n,
+                Feature::LastLocMax => (state.last_max_idx + 1) as f32 / n,
                 Feature::FirstLocMin => state.first_min_idx as f32 / n,
-                Feature::LastLocMin => state.last_min_idx as f32 / n,
+                Feature::LastLocMin => (state.last_min_idx + 1) as f32 / n,
                 Feature::Autocorr(lag) if var > 1e-9 && full_series.len() > *lag as usize => {
                     let l = *lag as usize;
                     let l_idx = self
@@ -650,7 +744,8 @@ impl<'a> ExpandingEngine<'a> {
                     let n_l = full_series.len() - l;
 
                     let sum_xi = state.prefix_sums[n_l - 1];
-                    let sum_xil = state.prefix_sums[full_series.len() - 1] - state.prefix_sums[l - 1];
+                    let sum_xil =
+                        state.prefix_sums[full_series.len() - 1] - state.prefix_sums[l - 1];
                     let cov = state.autocorr_sums[l_idx] as f32 - mean * (sum_xi + sum_xil)
                         + n_l as f32 * mean * mean;
 
@@ -688,10 +783,12 @@ impl<'a> ExpandingEngine<'a> {
                         crate::types::FftAttr::Real => re,
                         crate::types::FftAttr::Imag => im,
                         crate::types::FftAttr::Abs => (re * re + im * im).sqrt(),
-                        crate::types::FftAttr::Angle => im.atan2(re),
+                        crate::types::FftAttr::Angle => im.atan2(re).to_degrees(),
                     }
                 }
-                Feature::PartialAutocorr(lag) if var > 1e-9 && full_series.len() > *lag as usize => {
+                Feature::PartialAutocorr(lag)
+                    if var > 1e-9 && full_series.len() > *lag as usize =>
+                {
                     let l = *lag as usize;
                     let mut r = Vec::with_capacity(l + 1);
                     for k in 0..=l {
@@ -706,7 +803,8 @@ impl<'a> ExpandingEngine<'a> {
                             .unwrap();
                         let n_k = full_series.len() - k;
                         let sum_xi = state.prefix_sums[n_k - 1];
-                        let sum_xk = state.prefix_sums[full_series.len() - 1] - state.prefix_sums[k - 1];
+                        let sum_xk =
+                            state.prefix_sums[full_series.len() - 1] - state.prefix_sums[k - 1];
                         let cov = state.autocorr_sums[k_idx] as f32 - mean * (sum_xi + sum_xk)
                             + n_k as f32 * mean * mean;
                         r.push(cov / (n_k as f32 * var));
@@ -825,8 +923,53 @@ impl<'a> ExpandingEngine<'a> {
                 }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
-                    let idx = (q * (running_sorted.len() as f32 - 1.0)) as usize;
-                    if running_sorted.is_empty() { 0.0 } else { running_sorted[idx] }
+                    if running_sorted.is_empty() {
+                        0.0
+                    } else if running_sorted.len() == 1 {
+                        running_sorted[0]
+                    } else {
+                        let n_len = running_sorted.len();
+                        let idx = q * (n_len as f32 - 1.0);
+                        let i = idx.floor() as usize;
+                        let f = idx - i as f32;
+                        if i >= n_len - 1 {
+                            running_sorted[n_len - 1]
+                        } else {
+                            (1.0 - f) * running_sorted[i] + f * running_sorted[i + 1]
+                        }
+                    }
+                }
+                Feature::BenfordCorrelation => {
+                    let mut counts = [0.0; 9];
+                    for &v in full_series {
+                        let mut abs_v = v.abs();
+                        if abs_v > 0.0 {
+                            while abs_v < 1.0 { abs_v *= 10.0; }
+                            while abs_v >= 10.0 { abs_v /= 10.0; }
+                            let first_digit = abs_v.floor() as usize;
+                            if (1..=9).contains(&first_digit) {
+                                counts[first_digit - 1] += 1.0;
+                            }
+                        }
+                    }
+                    let total: f32 = counts.iter().sum();
+                    if total > 0.0 {
+                        let p: Vec<f32> = counts.iter().map(|&c| c / total).collect();
+                        let b: Vec<f32> = (1..10).map(|i| (1.0 + 1.0 / i as f32).log10()).collect();
+                        let mu_p = p.iter().sum::<f32>() / 9.0;
+                        let mu_b = b.iter().sum::<f32>() / 9.0;
+                        let mut num = 0.0;
+                        let mut den_p = 0.0;
+                        let mut den_b = 0.0;
+                        for i in 0..9 {
+                            num += (p[i] - mu_p) * (b[i] - mu_b);
+                            den_p += (p[i] - mu_p).powi(2);
+                            den_b += (b[i] - mu_b).powi(2);
+                        }
+                        if den_p > 0.0 && den_b > 0.0 {
+                            num / (den_p * den_b).sqrt()
+                        } else { 0.0 }
+                    } else { 0.0 }
                 }
                 Feature::SumOfReoccurringValues => {
                     use std::collections::HashMap;
@@ -835,7 +978,8 @@ impl<'a> ExpandingEngine<'a> {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
                     }
-                    counts.iter()
+                    counts
+                        .iter()
                         .filter(|&(_, &count)| count > 1)
                         .map(|(&bits, _)| f32::from_bits(bits))
                         .sum()
@@ -847,14 +991,17 @@ impl<'a> ExpandingEngine<'a> {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
                     }
-                    counts.iter()
+                    counts
+                        .iter()
                         .filter(|&(_, &count)| count > 1)
                         .map(|(&bits, &count)| f32::from_bits(bits) * count as f32)
                         .sum()
                 }
                 Feature::MeanNAbsoluteMax(n_max) => {
                     let mut abs_vals: Vec<f32> = full_series.iter().map(|v| v.abs()).collect();
-                    abs_vals.sort_unstable_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+                    abs_vals.sort_unstable_by(|a, b| {
+                        b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
+                    });
                     let count = (*n_max as usize).min(abs_vals.len());
                     if count > 0 {
                         abs_vals.iter().take(count).sum::<f32>() / count as f32
@@ -869,10 +1016,12 @@ impl<'a> ExpandingEngine<'a> {
                         let freq_step = fs / n_fft as f32;
                         let start_idx = (0.6 / freq_step).ceil() as usize;
                         let end_idx = (2.5 / freq_step).floor() as usize;
-                        
+
                         let total_energy: f32 = spectrum.iter().map(|&s| s * s).sum();
                         if total_energy > 0.0 {
-                            let range_energy: f32 = spectrum.iter().enumerate()
+                            let range_energy: f32 = spectrum
+                                .iter()
+                                .enumerate()
                                 .filter(|(i, _)| *i >= start_idx && *i <= end_idx)
                                 .map(|(_, &s)| s * s)
                                 .sum();
@@ -890,14 +1039,18 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::SignalDistance => {
                     let mut dist = 0.0;
                     for i in 1..full_series.len() {
-                        dist += ((full_series[i] - full_series[i-1]).powi(2) + 1.0).sqrt();
+                        dist += ((full_series[i] - full_series[i - 1]).powi(2) + 1.0).sqrt();
                     }
                     dist
                 }
                 Feature::SpectralDistance => {
                     if !spectrum.is_empty() {
                         let m = spectrum.iter().sum::<f32>() / spectrum.len() as f32;
-                        spectrum.iter().map(|&s| (s - m).powi(2)).sum::<f32>().sqrt()
+                        spectrum
+                            .iter()
+                            .map(|&s| (s - m).powi(2))
+                            .sum::<f32>()
+                            .sqrt()
                     } else {
                         0.0
                     }
@@ -905,11 +1058,11 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::WaveletFeatures(_w_bits, f_type) => {
                     if full_series.len() >= 2 {
                         let mut sum = 0.0;
-                        for i in (0..full_series.len()-1).step_by(2) {
+                        for i in (0..full_series.len() - 1).step_by(2) {
                             if *f_type == 0 {
-                                sum += (full_series[i] - full_series[i+1]).abs();
+                                sum += (full_series[i] - full_series[i + 1]).abs();
                             } else {
-                                sum += (full_series[i] - full_series[i+1]).powi(2);
+                                sum += (full_series[i] - full_series[i + 1]).powi(2);
                             }
                         }
                         if *f_type == 0 {
@@ -924,7 +1077,7 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::SpectrogramCoefficients(_t, f_bits) => {
                     if !spectrum.is_empty() {
                         let target_freq = f32::from_bits(*f_bits as u32);
-                        let fs = 100.0; 
+                        let fs = 100.0;
                         let n_fft = (spectrum.len() - 1) * 2;
                         let freq_step = fs / n_fft as f32;
                         let idx = (target_freq / freq_step).round() as usize;

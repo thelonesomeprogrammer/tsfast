@@ -25,7 +25,8 @@ impl<'a> StaticEngine<'a> {
             return vec![0.0; self.features.len()];
         }
 
-        let mut state = ColumnState::new(self.unique_paa_totals, self.unique_c3_lags, &[], values[0]);
+        let mut state =
+            ColumnState::new(self.unique_paa_totals, self.unique_c3_lags, &[], values[0]);
 
         // SIMD Pass 1
         let rem_start = self.process_simd_chunks(values, &mut state);
@@ -167,13 +168,13 @@ impl<'a> StaticEngine<'a> {
                             f32x4::from_slice(&values[global_idx - l..global_idx - l + 4]);
                         let chunk_i2l =
                             f32x4::from_slice(&values[global_idx - 2 * l..global_idx - 2 * l + 4]);
-                        state.c3_sums[l_idx] += (chunk * chunk_il * chunk_i2l).reduce_sum() as f64;
+                        state.c3_sums[l_idx] += (chunk * chunk_il * chunk_i2l).reduce_sum();
                     } else {
                         for j in 0..LANES {
                             let idx = global_idx + j;
                             if idx >= 2 * l {
                                 state.c3_sums[l_idx] +=
-                                    (values[idx] * values[idx - l] * values[idx - 2 * l]) as f64;
+                                    values[idx] * values[idx - l] * values[idx - 2 * l];
                             }
                         }
                     }
@@ -261,7 +262,7 @@ impl<'a> StaticEngine<'a> {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
                     if i >= 2 * l {
-                        state.c3_sums[l_idx] += (val * values[i - l] * values[i - 2 * l]) as f64;
+                        state.c3_sums[l_idx] += val * values[i - l] * values[i - 2 * l];
                     }
                 }
             }
@@ -300,16 +301,32 @@ impl<'a> StaticEngine<'a> {
         let mut sorted_copy: Option<Vec<f32>> = None;
         if self.compute.any([6, 10, 11, 49]) {
             let mut copy = values.to_vec();
+            copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            
             if self.compute[6] {
-                let mid = copy.len() / 2;
-                median = *copy.select_nth_unstable_by(mid, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).1;
+                let n_len = copy.len();
+                if n_len > 0 {
+                    if n_len % 2 == 1 {
+                        median = copy[n_len / 2];
+                    } else {
+                        median = (copy[n_len / 2] + copy[n_len / 2 - 1]) / 2.0;
+                    }
+                }
             }
             if self.compute[10] {
-                let q1_idx = (n * 0.25) as usize;
-                let q1 = *copy.select_nth_unstable_by(q1_idx, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).1;
-                let q3_idx = (n * 0.75) as usize;
-                let q3 = *copy.select_nth_unstable_by(q3_idx, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).1;
-                iqr = q3 - q1;
+                let n_f = n as f32;
+                let get_q = |q: f32, data: &[f32]| -> f32 {
+                    if data.is_empty() { return 0.0; }
+                    let idx = q * (n_f - 1.0);
+                    let i = idx.floor() as usize;
+                    let f = idx - i as f32;
+                    if i >= data.len() - 1 {
+                        data[data.len() - 1]
+                    } else {
+                        (1.0 - f) * data[i] + f * data[i + 1]
+                    }
+                };
+                iqr = get_q(0.75, &copy) - get_q(0.25, &copy);
             }
             if self.compute[11] {
                 let range = state.max_value - state.min_value;
@@ -317,8 +334,7 @@ impl<'a> StaticEngine<'a> {
                     let bins = 10;
                     let mut counts = vec![0usize; bins];
                     for &v in values {
-                        let b =
-                            (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
+                        let b = (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
                         counts[b.min(bins - 1)] += 1;
                     }
                     for &c in &counts {
@@ -340,10 +356,14 @@ impl<'a> StaticEngine<'a> {
             for &v in values {
                 let mut abs_v = v.abs();
                 if abs_v > 0.0 {
-                    while abs_v < 1.0 { abs_v *= 10.0; }
-                    while abs_v >= 10.0 { abs_v /= 10.0; }
+                    while abs_v < 1.0 {
+                        abs_v *= 10.0;
+                    }
+                    while abs_v >= 10.0 {
+                        abs_v /= 10.0;
+                    }
                     let first_digit = abs_v.floor() as usize;
-                    if first_digit >= 1 && first_digit <= 9 {
+                    if (1..=9).contains(&first_digit) {
                         counts[first_digit - 1] += 1.0;
                     }
                 }
@@ -399,21 +419,33 @@ impl<'a> StaticEngine<'a> {
             if !spectrum.is_empty() {
                 let spec_sum: f32 = spectrum.iter().sum();
                 if spec_sum > 0.0 {
-                    freq_centroid = spectrum.iter().enumerate().map(|(i, &mag)| i as f32 * mag).sum::<f32>() / spec_sum;
+                    freq_centroid = spectrum
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &mag)| i as f32 * mag)
+                        .sum::<f32>()
+                        / spec_sum;
 
                     if spectrum.len() > 1 {
                         let spec_sum_no_first: f32 = spectrum[1..].iter().sum();
                         if spec_sum_no_first > 0.0 {
-                            spectral_decrease = spectrum[1..].iter().enumerate()
+                            spectral_decrease = spectrum[1..]
+                                .iter()
+                                .enumerate()
                                 .map(|(i, &mag)| (mag - spectrum[0]) / (i + 1) as f32)
-                                .sum::<f32>() / spec_sum_no_first;
+                                .sum::<f32>()
+                                / spec_sum_no_first;
                         }
 
                         let m_n = spectrum.len() as f32;
                         let sum_x: f32 = (0..spectrum.len()).map(|i| i as f32).sum();
                         let sum_y: f32 = spectrum.iter().sum();
                         let sum_xx: f32 = (0..spectrum.len()).map(|i| (i as f32).powi(2)).sum();
-                        let sum_xy: f32 = spectrum.iter().enumerate().map(|(i, &mag)| i as f32 * mag).sum();
+                        let sum_xy: f32 = spectrum
+                            .iter()
+                            .enumerate()
+                            .map(|(i, &mag)| i as f32 * mag)
+                            .sum();
                         let s_xx = sum_xx - (sum_x * sum_x) / m_n;
                         let s_xy = sum_xy - (sum_x * sum_y) / m_n;
                         if s_xx.abs() > 1e-9 {
@@ -427,7 +459,7 @@ impl<'a> StaticEngine<'a> {
         let mut signal_dist = 0.0;
         if self.compute[58] {
             for i in 1..values.len() {
-                signal_dist += ((values[i] - values[i-1]).powi(2) + 1.0).sqrt();
+                signal_dist += ((values[i] - values[i - 1]).powi(2) + 1.0).sqrt();
             }
         }
 
@@ -438,25 +470,29 @@ impl<'a> StaticEngine<'a> {
             let mut planner = realfft::RealFftPlanner::<f32>::new();
             let r2c_ac = planner.plan_fft_forward(fft_size_ac);
             let c2r_ac = planner.plan_fft_inverse(fft_size_ac);
-            
+
             let mut indata = vec![0.0; fft_size_ac];
             for (i, &v) in values.iter().enumerate() {
                 indata[i] = v - mean;
             }
             let mut outdata = r2c_ac.make_output_vec();
             r2c_ac.process(&mut indata, &mut outdata).unwrap();
-            
+
             for c in &mut outdata {
                 *c = realfft::num_complex::Complex::new(c.norm_sqr(), 0.0);
             }
-            
+
             let mut outdata_inv = c2r_ac.make_output_vec();
             c2r_ac.process(&mut outdata, &mut outdata_inv).unwrap();
-            
+
             let m2_ac = m2; // var * (n - 1.0)
             if m2_ac.abs() > 1e-9 {
                 let scale = 1.0 / (fft_size_ac as f32);
-                fft_autocorr = outdata_inv.into_iter().take(values.len()).map(|v| (v * scale) / m2_ac).collect();
+                fft_autocorr = outdata_inv
+                    .into_iter()
+                    .take(values.len())
+                    .map(|v| (v * scale) / m2_ac)
+                    .collect();
             }
         }
 
@@ -547,8 +583,19 @@ impl<'a> StaticEngine<'a> {
                 Feature::Min => state.min_value,
                 Feature::Max => state.max_value,
                 Feature::Median => median,
-                Feature::Skew if var > 1e-9 => (m3 / n) / var.powf(1.5),
-                Feature::Kurtosis if var > 1e-9 => (m4 / n) / (var * var) - 3.0,
+                Feature::Skew if var > 1e-9 => {
+                    let mu2 = m2 / n;
+                    (m3 / n) / mu2.powf(1.5)
+                }
+                Feature::UnbiasedFisherKurtosis if var > 1e-9 && n > 3.0 => {
+                    let mu2 = m2 / n;
+                    let g2 = (m4 / n) / (mu2 * mu2) - 3.0;
+                    ((n - 1.0) / ((n - 2.0) * (n - 3.0))) * ((n + 1.0) * g2 + 6.0)
+                }
+                Feature::BiasedFisherKurtosis if var > 1e-9 => {
+                    let mu2 = m2 / n;
+                    (m4 / n) / (mu2 * mu2) - 3.0
+                }
                 Feature::Mad => mad_sum / n,
                 Feature::Iqr => iqr,
                 Feature::Entropy => entropy,
@@ -556,8 +603,44 @@ impl<'a> StaticEngine<'a> {
                 Feature::Rms | Feature::RootMeanSquare => (state.energy / n).sqrt(),
                 Feature::ZeroCrossingRate => state.zcr_count as f32 / n,
                 Feature::PeakCount => state.peaks as f32,
-                Feature::AutocorrLag1 if var > 1e-9 => {
-                    (state.sum_prod / (n - 1.0) - mean * mean) / var
+                Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
+                    let x0 = values[0];
+                    let xn = values[values.len() - 1];
+                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn) + (n - 1.0) * mean * mean;
+                    cov / m2
+                }
+                Feature::AutocorrFirst1e => {
+                    let threshold = 0.36787944;
+                    if !fft_autocorr.is_empty() {
+                        let mut found = false;
+                        let mut first_lag = 0.0;
+                        // Skip lag 0 which is always 1.0
+                        for (l, &val) in fft_autocorr.iter().enumerate().skip(1) {
+                            if val < threshold {
+                                first_lag = l as f32;
+                                found = true;
+                                break;
+                            }
+                        }
+                        if found { first_lag } else { 0.0 }
+                    } else if var > 1e-9 && n > 1.0 {
+                        // Efficient non-FFT loop
+                        let mut first_lag = 0.0;
+                        let m2_val = m2;
+                        for l in 1..values.len() {
+                            let mut sum = 0.0;
+                            for i in 0..values.len() - l {
+                                sum += (values[i] - mean) * (values[i + l] - mean);
+                            }
+                            if sum / m2_val < threshold {
+                                first_lag = l as f32;
+                                break;
+                            }
+                        }
+                        first_lag
+                    } else {
+                        0.0
+                    }
                 }
                 Feature::MeanAbsChange if n > 1.0 => mac_sum / (n - 1.0),
                 Feature::MeanChange if n > 1.0 => mc_sum / (n - 1.0),
@@ -588,7 +671,7 @@ impl<'a> StaticEngine<'a> {
                     let l_idx = self.unique_c3_lags.iter().position(|&l| l == *lag).unwrap();
                     let l = *lag as usize;
                     if values.len() > 2 * l {
-                        (state.c3_sums[l_idx] / (values.len() - 2 * l) as f64) as f32
+                        state.c3_sums[l_idx] / (values.len() - 2 * l) as f32
                     } else {
                         0.0
                     }
@@ -610,9 +693,9 @@ impl<'a> StaticEngine<'a> {
                 }
                 Feature::AbsMax => state.abs_max,
                 Feature::FirstLocMax => first_max_idx as f32 / n,
-                Feature::LastLocMax => last_max_idx as f32 / n,
+                Feature::LastLocMax => (last_max_idx + 1) as f32 / n,
                 Feature::FirstLocMin => first_min_idx as f32 / n,
-                Feature::LastLocMin => last_min_idx as f32 / n,
+                Feature::LastLocMin => (last_min_idx + 1) as f32 / n,
                 Feature::Autocorr(lag) => {
                     let l = *lag as usize;
                     if var > 1e-9 && values.len() > l {
@@ -621,11 +704,7 @@ impl<'a> StaticEngine<'a> {
                             sum += (values[i] - mean) * (values[i + l] - mean);
                         }
                         let m2 = var * (n - 1.0);
-                        if m2.abs() > 1e-9 {
-                            sum / m2
-                        } else {
-                            0.0
-                        }
+                        if m2.abs() > 1e-9 { sum / m2 } else { 0.0 }
                     } else {
                         0.0
                     }
@@ -658,7 +737,7 @@ impl<'a> StaticEngine<'a> {
                         crate::types::FftAttr::Real => re,
                         crate::types::FftAttr::Imag => im,
                         crate::types::FftAttr::Abs => (re * re + im * im).sqrt(),
-                        crate::types::FftAttr::Angle => im.atan2(re),
+                        crate::types::FftAttr::Angle => im.atan2(re).to_degrees(),
                     }
                 }
                 Feature::PartialAutocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
@@ -786,17 +865,31 @@ impl<'a> StaticEngine<'a> {
                 }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
-                    if let Some(mut copy) = sorted_copy.take() {
-                        let idx = (q * (copy.len() as f32 - 1.0)) as usize;
-                        if copy.is_empty() { 0.0 } else {
-                            *copy.select_nth_unstable_by(idx, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).1
-                        }
+                    let mut copy = if let Some(c) = sorted_copy.take() {
+                        c
                     } else {
-                        // Fallback if not pre-computed
-                        let mut copy = values.to_vec();
-                        let idx = (q * (copy.len() as f32 - 1.0)) as usize;
-                        if copy.is_empty() { 0.0 } else {
-                            *copy.select_nth_unstable_by(idx, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).1
+                        values.to_vec()
+                    };
+                    if copy.is_empty() {
+                        0.0
+                    } else if copy.len() == 1 {
+                        copy[0]
+                    } else {
+                        let n_len = copy.len();
+                        let idx = q * (n_len as f32 - 1.0);
+                        let i = idx.floor() as usize;
+                        let f = idx - i as f32;
+                        
+                        // We need i and i+1 to be valid.
+                        // select_nth_unstable only gives us one.
+                        // For linear interpolation, we need to sort or at least find two.
+                        // Since we already might have a sorted copy, let's just sort if not.
+                        copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                        
+                        if i >= n_len - 1 {
+                            copy[n_len - 1]
+                        } else {
+                            (1.0 - f) * copy[i] + f * copy[i + 1]
                         }
                     }
                 }
@@ -821,7 +914,8 @@ impl<'a> StaticEngine<'a> {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
                     }
-                    counts.iter()
+                    counts
+                        .iter()
                         .filter(|&(_, &count)| count > 1)
                         .map(|(&bits, _)| f32::from_bits(bits))
                         .sum()
@@ -832,14 +926,17 @@ impl<'a> StaticEngine<'a> {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
                     }
-                    counts.iter()
+                    counts
+                        .iter()
                         .filter(|&(_, &count)| count > 1)
                         .map(|(&bits, &count)| f32::from_bits(bits) * count as f32)
                         .sum()
                 }
                 Feature::MeanNAbsoluteMax(n_max) => {
                     let mut abs_vals: Vec<f32> = values.iter().map(|v| v.abs()).collect();
-                    abs_vals.sort_unstable_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+                    abs_vals.sort_unstable_by(|a, b| {
+                        b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
+                    });
                     let count = (*n_max as usize).min(abs_vals.len());
                     if count > 0 {
                         abs_vals.iter().take(count).sum::<f32>() / count as f32
@@ -847,24 +944,22 @@ impl<'a> StaticEngine<'a> {
                         0.0
                     }
                 }
-                Feature::HumanRangeEnergy(fs_bits) => {
-                    if !spectrum.is_empty() {
-                        let fs = f32::from_bits(*fs_bits);
-                        let n_fft = (spectrum.len() - 1) * 2;
-                        let freq_step = fs / n_fft as f32;
-                        let start_idx = (0.6 / freq_step).ceil() as usize;
-                        let end_idx = (2.5 / freq_step).floor() as usize;
-                        
-                        let total_energy: f32 = spectrum.iter().map(|&s| s * s).sum();
-                        if total_energy > 0.0 {
-                            let range_energy: f32 = spectrum.iter().enumerate()
-                                .filter(|(i, _)| *i >= start_idx && *i <= end_idx)
-                                .map(|(_, &s)| s * s)
-                                .sum();
-                            range_energy / total_energy
-                        } else {
-                            0.0
-                        }
+                Feature::HumanRangeEnergy(fs_bits) if !spectrum.is_empty() => {
+                    let fs = f32::from_bits(*fs_bits);
+                    let n_fft = (spectrum.len() - 1) * 2;
+                    let freq_step = fs / n_fft as f32;
+                    let start_idx = (0.6 / freq_step).ceil() as usize;
+                    let end_idx = (2.5 / freq_step).floor() as usize;
+
+                    let total_energy: f32 = spectrum.iter().map(|&s| s * s).sum();
+                    if total_energy > 0.0 {
+                        let range_energy: f32 = spectrum
+                            .iter()
+                            .enumerate()
+                            .filter(|(i, _)| *i >= start_idx && *i <= end_idx)
+                            .map(|(_, &s)| s * s)
+                            .sum();
+                        range_energy / total_energy
                     } else {
                         0.0
                     }
@@ -878,49 +973,39 @@ impl<'a> StaticEngine<'a> {
                 Feature::SpectralDecrease => spectral_decrease,
                 Feature::SpectralSlope => spectral_slope,
                 Feature::SignalDistance => signal_dist,
-                Feature::SpectralDistance => {
-                    if !spectrum.is_empty() {
-                        let m = spectrum.iter().sum::<f32>() / spectrum.len() as f32;
-                        spectrum.iter().map(|&s| (s - m).powi(2)).sum::<f32>().sqrt()
-                    } else {
-                        0.0
-                    }
+                Feature::SpectralDistance if !spectrum.is_empty() => {
+                    let m = spectrum.iter().sum::<f32>() / spectrum.len() as f32;
+                    spectrum
+                        .iter()
+                        .map(|&s| (s - m).powi(2))
+                        .sum::<f32>()
+                        .sqrt()
                 }
-                Feature::WaveletFeatures(_w_bits, f_type) => {
-                    // w_bits is actually frequency in our hack
-                    // Simple Haar DWT - 1 level as placeholder
-                    if values.len() >= 2 {
-                        let mut sum = 0.0;
-                        for i in (0..values.len()-1).step_by(2) {
-                            if *f_type == 0 {
-                                sum += (values[i] - values[i+1]).abs();
-                            } else {
-                                sum += (values[i] - values[i+1]).powi(2);
-                            }
-                        }
+                Feature::WaveletFeatures(_w_bits, f_type) if values.len() >= 2 => {
+                    let mut sum = 0.0;
+                    for i in (0..values.len() - 1).step_by(2) {
                         if *f_type == 0 {
-                            sum / (values.len() / 2) as f32
+                            sum += (values[i] - values[i + 1]).abs();
                         } else {
-                            (sum / (values.len() / 2) as f32).sqrt()
+                            sum += (values[i] - values[i + 1]).powi(2);
                         }
+                    }
+                    if *f_type == 0 {
+                        sum / (values.len() / 2) as f32
                     } else {
-                        0.0
+                        (sum / (values.len() / 2) as f32).sqrt()
                     }
                 }
-                Feature::SpectrogramCoefficients(_t, f_bits) => {
-                    if !spectrum.is_empty() {
-                        let target_freq = f32::from_bits(*f_bits as u32);
-                        // We don't have fs here easily unless we passed it.
-                        // Assuming default fs=100 for now if it looks like a frequency.
-                        let fs = 100.0; 
-                        let n_fft = (spectrum.len() - 1) * 2;
-                        let freq_step = fs / n_fft as f32;
-                        let idx = (target_freq / freq_step).round() as usize;
-                        let idx = idx.min(spectrum.len() - 1);
-                        spectrum[idx]
-                    } else {
-                        0.0
-                    }
+                Feature::SpectrogramCoefficients(_t, f_bits) if !spectrum.is_empty() => {
+                    let target_freq = f32::from_bits(*f_bits as u32);
+                    // We don't have fs here easily unless we passed it.
+                    // Assuming default fs=100 for now if it looks like a frequency.
+                    let fs = 100.0;
+                    let n_fft = (spectrum.len() - 1) * 2;
+                    let freq_step = fs / n_fft as f32;
+                    let idx = (target_freq / freq_step).round() as usize;
+                    let idx = idx.min(spectrum.len() - 1);
+                    spectrum[idx]
                 }
                 _ => 0.0,
             })
