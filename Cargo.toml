@@ -15,6 +15,7 @@ num-traits = "0.2"
 rayon = "1.10"
 arrow = { version = "58.1.0", features = ["pyarrow"] }
 smallvec = "1.10"
+realfft = "3.5.0"
 
 [features]
 extension-module = ["pyo3/extension-module"]

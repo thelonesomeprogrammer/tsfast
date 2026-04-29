@@ -7,11 +7,12 @@ use arrow::pyarrow::PyArrowType;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use rayon::prelude::*;
-use std::sync::Arc;
+use realfft::RealFftPlanner;
+use std::sync::{Arc, Mutex};
 
 pub mod extractor;
 
-use crate::common::map_features_to_indices;
+use crate::common::{map_features_to_indices, next_good_fft_size};
 use extractor::StaticEngine;
 
 #[pyclass]
@@ -22,12 +23,15 @@ pub struct Extractor {
     pub c3_args: Vec<u16>,
     pub unique_paa_totals: Vec<u16>,
     pub unique_c3_lags: Vec<u16>,
+    pub planner: Arc<Mutex<RealFftPlanner<f32>>>,
+    pub max_size: Option<usize>,
 }
 
 #[pymethods]
 impl Extractor {
     #[new]
-    pub fn new(feature_str: Vec<String>) -> Self {
+    #[pyo3(signature = (feature_str, max_size=None))]
+    pub fn new(feature_str: Vec<String>, max_size: Option<usize>) -> Self {
         let mut features = Vec::new();
         let mut paa_args = Vec::new();
         let mut c3_args = Vec::new();
@@ -47,6 +51,17 @@ impl Extractor {
         }
         let compute = map_features_to_indices(&features);
 
+        let planned_size = max_size.map(next_good_fft_size);
+        let planner = RealFftPlanner::<f32>::new();
+        let planner_arc = Arc::new(Mutex::new(planner));
+
+        if let Some(size) = planned_size {
+            if compute.any_fft() {
+                let mut p = planner_arc.lock().unwrap();
+                p.plan_fft_forward(size);
+            }
+        }
+
         Self {
             features,
             compute,
@@ -54,6 +69,8 @@ impl Extractor {
             c3_args,
             unique_paa_totals: unique_paa_totals.into_iter().collect(),
             unique_c3_lags: unique_c3_lags.into_iter().collect(),
+            planner: planner_arc,
+            max_size,
         }
     }
 
@@ -78,6 +95,20 @@ impl Extractor {
             })
             .collect();
 
+        // If FFT is needed, ensure we have a plan for the current size or max_size
+        let fft_size = if let Some(ms) = self.max_size {
+            next_good_fft_size(ms.max(n_rows))
+        } else {
+            n_rows
+        };
+
+        let r2c = if compute.any_fft() && fft_size > 0 {
+            let mut p = self.planner.lock().unwrap();
+            Some(p.plan_fft_forward(fft_size))
+        } else {
+            None
+        };
+
         let column_results: Vec<Vec<f32>> = record_batch
             .columns()
             .par_iter()
@@ -93,6 +124,8 @@ impl Extractor {
                     unique_paa_totals,
                     unique_c3_lags,
                     paa_boundaries: &paa_boundaries,
+                    r2c: r2c.as_ref().cloned(),
+                    fft_size,
                 };
                 processor.process_column(float_array.values())
             })

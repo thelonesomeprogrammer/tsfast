@@ -1,9 +1,11 @@
 use crate::common::ColumnState;
 use crate::common::LANES;
 use crate::types::{FastBitArray, Feature};
+use realfft::{RealToComplex, num_complex};
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
+use std::sync::Arc;
 
 const ENTROPY_BINS: usize = 10;
 
@@ -14,6 +16,9 @@ pub(crate) struct ExpandingEngine<'a> {
     pub(crate) unique_c3_lags: &'a [u16],
     pub(crate) unique_autocorr_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
+    pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
+    pub(crate) fft_size: usize,
+    pub(crate) fft_update_period: usize,
 }
 
 impl<'a> ExpandingEngine<'a> {
@@ -342,7 +347,7 @@ impl<'a> ExpandingEngine<'a> {
         let mut zc_std = 0.0;
 
         // 1. Median/IQR Optimization: Merge instead of Sort
-        if self.compute[6] || self.compute[10] {
+        if self.compute.any([6, 10, 49, 63]) {
             if running_sorted.len() < full_series.len() {
                 let mut new_elements: Vec<f32> = full_series[running_sorted.len()..].to_vec();
                 new_elements.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -376,6 +381,78 @@ impl<'a> ExpandingEngine<'a> {
                     let q1 = running_sorted[(n_size as f32 * 0.25) as usize];
                     let q3 = running_sorted[(n_size as f32 * 0.75) as usize];
                     iqr = q3 - q1;
+                }
+            }
+        }
+
+        let mut spectrum = Vec::new();
+        let mut fft_complex = Vec::new();
+        let mut freq_centroid = 0.0;
+        let mut spectral_decrease = 0.0;
+        let mut spectral_slope = 0.0;
+
+        if self.compute.any_fft() {
+            let n_total = full_series.len();
+            let should_update = state.last_fft_n == 0 || (n_total - state.last_fft_n) >= self.fft_update_period;
+
+            if should_update {
+                if let Some(r2c) = &self.r2c {
+                    if state.fft_in_buffer.len() < self.fft_size {
+                        state.fft_in_buffer.resize(self.fft_size, 0.0);
+                    }
+                    state.fft_in_buffer.fill(0.0);
+                    state.fft_in_buffer[..n_total].copy_from_slice(full_series);
+                    let complex_len = r2c.complex_len();
+                    if state.fft_out_buffer.len() < complex_len {
+                        state.fft_out_buffer.resize(complex_len, num_complex::Complex::new(0.0, 0.0));
+                    }
+                    r2c.process(&mut state.fft_in_buffer, &mut state.fft_out_buffer[..complex_len]).unwrap();
+                    fft_complex = state.fft_out_buffer[..complex_len].to_vec();
+                    spectrum = fft_complex.iter().map(|c| c.norm()).collect();
+                } else if self.compute.any([54, 55, 56, 57, 60, 64]) {
+                    use realfft::RealFftPlanner;
+                    let mut planner = RealFftPlanner::<f32>::new();
+                    let r2c = planner.plan_fft_forward(n_total);
+                    let mut indata = full_series.to_vec();
+                    let mut outdata = r2c.make_output_vec();
+                    r2c.process(&mut indata, &mut outdata).unwrap();
+                    fft_complex = outdata;
+                    spectrum = fft_complex.iter().map(|c| c.norm()).collect();
+                }
+                // Cache it
+                state.last_fft_n = n_total;
+                state.last_spectrum = spectrum.clone();
+                state.last_fft_complex = fft_complex.clone();
+            } else {
+                // Use cached
+                spectrum = state.last_spectrum.clone();
+                fft_complex = state.last_fft_complex.clone();
+            }
+
+            if !spectrum.is_empty() {
+                let spec_sum: f32 = spectrum.iter().sum();
+                if spec_sum > 0.0 {
+                    freq_centroid = spectrum.iter().enumerate().map(|(i, &mag)| i as f32 * mag).sum::<f32>() / spec_sum;
+
+                    if spectrum.len() > 1 {
+                        let spec_sum_no_first: f32 = spectrum[1..].iter().sum();
+                        if spec_sum_no_first > 0.0 {
+                            spectral_decrease = spectrum[1..].iter().enumerate()
+                                .map(|(i, &mag)| (mag - spectrum[0]) / (i + 1) as f32)
+                                .sum::<f32>() / spec_sum_no_first;
+                        }
+
+                        let m_n = spectrum.len() as f32;
+                        let sum_x: f32 = (0..spectrum.len()).map(|i| i as f32).sum();
+                        let sum_y: f32 = spectrum.iter().sum();
+                        let sum_xx: f32 = (0..spectrum.len()).map(|i| (i as f32).powi(2)).sum();
+                        let sum_xy: f32 = spectrum.iter().enumerate().map(|(i, &mag)| i as f32 * mag).sum();
+                        let s_xx = sum_xx - (sum_x * sum_x) / m_n;
+                        let s_xy = sum_xy - (sum_x * sum_y) / m_n;
+                        if s_xx.abs() > 1e-9 {
+                            spectral_slope = s_xy / s_xx;
+                        }
+                    }
                 }
             }
         }
@@ -594,14 +671,19 @@ impl<'a> ExpandingEngine<'a> {
                 }
                 Feature::FftCoefficient(coeff, attr) => {
                     let k = *coeff as usize;
-                    let mut re = 0.0;
-                    let mut im = 0.0;
-                    let pi2 = 2.0 * std::f32::consts::PI;
-                    for (n_idx, &v) in full_series.iter().enumerate() {
-                        let angle = pi2 * k as f32 * n_idx as f32 / n;
-                        re += v * angle.cos();
-                        im -= v * angle.sin();
-                    }
+                    let (re, im) = if !fft_complex.is_empty() && k < fft_complex.len() {
+                        (fft_complex[k].re, fft_complex[k].im)
+                    } else {
+                        let mut re = 0.0;
+                        let mut im = 0.0;
+                        let pi2 = 2.0 * std::f32::consts::PI;
+                        for (n_idx, &v) in full_series.iter().enumerate() {
+                            let angle = pi2 * k as f32 * n_idx as f32 / n;
+                            re += v * angle.cos();
+                            im -= v * angle.sin();
+                        }
+                        (re, im)
+                    };
                     match attr {
                         crate::types::FftAttr::Real => re,
                         crate::types::FftAttr::Imag => im,
@@ -740,6 +822,117 @@ impl<'a> ExpandingEngine<'a> {
                         result / (n - m + 1) as f32
                     }
                     phi(m_val, r, full_series) - phi(m_val + 1, r, full_series)
+                }
+                Feature::Quantile(q_bits) => {
+                    let q = f32::from_bits(*q_bits);
+                    let idx = (q * (running_sorted.len() as f32 - 1.0)) as usize;
+                    if running_sorted.is_empty() { 0.0 } else { running_sorted[idx] }
+                }
+                Feature::SumOfReoccurringValues => {
+                    use std::collections::HashMap;
+                    let mut counts = HashMap::new();
+                    for &v in full_series {
+                        let bits = v.to_bits();
+                        *counts.entry(bits).or_insert(0) += 1;
+                    }
+                    counts.iter()
+                        .filter(|&(_, &count)| count > 1)
+                        .map(|(&bits, _)| f32::from_bits(bits))
+                        .sum()
+                }
+                Feature::SumOfReoccurringDataPoints => {
+                    use std::collections::HashMap;
+                    let mut counts = HashMap::new();
+                    for &v in full_series {
+                        let bits = v.to_bits();
+                        *counts.entry(bits).or_insert(0) += 1;
+                    }
+                    counts.iter()
+                        .filter(|&(_, &count)| count > 1)
+                        .map(|(&bits, &count)| f32::from_bits(bits) * count as f32)
+                        .sum()
+                }
+                Feature::MeanNAbsoluteMax(n_max) => {
+                    let mut abs_vals: Vec<f32> = full_series.iter().map(|v| v.abs()).collect();
+                    abs_vals.sort_unstable_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+                    let count = (*n_max as usize).min(abs_vals.len());
+                    if count > 0 {
+                        abs_vals.iter().take(count).sum::<f32>() / count as f32
+                    } else {
+                        0.0
+                    }
+                }
+                Feature::HumanRangeEnergy(fs_bits) => {
+                    if !spectrum.is_empty() {
+                        let fs = f32::from_bits(*fs_bits);
+                        let n_fft = (spectrum.len() - 1) * 2;
+                        let freq_step = fs / n_fft as f32;
+                        let start_idx = (0.6 / freq_step).ceil() as usize;
+                        let end_idx = (2.5 / freq_step).floor() as usize;
+                        
+                        let total_energy: f32 = spectrum.iter().map(|&s| s * s).sum();
+                        if total_energy > 0.0 {
+                            let range_energy: f32 = spectrum.iter().enumerate()
+                                .filter(|(i, _)| *i >= start_idx && *i <= end_idx)
+                                .map(|(_, &s)| s * s)
+                                .sum();
+                            range_energy / total_energy
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
+                }
+                Feature::SpectralCentroid => freq_centroid,
+                Feature::SpectralDecrease => spectral_decrease,
+                Feature::SpectralSlope => spectral_slope,
+                Feature::SignalDistance => {
+                    let mut dist = 0.0;
+                    for i in 1..full_series.len() {
+                        dist += ((full_series[i] - full_series[i-1]).powi(2) + 1.0).sqrt();
+                    }
+                    dist
+                }
+                Feature::SpectralDistance => {
+                    if !spectrum.is_empty() {
+                        let m = spectrum.iter().sum::<f32>() / spectrum.len() as f32;
+                        spectrum.iter().map(|&s| (s - m).powi(2)).sum::<f32>().sqrt()
+                    } else {
+                        0.0
+                    }
+                }
+                Feature::WaveletFeatures(_w_bits, f_type) => {
+                    if full_series.len() >= 2 {
+                        let mut sum = 0.0;
+                        for i in (0..full_series.len()-1).step_by(2) {
+                            if *f_type == 0 {
+                                sum += (full_series[i] - full_series[i+1]).abs();
+                            } else {
+                                sum += (full_series[i] - full_series[i+1]).powi(2);
+                            }
+                        }
+                        if *f_type == 0 {
+                            sum / (full_series.len() / 2) as f32
+                        } else {
+                            (sum / (full_series.len() / 2) as f32).sqrt()
+                        }
+                    } else {
+                        0.0
+                    }
+                }
+                Feature::SpectrogramCoefficients(_t, f_bits) => {
+                    if !spectrum.is_empty() {
+                        let target_freq = f32::from_bits(*f_bits as u32);
+                        let fs = 100.0; 
+                        let n_fft = (spectrum.len() - 1) * 2;
+                        let freq_step = fs / n_fft as f32;
+                        let idx = (target_freq / freq_step).round() as usize;
+                        let idx = idx.min(spectrum.len() - 1);
+                        spectrum[idx]
+                    } else {
+                        0.0
+                    }
                 }
                 _ => 0.0,
             })

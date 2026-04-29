@@ -1,11 +1,12 @@
-use crate::common::{ColumnState, map_features_to_indices};
+use crate::common::{ColumnState, map_features_to_indices, next_good_fft_size};
 use crate::types::{FastBitArray, Feature};
 use arrow::array::{ArrayRef, Float32Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::pyarrow::PyArrowType;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use realfft::RealFftPlanner;
 
 pub mod engine;
 use engine::ExpandingEngine;
@@ -22,12 +23,16 @@ pub struct ExpandingExtractor {
     pub states: Vec<ColumnState>,
     pub histories: Vec<Vec<f32>>,
     pub sorted_histories: Vec<Vec<f32>>,
+    pub planner: Arc<Mutex<RealFftPlanner<f32>>>,
+    pub max_size: Option<usize>,
+    pub fft_update_period: usize,
 }
 
 #[pymethods]
 impl ExpandingExtractor {
     #[new]
-    pub fn new(feature_str: Vec<String>, n_cols: usize) -> Self {
+    #[pyo3(signature = (feature_str, n_cols, max_size=None, fft_update_period=1))]
+    pub fn new(feature_str: Vec<String>, n_cols: usize, max_size: Option<usize>, fft_update_period: usize) -> Self {
         let mut features = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
@@ -60,6 +65,17 @@ impl ExpandingExtractor {
         let unique_c3_lags: Vec<u16> = unique_c3_lags.into_iter().collect();
         let unique_autocorr_lags: Vec<u16> = unique_autocorr_lags.into_iter().collect();
 
+        let planned_size = max_size.map(next_good_fft_size);
+        let planner = RealFftPlanner::<f32>::new();
+        let planner_arc = Arc::new(Mutex::new(planner));
+
+        if let Some(size) = planned_size {
+            if compute.any_fft() {
+                let mut p = planner_arc.lock().unwrap();
+                p.plan_fft_forward(size);
+            }
+        }
+
         Self {
             features,
             compute,
@@ -72,6 +88,9 @@ impl ExpandingExtractor {
                 .collect(), // Initial placeholder
             histories: vec![Vec::new(); n_cols],
             sorted_histories: vec![Vec::new(); n_cols],
+            planner: planner_arc,
+            max_size,
+            fft_update_period,
         }
     }
 
@@ -114,6 +133,20 @@ impl ExpandingExtractor {
             })
             .collect();
 
+        // Ensure we have a plan for the current total_n or max_size
+        let fft_size = if let Some(ms) = self.max_size {
+            next_good_fft_size(ms.max(total_n))
+        } else {
+            total_n
+        };
+
+        let r2c = if self.compute.any_fft() && fft_size > 0 {
+            let mut p = self.planner.lock().unwrap();
+            Some(p.plan_fft_forward(fft_size))
+        } else {
+            None
+        };
+
         use rayon::prelude::*;
 
         let column_results: Vec<Vec<f32>> = self.states[..n_cols]
@@ -145,6 +178,9 @@ impl ExpandingExtractor {
                     unique_c3_lags: &self.unique_c3_lags,
                     unique_autocorr_lags: &self.unique_autocorr_lags,
                     paa_boundaries: &current_paa_boundaries,
+                    r2c: r2c.as_ref().cloned(),
+                    fft_size,
+                    fft_update_period: self.fft_update_period,
                 };
 
                 engine.process_expanding(
