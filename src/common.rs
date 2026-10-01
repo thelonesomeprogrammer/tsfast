@@ -233,10 +233,10 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::ZeroCrossingMean => bits.set_batch([0, 1, 15, 34, 36, 37]),
             Feature::ZeroCrossingStd => bits.set_batch([0, 1, 15, 34, 35, 36, 37]),
             Feature::AbsMax => bits.set_batch([38]),
-            Feature::FirstLocMax => bits.set_batch([5, 39]),
-            Feature::LastLocMax => bits.set_batch([5, 40]),
-            Feature::FirstLocMin => bits.set_batch([4, 41]),
-            Feature::LastLocMin => bits.set_batch([4, 42]),
+            Feature::FirstLocMax => bits.set_batch([5, 37, 39]),
+            Feature::LastLocMax => bits.set_batch([5, 37, 40]),
+            Feature::FirstLocMin => bits.set_batch([4, 37, 41]),
+            Feature::LastLocMin => bits.set_batch([4, 37, 42]),
             Feature::Autocorr(lag) => {
                 if *lag == 1 {
                     bits.set_batch([0, 1, 12, 17, 37]);
@@ -267,4 +267,36 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
         }
     }
     bits
+}
+
+pub fn approx_entropy_phi(m: usize, r: f32, data: &[f32], sorted_idx: &mut Vec<usize>) -> f32 {
+    let n = data.len();
+    let mut result = 0.0;
+
+    sorted_idx.clear();
+    sorted_idx.extend(0..n - m + 1);
+    sorted_idx.sort_unstable_by(|&a, &b| {
+        data[a]
+            .partial_cmp(&data[b])
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    for i in 0..n - m + 1 {
+        let mut count = 0;
+        let target = data[i];
+        let start_pos = sorted_idx.partition_point(|&idx| data[idx] < target - r);
+        let end_pos = sorted_idx.partition_point(|&idx| data[idx] <= target + r);
+
+        for &j in &sorted_idx[start_pos..end_pos] {
+            let mut max_diff: f32 = 0.0;
+            for k in 0..m {
+                max_diff = max_diff.max((data[i + k] - data[j + k]).abs());
+            }
+            if max_diff <= r {
+                count += 1;
+            }
+        }
+        result += (count as f32 / (n - m + 1) as f32).ln();
+    }
+    result / (n - m + 1) as f32
 }
