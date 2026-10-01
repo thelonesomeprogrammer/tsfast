@@ -36,8 +36,8 @@ def test_new_features():
     
     # MAD: mean(|x - mean(x)|)
     assert np.allclose(results[0], 1.5)
-    # IQR: Q3 - Q1. x=[1, 2, 3, 4, 5, 6]. Q1=2.0, Q3=5.0. IQR=3.
-    assert np.allclose(results[1], 3.0)
+    # IQR: Q3 - Q1. x=[1, 2, 3, 4, 5, 6]. Q1=2.25, Q3=4.75. IQR=2.5.
+    assert np.allclose(results[1], 2.5)
     assert results[2] > 0
     assert np.allclose(results[3], 1.0)
     assert np.allclose(results[4], 1.0)
