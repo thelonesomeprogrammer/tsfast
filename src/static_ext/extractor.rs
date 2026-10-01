@@ -1,7 +1,7 @@
 use crate::common::{ColumnState, LANES};
 use crate::types::{FastBitArray, Feature};
 use realfft::{RealFftPlanner, RealToComplex};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
@@ -302,7 +302,7 @@ impl<'a> StaticEngine<'a> {
         if self.compute.any([6, 10, 11, 49]) {
             let mut copy = values.to_vec();
             copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            
+
             if self.compute[6] {
                 let n_len = copy.len();
                 if n_len > 0 {
@@ -316,7 +316,9 @@ impl<'a> StaticEngine<'a> {
             if self.compute[10] {
                 let n_f = n as f32;
                 let get_q = |q: f32, data: &[f32]| -> f32 {
-                    if data.is_empty() { return 0.0; }
+                    if data.is_empty() {
+                        return 0.0;
+                    }
                     let idx = q * (n_f - 1.0);
                     let i = idx.floor() as usize;
                     let f = idx - i as f32;
@@ -606,7 +608,8 @@ impl<'a> StaticEngine<'a> {
                 Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
                     let x0 = values[0];
                     let xn = values[values.len() - 1];
-                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn) + (n - 1.0) * mean * mean;
+                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn)
+                        + (n - 1.0) * mean * mean;
                     cov / m2
                 }
                 Feature::AutocorrFirst1e => {
@@ -879,13 +882,15 @@ impl<'a> StaticEngine<'a> {
                         let idx = q * (n_len as f32 - 1.0);
                         let i = idx.floor() as usize;
                         let f = idx - i as f32;
-                        
+
                         // We need i and i+1 to be valid.
                         // select_nth_unstable only gives us one.
                         // For linear interpolation, we need to sort or at least find two.
                         // Since we already might have a sorted copy, let's just sort if not.
-                        copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                        
+                        copy.sort_unstable_by(|a, b| {
+                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+
                         if i >= n_len - 1 {
                             copy[n_len - 1]
                         } else {
@@ -909,7 +914,7 @@ impl<'a> StaticEngine<'a> {
                 }
                 Feature::BenfordCorrelation => benford_corr,
                 Feature::SumOfReoccurringValues => {
-                    let mut counts = HashMap::new();
+                    let mut counts = FxHashMap::default();
                     for &v in values {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
@@ -921,7 +926,7 @@ impl<'a> StaticEngine<'a> {
                         .sum()
                 }
                 Feature::SumOfReoccurringDataPoints => {
-                    let mut counts = HashMap::new();
+                    let mut counts = FxHashMap::default();
                     for &v in values {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
