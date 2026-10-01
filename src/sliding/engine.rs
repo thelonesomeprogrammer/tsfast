@@ -360,10 +360,10 @@ impl<'a> SlidingEngine<'a> {
         values: &[f32],
         state: &mut ColumnState,
         is_incremental: bool,
-    ) -> Vec<f32> {
+    ) -> Result<Vec<f32>, String> {
         let n = values.len() as f32;
         if n == 0.0 {
-            return vec![0.0; self.features.len()];
+            return Ok(vec![0.0; self.features.len()]);
         }
 
         // Reset incremental parts of state that we re-calculate
@@ -716,7 +716,7 @@ impl<'a> SlidingEngine<'a> {
     }
 
     #[inline(always)]
-    pub(crate) fn finalize_results(&self, values: &[f32], n: f32, state: &mut ColumnState) -> Vec<f32> {
+    pub(crate) fn finalize_results(&self, values: &[f32], n: f32, state: &mut ColumnState) -> Result<Vec<f32>, String> {
         let mean = state.total_sum / n;
         let mac_sum = state.mac_sum;
         let mc_sum = state.mc_sum;
@@ -754,7 +754,7 @@ impl<'a> SlidingEngine<'a> {
                 let mut indata = vec![0.0; self.fft_size];
                 indata[..values.len()].copy_from_slice(values);
                 let mut outdata = r2c.make_output_vec();
-                r2c.process(&mut indata, &mut outdata).unwrap();
+                r2c.process(&mut indata, &mut outdata).map_err(|e| e.to_string())?;
                 state.sliding_dft = Some(SlidingDFT::from_fft(outdata, values.len()));
             }
 
@@ -781,14 +781,14 @@ impl<'a> SlidingEngine<'a> {
                 indata[i] = v - mean;
             }
             let mut outdata = r2c_ac.make_output_vec();
-            r2c_ac.process(&mut indata, &mut outdata).unwrap();
+            r2c_ac.process(&mut indata, &mut outdata).map_err(|e| e.to_string())?;
 
             for c in &mut outdata {
                 *c = realfft::num_complex::Complex::new(c.norm_sqr(), 0.0);
             }
 
             let mut outdata_inv = c2r_ac.make_output_vec();
-            c2r_ac.process(&mut outdata, &mut outdata_inv).unwrap();
+            c2r_ac.process(&mut outdata, &mut outdata_inv).map_err(|e| e.to_string())?;
 
             let var_ac = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
             let m2_val = var_ac * (n - 1.0);
@@ -978,9 +978,9 @@ impl<'a> SlidingEngine<'a> {
         let var = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
         let std_dev = var.sqrt();
 
-        self.features
-            .iter()
-            .map(|feat| match feat {
+        let mut feats = Vec::with_capacity(self.features.len());
+        for feat in self.features {
+            let val = match feat {
                 Feature::TotalSum => state.total_sum as f32,
                 Feature::Mean => mean as f32,
                 Feature::Variance => var as f32,
@@ -1175,31 +1175,33 @@ impl<'a> SlidingEngine<'a> {
                 Feature::PartialAutocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
                     let l = *lag as usize;
                     if fft_autocorr.is_empty() || fft_autocorr.len() <= l {
-                        return 0.0;
-                    }
-                    let r = &fft_autocorr;
-                    let mut phi = vec![vec![0.0; l + 1]; l + 1];
-                    let mut error = r[0] as f64;
-                    if error.abs() < 1e-9 {
-                        return 0.0;
-                    }
-                    phi[1][1] = r[1] / r[0];
-                    error *= 1.0 - (phi[1][1] * phi[1][1]) as f64;
-                    for k in 1..l {
-                        let mut sum = 0.0;
-                        for i in 1..=k {
-                            sum += phi[k][i] * r[k + 1 - i];
-                        }
-                        phi[k + 1][k + 1] = (r[k + 1] - sum) / error as f32;
-                        for i in 1..=k {
-                            phi[k + 1][i] = phi[k][i] - phi[k + 1][k + 1] * phi[k][k + 1 - i];
-                        }
-                        error *= 1.0 - (phi[k + 1][k + 1] * phi[k + 1][k + 1]) as f64;
+                        0.0
+                    } else {
+                        let r = &fft_autocorr;
+                        let mut phi = vec![vec![0.0; l + 1]; l + 1];
+                        let mut error = r[0] as f64;
                         if error.abs() < 1e-9 {
-                            break;
+                            0.0
+                        } else {
+                            phi[1][1] = r[1] / r[0];
+                            error *= 1.0 - (phi[1][1] * phi[1][1]) as f64;
+                            for k in 1..l {
+                                let mut sum = 0.0;
+                                for i in 1..=k {
+                                    sum += phi[k][i] * r[k + 1 - i];
+                                }
+                                phi[k + 1][k + 1] = (r[k + 1] - sum) / error as f32;
+                                for i in 1..=k {
+                                    phi[k + 1][i] = phi[k][i] - phi[k + 1][k + 1] * phi[k][k + 1 - i];
+                                }
+                                error *= 1.0 - (phi[k + 1][k + 1] * phi[k + 1][k + 1]) as f64;
+                                if error.abs() < 1e-9 {
+                                    break;
+                                }
+                            }
+                            phi[l][l]
                         }
                     }
-                    phi[l][l]
                 }
                 Feature::AggLinearTrend(attr, chunk_len, func)
                     if values.len() >= *chunk_len as usize =>
@@ -1224,9 +1226,9 @@ impl<'a> SlidingEngine<'a> {
                     }
                     let m_n = agg_series.len() as f32;
                     if m_n < 2.0 {
-                        return 0.0;
-                    }
-                    let m_sum_x: f32 = (0..agg_series.len()).map(|i| i as f32).sum();
+                        0.0
+                    } else {
+                        let m_sum_x: f32 = (0..agg_series.len()).map(|i| i as f32).sum();
                     let m_sum_y: f32 = agg_series.iter().sum();
                     let m_sum_xx: f32 = (0..agg_series.len()).map(|i| (i as f32).powi(2)).sum();
                     let m_sum_xy: f32 = agg_series
@@ -1265,6 +1267,7 @@ impl<'a> SlidingEngine<'a> {
                             }
                         }
                         _ => 0.0,
+                    }
                     }
                 }
                 Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
@@ -1425,7 +1428,9 @@ impl<'a> SlidingEngine<'a> {
                     }
                 }
                 _ => 0.0,
-            })
-            .collect()
+            };
+            feats.push(val);
+        }
+        Ok(feats)
     }
 }
