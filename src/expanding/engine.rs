@@ -942,11 +942,9 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::BenfordCorrelation => {
                     let mut counts = [0.0; 9];
                     for &v in full_series {
-                        let mut abs_v = v.abs();
+                        let abs_v = v.abs();
                         if abs_v > 0.0 {
-                            while abs_v < 1.0 { abs_v *= 10.0; }
-                            while abs_v >= 10.0 { abs_v /= 10.0; }
-                            let first_digit = abs_v.floor() as usize;
+                            let first_digit = (abs_v / 10.0_f32.powf(abs_v.log10().floor())).floor() as usize;
                             if (1..=9).contains(&first_digit) {
                                 counts[first_digit - 1] += 1.0;
                             }
