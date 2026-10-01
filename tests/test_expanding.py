@@ -107,9 +107,8 @@ def test_expanding_higher_moments():
     m = np.mean(x)
     v = np.var(x, ddof=1)
     m3 = np.mean((x - m)**3)
-    m4 = np.mean((x - m)**4)
-    expected_skew = m3 / (np.var(x, ddof=0)**1.5)
-    expected_kurt = m4 / (np.var(x, ddof=0)**2) - 3.0
+    expected_skew = m3 / (v**1.5)
+    expected_kurt = kurtosis(x, fisher=True, bias=False)
     
     # Wait, tsfast uses (m3/n) where m3 is sum of (x-mean)^3.
     # So (m3/n) is exactly np.mean((x-m)**3).
