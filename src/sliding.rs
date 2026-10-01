@@ -142,11 +142,11 @@ impl SlidingExtractor {
         let window_size = self.window_size;
         let stride = self.stride;
 
-        let column_results: Vec<Vec<Vec<f32>>> = self.states[..n_cols]
+        let column_results: Result<Vec<Vec<Vec<f32>>>, String> = self.states[..n_cols]
             .par_iter_mut()
             .zip(self.histories[..n_cols].par_iter_mut())
             .zip(record_batch.columns().par_iter())
-            .map(|((state, history), column)| {
+            .map(|((state, history), column)| -> Result<Vec<Vec<f32>>, String> {
                 let array = column
                     .as_any()
                     .downcast_ref::<Float32Array>()
@@ -170,7 +170,7 @@ impl SlidingExtractor {
                     
                     if history.len() == window_size {
                         // First time window is full
-                        batch_res.push(engine.process_column(history, state, false));
+                        batch_res.push(engine.process_column(history, state, false)?);
                     } else if history.len() == window_size + stride {
                         // We have reached a stride boundary
                         let old_slice = &history[..stride];
@@ -198,14 +198,15 @@ impl SlidingExtractor {
 
                         history.drain(..stride);
                         
-                        batch_res.push(engine.process_column(history, state, true));
+                        batch_res.push(engine.process_column(history, state, true)?);
                         state.n += stride as f32;
                     }
                 }
-                batch_res
+                Ok(batch_res)
             })
             .collect();
 
+        let column_results = column_results.map_err(PyTypeError::new_err)?;
         let n_results = column_results[0].len();
         let mut fields = Vec::with_capacity(self.features.len());
         for feat in &self.features {
