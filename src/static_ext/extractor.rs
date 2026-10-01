@@ -1,7 +1,7 @@
 use crate::common::{ColumnState, LANES};
 use crate::types::{FastBitArray, Feature};
 use realfft::{RealFftPlanner, RealToComplex};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
@@ -302,7 +302,7 @@ impl<'a> StaticEngine<'a> {
         if self.compute.any([6, 10, 11, 49]) {
             let mut copy = values.to_vec();
             copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            
+
             if self.compute[6] {
                 let n_len = copy.len();
                 if n_len > 0 {
@@ -316,7 +316,9 @@ impl<'a> StaticEngine<'a> {
             if self.compute[10] {
                 let n_f = n as f32;
                 let get_q = |q: f32, data: &[f32]| -> f32 {
-                    if data.is_empty() { return 0.0; }
+                    if data.is_empty() {
+                        return 0.0;
+                    }
                     let idx = q * (n_f - 1.0);
                     let i = idx.floor() as usize;
                     let f = idx - i as f32;
@@ -354,15 +356,10 @@ impl<'a> StaticEngine<'a> {
         if self.compute[51] {
             let mut counts = [0.0; 9];
             for &v in values {
-                let mut abs_v = v.abs();
+                let abs_v = v.abs();
                 if abs_v > 0.0 {
-                    while abs_v < 1.0 {
-                        abs_v *= 10.0;
-                    }
-                    while abs_v >= 10.0 {
-                        abs_v /= 10.0;
-                    }
-                    let first_digit = abs_v.floor() as usize;
+                    let first_digit =
+                        (abs_v / 10.0_f32.powf(abs_v.log10().floor())).floor() as usize;
                     if (1..=9).contains(&first_digit) {
                         counts[first_digit - 1] += 1.0;
                     }
@@ -606,7 +603,8 @@ impl<'a> StaticEngine<'a> {
                 Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
                     let x0 = values[0];
                     let xn = values[values.len() - 1];
-                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn) + (n - 1.0) * mean * mean;
+                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn)
+                        + (n - 1.0) * mean * mean;
                     cov / m2
                 }
                 Feature::AutocorrFirst1e => {
@@ -843,42 +841,9 @@ impl<'a> StaticEngine<'a> {
                 Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
                     let m_val = *m as usize;
                     let r = f32::from_bits(*r_bits);
-                    let mut sorted_idx = Vec::new();
-
-                    fn phi(m: usize, r: f32, data: &[f32], sorted_idx: &mut Vec<usize>) -> f32 {
-                        let n = data.len();
-                        let mut result = 0.0;
-
-                        sorted_idx.clear();
-                        sorted_idx.extend(0..n - m + 1);
-                        sorted_idx.sort_unstable_by(|&a, &b| {
-                            data[a]
-                                .partial_cmp(&data[b])
-                                .unwrap_or(std::cmp::Ordering::Equal)
-                        });
-
-                        for i in 0..n - m + 1 {
-                            let mut count = 0;
-                            let target = data[i];
-                            let start_pos =
-                                sorted_idx.partition_point(|&idx| data[idx] < target - r);
-                            let end_pos =
-                                sorted_idx.partition_point(|&idx| data[idx] <= target + r);
-
-                            for &j in &sorted_idx[start_pos..end_pos] {
-                                let mut max_diff: f32 = 0.0;
-                                for k in 0..m {
-                                    max_diff = max_diff.max((data[i + k] - data[j + k]).abs());
-                                }
-                                if max_diff <= r {
-                                    count += 1;
-                                }
-                            }
-                            result += (count as f32 / (n - m + 1) as f32).ln();
-                        }
-                        result / (n - m + 1) as f32
-                    }
-                    phi(m_val, r, values, &mut sorted_idx) - phi(m_val + 1, r, values, &mut sorted_idx)
+                    let mut buffer = Vec::new();
+                    crate::common::approx_entropy_phi(m_val, r, values, &mut buffer) -
+                    crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer)
                 }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
@@ -896,13 +861,15 @@ impl<'a> StaticEngine<'a> {
                         let idx = q * (n_len as f32 - 1.0);
                         let i = idx.floor() as usize;
                         let f = idx - i as f32;
-                        
+
                         // We need i and i+1 to be valid.
                         // select_nth_unstable only gives us one.
                         // For linear interpolation, we need to sort or at least find two.
                         // Since we already might have a sorted copy, let's just sort if not.
-                        copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                        
+                        copy.sort_unstable_by(|a, b| {
+                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+
                         if i >= n_len - 1 {
                             copy[n_len - 1]
                         } else {
@@ -926,7 +893,7 @@ impl<'a> StaticEngine<'a> {
                 }
                 Feature::BenfordCorrelation => benford_corr,
                 Feature::SumOfReoccurringValues => {
-                    let mut counts = HashMap::new();
+                    let mut counts = FxHashMap::default();
                     for &v in values {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
@@ -938,7 +905,7 @@ impl<'a> StaticEngine<'a> {
                         .sum()
                 }
                 Feature::SumOfReoccurringDataPoints => {
-                    let mut counts = HashMap::new();
+                    let mut counts = FxHashMap::default();
                     for &v in values {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
