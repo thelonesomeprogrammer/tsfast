@@ -1,7 +1,7 @@
 use crate::common::{ColumnState, LANES};
 use crate::types::{FastBitArray, Feature};
 use realfft::{RealFftPlanner, RealToComplex};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
@@ -893,7 +893,7 @@ impl<'a> StaticEngine<'a> {
                 }
                 Feature::BenfordCorrelation => benford_corr,
                 Feature::SumOfReoccurringValues => {
-                    let mut counts = HashMap::new();
+                    let mut counts = FxHashMap::default();
                     for &v in values {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
@@ -905,7 +905,7 @@ impl<'a> StaticEngine<'a> {
                         .sum()
                 }
                 Feature::SumOfReoccurringDataPoints => {
-                    let mut counts = HashMap::new();
+                    let mut counts = FxHashMap::default();
                     for &v in values {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
