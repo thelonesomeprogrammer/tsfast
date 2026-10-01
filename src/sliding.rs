@@ -173,15 +173,15 @@ impl SlidingExtractor {
                         batch_res.push(engine.process_column(history, state, false));
                     } else if history.len() == window_size + stride {
                         // We have reached a stride boundary
-                        let old_slice_vec: Vec<f32> = history[..stride].to_vec();
-                        let new_slice_vec: Vec<f32> = history[window_size..window_size + stride].to_vec();
+                        let old_slice = &history[..stride];
+                        let new_slice = &history[window_size..window_size + stride];
                         
                         let value_after_old = history[stride];
                         let value_before_new = history[window_size - 1];
                         
                         engine.update_batch(
-                            &old_slice_vec,
-                            &new_slice_vec,
+                            old_slice,
+                            new_slice,
                             None,
                             value_after_old,
                             value_before_new,
@@ -190,13 +190,13 @@ impl SlidingExtractor {
                             state
                         );
                         
-                        history.drain(..stride);
-                        
                         if let Some(ref mut sdft) = state.sliding_dft {
-                            for (i, &v) in old_slice_vec.iter().enumerate() {
-                                sdft.update(v, new_slice_vec[i]);
+                            for (i, &v) in old_slice.iter().enumerate() {
+                                sdft.update(v, new_slice[i]);
                             }
                         }
+
+                        history.drain(..stride);
                         
                         batch_res.push(engine.process_column(history, state, true));
                         state.n += stride as f32;
