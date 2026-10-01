@@ -233,10 +233,10 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::ZeroCrossingMean => bits.set_batch([0, 1, 15, 34, 36, 37]),
             Feature::ZeroCrossingStd => bits.set_batch([0, 1, 15, 34, 35, 36, 37]),
             Feature::AbsMax => bits.set_batch([38]),
-            Feature::FirstLocMax => bits.set_batch([5, 39]),
-            Feature::LastLocMax => bits.set_batch([5, 40]),
-            Feature::FirstLocMin => bits.set_batch([4, 41]),
-            Feature::LastLocMin => bits.set_batch([4, 42]),
+            Feature::FirstLocMax => bits.set_batch([5, 37, 39]),
+            Feature::LastLocMax => bits.set_batch([5, 37, 40]),
+            Feature::FirstLocMin => bits.set_batch([4, 37, 41]),
+            Feature::LastLocMin => bits.set_batch([4, 37, 42]),
             Feature::Autocorr(lag) => {
                 if *lag == 1 {
                     bits.set_batch([0, 1, 12, 17, 37]);
