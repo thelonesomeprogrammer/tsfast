@@ -66,7 +66,7 @@ impl SlidingExtractor {
         let planner_arc = Arc::new(Mutex::new(planner));
 
         if compute.any_fft() {
-            let mut p = planner_arc.lock().unwrap();
+            let mut p = planner_arc.lock().unwrap_or_else(|e| e.into_inner());
             p.plan_fft_forward(next_good_fft_size(window_size));
         }
 
@@ -131,7 +131,7 @@ impl SlidingExtractor {
 
         let fft_size = next_good_fft_size(self.window_size);
         let r2c = if self.compute.any_fft() {
-            let mut p = self.planner.lock().unwrap();
+            let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
             Some(p.plan_fft_forward(fft_size))
         } else {
             None

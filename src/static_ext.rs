@@ -57,7 +57,7 @@ impl Extractor {
 
         if let Some(size) = planned_size {
             if compute.any_fft() {
-                let mut p = planner_arc.lock().unwrap();
+                let mut p = planner_arc.lock().unwrap_or_else(|e| e.into_inner());
                 p.plan_fft_forward(size);
             }
         }
@@ -103,7 +103,7 @@ impl Extractor {
         };
 
         let r2c = if compute.any_fft() && fft_size > 0 {
-            let mut p = self.planner.lock().unwrap();
+            let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
             Some(p.plan_fft_forward(fft_size))
         } else {
             None
@@ -210,7 +210,7 @@ mod tests {
             "paa-2-0".to_string(),
             "paa-2-1".to_string(),
         ];
-        let extractor = Extractor::new(features);
+        let extractor = Extractor::new(features, None);
         let batch = create_test_batch(data.clone());
         let result = extractor.process_2d_floats(batch).unwrap().0;
 
@@ -246,7 +246,7 @@ mod tests {
             "rms".to_string(),
             "mad".to_string(),
         ];
-        let extractor = Extractor::new(features);
+        let extractor = Extractor::new(features, None);
         let batch = create_test_batch(data.clone());
         let result = extractor.process_2d_floats(batch).unwrap().0;
 
