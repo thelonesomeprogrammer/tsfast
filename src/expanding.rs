@@ -32,14 +32,14 @@ pub struct ExpandingExtractor {
 impl ExpandingExtractor {
     #[new]
     #[pyo3(signature = (feature_str, n_cols, max_size=None, fft_update_period=1))]
-    pub fn new(feature_str: Vec<String>, n_cols: usize, max_size: Option<usize>, fft_update_period: usize) -> Self {
+    pub fn new(feature_str: Vec<String>, n_cols: usize, max_size: Option<usize>, fft_update_period: usize) -> PyResult<Self> {
         let mut features = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
         let mut unique_autocorr_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
-            let feat = Feature::from(i);
+            let feat = std::str::FromStr::from_str(&i).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             match feat {
                 Feature::Paa(total, _) => {
                     unique_paa_totals.insert(total);
@@ -76,7 +76,7 @@ impl ExpandingExtractor {
             }
         }
 
-        Self {
+        Ok(Self {
             features,
             compute,
             unique_paa_totals: unique_paa_totals.clone(),
@@ -98,7 +98,7 @@ impl ExpandingExtractor {
             planner: planner_arc,
             max_size,
             fft_update_period,
-        }
+        })
     }
 
     pub fn update(

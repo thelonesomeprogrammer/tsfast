@@ -30,14 +30,14 @@ pub struct SlidingExtractor {
 impl SlidingExtractor {
     #[new]
     #[pyo3(signature = (feature_str, n_cols, window_size, stride=1))]
-    pub fn new(feature_str: Vec<String>, n_cols: usize, window_size: usize, stride: usize) -> Self {
+    pub fn new(feature_str: Vec<String>, n_cols: usize, window_size: usize, stride: usize) -> PyResult<Self> {
         let mut features = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
         let mut unique_autocorr_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
-            let feat = Feature::from(i);
+            let feat = std::str::FromStr::from_str(&i).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             match feat {
                 Feature::Paa(total, _) => {
                     unique_paa_totals.insert(total);
@@ -70,7 +70,7 @@ impl SlidingExtractor {
             p.plan_fft_forward(next_good_fft_size(window_size));
         }
 
-        Self {
+        Ok(Self {
             features,
             compute,
             unique_paa_totals: unique_paa_totals.clone(),
@@ -90,7 +90,7 @@ impl SlidingExtractor {
                 .collect(),
             histories: vec![Vec::with_capacity(window_size + stride); n_cols],
             planner: planner_arc,
-        }
+        })
     }
 
     pub fn update(
