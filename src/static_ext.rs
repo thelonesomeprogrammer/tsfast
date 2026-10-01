@@ -31,7 +31,7 @@ pub struct Extractor {
 impl Extractor {
     #[new]
     #[pyo3(signature = (feature_str, max_size=None))]
-    pub fn new(feature_str: Vec<String>, max_size: Option<usize>) -> Self {
+    pub fn new(feature_str: Vec<String>, max_size: Option<usize>) -> PyResult<Self> {
         let mut features = Vec::new();
         let mut paa_args = Vec::new();
         let mut c3_args = Vec::new();
@@ -39,7 +39,7 @@ impl Extractor {
         let mut unique_c3_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
-            let feat = Feature::from(i);
+            let feat = std::str::FromStr::from_str(&i).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             if let Feature::Paa(total, index) = feat {
                 paa_args.push((total, index));
                 unique_paa_totals.insert(total);
@@ -57,12 +57,12 @@ impl Extractor {
 
         if let Some(size) = planned_size {
             if compute.any_fft() {
-                let mut p = planner_arc.lock().unwrap();
+                let mut p = planner_arc.lock().unwrap_or_else(|e| e.into_inner());
                 p.plan_fft_forward(size);
             }
         }
 
-        Self {
+        Ok(Self {
             features,
             compute,
             paa_args,
@@ -71,7 +71,7 @@ impl Extractor {
             unique_c3_lags: unique_c3_lags.into_iter().collect(),
             planner: planner_arc,
             max_size,
-        }
+        })
     }
 
     pub fn process_2d_floats(
@@ -103,7 +103,7 @@ impl Extractor {
         };
 
         let r2c = if compute.any_fft() && fft_size > 0 {
-            let mut p = self.planner.lock().unwrap();
+            let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
             Some(p.plan_fft_forward(fft_size))
         } else {
             None
@@ -210,7 +210,7 @@ mod tests {
             "paa-2-0".to_string(),
             "paa-2-1".to_string(),
         ];
-        let extractor = Extractor::new(features);
+        let extractor = Extractor::new(features, None);
         let batch = create_test_batch(data.clone());
         let result = extractor.process_2d_floats(batch).unwrap().0;
 
@@ -246,7 +246,7 @@ mod tests {
             "rms".to_string(),
             "mad".to_string(),
         ];
-        let extractor = Extractor::new(features);
+        let extractor = Extractor::new(features, None);
         let batch = create_test_batch(data.clone());
         let result = extractor.process_2d_floats(batch).unwrap().0;
 

@@ -390,7 +390,9 @@ impl<'a> ExpandingEngine<'a> {
                 if self.compute[10] {
                     let n_f = n_size as f32;
                     let get_q = |q: f32, data: &[f32]| -> f32 {
-                        if data.is_empty() { return 0.0; }
+                        if data.is_empty() {
+                            return 0.0;
+                        }
                         let idx = q * (n_f - 1.0);
                         let i = idx.floor() as usize;
                         let f = idx - i as f32;
@@ -631,7 +633,8 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
                     let x0 = full_series[0];
                     let xn = full_series[full_series.len() - 1];
-                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn) + (n - 1.0) * mean * mean;
+                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn)
+                        + (n - 1.0) * mean * mean;
                     cov / m2
                 }
                 Feature::AutocorrFirst1e => {
@@ -657,7 +660,11 @@ impl<'a> ExpandingEngine<'a> {
                         let mut outdata_inv = c2r_ac.make_output_vec();
                         c2r_ac.process(&mut outdata, &mut outdata_inv).unwrap();
 
-                        let m2_val = if n > 1.0 { state.energy - (state.total_sum * state.total_sum) / n } else { 0.0 };
+                        let m2_val = if n > 1.0 {
+                            state.energy - (state.total_sum * state.total_sum) / n
+                        } else {
+                            0.0
+                        };
                         if m2_val.abs() > 1e-9 {
                             let scale = 1.0 / (fft_size_ac as f32);
                             let threshold = 0.36787944;
@@ -672,8 +679,12 @@ impl<'a> ExpandingEngine<'a> {
                                 }
                             }
                             if found { first_lag } else { 0.0 }
-                        } else { 0.0 }
-                    } else { 0.0 }
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
                 }
                 Feature::MeanAbsChange if n > 1.0 => mac_sum / (n - 1.0),
                 Feature::MeanChange if n > 1.0 => mc_sum / (n - 1.0),
@@ -901,44 +912,9 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::ApproxEntropy(m, r_bits) if full_series.len() > *m as usize + 1 => {
                     let m_val = *m as usize;
                     let r = f32::from_bits(*r_bits);
-                    let mut buffer = std::mem::take(&mut state.approx_entropy_buffer);
-
-                    fn phi(m: usize, r: f32, data: &[f32], sorted_idx: &mut Vec<usize>) -> f32 {
-                        let n = data.len();
-                        let mut result = 0.0;
-
-                        sorted_idx.clear();
-                        sorted_idx.extend(0..n - m + 1);
-                        sorted_idx.sort_unstable_by(|&a, &b| {
-                            data[a]
-                                .partial_cmp(&data[b])
-                                .unwrap_or(std::cmp::Ordering::Equal)
-                        });
-
-                        for i in 0..n - m + 1 {
-                            let mut count = 0;
-                            let target = data[i];
-                            let start_pos =
-                                sorted_idx.partition_point(|&idx| data[idx] < target - r);
-                            let end_pos =
-                                sorted_idx.partition_point(|&idx| data[idx] <= target + r);
-
-                            for &j in &sorted_idx[start_pos..end_pos] {
-                                let mut max_diff: f32 = 0.0;
-                                for k in 0..m {
-                                    max_diff = max_diff.max((data[i + k] - data[j + k]).abs());
-                                }
-                                if max_diff <= r {
-                                    count += 1;
-                                }
-                            }
-                            result += (count as f32 / (n - m + 1) as f32).ln();
-                        }
-                        result / (n - m + 1) as f32
-                    }
-                    let res = phi(m_val, r, full_series, &mut buffer) - phi(m_val + 1, r, full_series, &mut buffer);
-                    state.approx_entropy_buffer = buffer;
-                    res
+                    let mut buffer = Vec::new();
+                    crate::common::approx_entropy_phi(m_val, r, full_series, &mut buffer) -
+                    crate::common::approx_entropy_phi(m_val + 1, r, full_series, &mut buffer)
                 }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
@@ -961,11 +937,9 @@ impl<'a> ExpandingEngine<'a> {
                 Feature::BenfordCorrelation => {
                     let mut counts = [0.0; 9];
                     for &v in full_series {
-                        let mut abs_v = v.abs();
+                        let abs_v = v.abs();
                         if abs_v > 0.0 {
-                            while abs_v < 1.0 { abs_v *= 10.0; }
-                            while abs_v >= 10.0 { abs_v /= 10.0; }
-                            let first_digit = abs_v.floor() as usize;
+                            let first_digit = (abs_v / 10.0_f32.powf(abs_v.log10().floor())).floor() as usize;
                             if (1..=9).contains(&first_digit) {
                                 counts[first_digit - 1] += 1.0;
                             }
@@ -987,12 +961,16 @@ impl<'a> ExpandingEngine<'a> {
                         }
                         if den_p > 0.0 && den_b > 0.0 {
                             num / (den_p * den_b).sqrt()
-                        } else { 0.0 }
-                    } else { 0.0 }
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
                 }
                 Feature::SumOfReoccurringValues => {
-                    use std::collections::HashMap;
-                    let mut counts = HashMap::new();
+                    use rustc_hash::FxHashMap;
+                    let mut counts = FxHashMap::default();
                     for &v in full_series {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
@@ -1004,8 +982,8 @@ impl<'a> ExpandingEngine<'a> {
                         .sum()
                 }
                 Feature::SumOfReoccurringDataPoints => {
-                    use std::collections::HashMap;
-                    let mut counts = HashMap::new();
+                    use rustc_hash::FxHashMap;
+                    let mut counts = FxHashMap::default();
                     for &v in full_series {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;

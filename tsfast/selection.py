@@ -19,15 +19,15 @@ def select_features(X, y=None, correlation_threshold=0.98, fdr_level=0.05):
     # 2. Remove highly correlated features
     if X.shape[1] > 1:
         corr_matrix = np.abs(np.corrcoef(X, rowvar=False))
-        to_drop = set()
+        upper = np.triu(corr_matrix, k=1)
+        to_drop_mask = np.zeros(corr_matrix.shape[1], dtype=bool)
+
         for i in range(corr_matrix.shape[1]):
-            if i in to_drop:
+            if to_drop_mask[i]:
                 continue
-            for j in range(i + 1, corr_matrix.shape[1]):
-                if corr_matrix[i, j] > correlation_threshold:
-                    to_drop.add(j)
-        
-        keep_indices = [i for i in range(X.shape[1]) if i not in to_drop]
+            to_drop_mask[i+1:] |= (upper[i, i+1:] > correlation_threshold)
+
+        keep_indices = np.where(~to_drop_mask)[0].tolist()
         X = X[:, keep_indices]
 
     if y is None or X.shape[1] == 0:
@@ -64,8 +64,6 @@ def select_features(X, y=None, correlation_threshold=0.98, fdr_level=0.05):
     if not any(significant):
         # If nothing is significant under FDR, we might want to return some top features 
         # but strictly following FRESH/FDR we should return nothing.
-        # For a demo/test, let's at least return something if it's better than random?
-        # No, let's be strict.
         return X[:, []], constant_mask
     
     max_idx = np.max(np.where(significant))

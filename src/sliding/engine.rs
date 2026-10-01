@@ -1272,41 +1272,9 @@ impl<'a> SlidingEngine<'a> {
                     let r = f32::from_bits(*r_bits);
                     let mut buffer = std::mem::take(&mut state.approx_entropy_buffer);
 
-                    fn phi(m: usize, r: f32, data: &[f32], sorted_idx: &mut Vec<usize>) -> f32 {
-                        let n = data.len();
-                        let mut result = 0.0;
-
-                        sorted_idx.clear();
-                        sorted_idx.extend(0..n - m + 1);
-                        sorted_idx.sort_unstable_by(|&a, &b| {
-                            data[a]
-                                .partial_cmp(&data[b])
-                                .unwrap_or(std::cmp::Ordering::Equal)
-                        });
-
-                        for i in 0..n - m + 1 {
-                            let mut count = 0;
-                            let target = data[i];
-                            let start_pos =
-                                sorted_idx.partition_point(|&idx| data[idx] < target - r);
-                            let end_pos =
-                                sorted_idx.partition_point(|&idx| data[idx] <= target + r);
-
-                            for &j in &sorted_idx[start_pos..end_pos] {
-                                let mut max_diff: f32 = 0.0;
-                                for k in 0..m {
-                                    max_diff = max_diff.max((data[i + k] - data[j + k]).abs());
-                                }
-                                if max_diff <= r {
-                                    count += 1;
-                                }
-                            }
-                            result += (count as f32 / (n - m + 1) as f32).ln();
-                        }
-                        result / (n - m + 1) as f32
-                    }
                     let res =
-                        phi(m_val, r, values, &mut buffer) - phi(m_val + 1, r, values, &mut buffer);
+                        crate::common::approx_entropy_phi(m_val, r, values, &mut buffer) -
+                        crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer);
                     state.approx_entropy_buffer = buffer;
                     res
                 }
