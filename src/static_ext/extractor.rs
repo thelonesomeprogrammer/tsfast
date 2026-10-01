@@ -356,15 +356,10 @@ impl<'a> StaticEngine<'a> {
         if self.compute[51] {
             let mut counts = [0.0; 9];
             for &v in values {
-                let mut abs_v = v.abs();
+                let abs_v = v.abs();
                 if abs_v > 0.0 {
-                    while abs_v < 1.0 {
-                        abs_v *= 10.0;
-                    }
-                    while abs_v >= 10.0 {
-                        abs_v /= 10.0;
-                    }
-                    let first_digit = abs_v.floor() as usize;
+                    let first_digit =
+                        (abs_v / 10.0_f32.powf(abs_v.log10().floor())).floor() as usize;
                     if (1..=9).contains(&first_digit) {
                         counts[first_digit - 1] += 1.0;
                     }
@@ -846,25 +841,9 @@ impl<'a> StaticEngine<'a> {
                 Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
                     let m_val = *m as usize;
                     let r = f32::from_bits(*r_bits);
-                    fn phi(m: usize, r: f32, data: &[f32]) -> f32 {
-                        let n = data.len();
-                        let mut result = 0.0;
-                        for i in 0..n - m + 1 {
-                            let mut count = 0;
-                            for j in 0..n - m + 1 {
-                                let mut max_diff: f32 = 0.0;
-                                for k in 0..m {
-                                    max_diff = max_diff.max((data[i + k] - data[j + k]).abs());
-                                }
-                                if max_diff <= r {
-                                    count += 1;
-                                }
-                            }
-                            result += (count as f32 / (n - m + 1) as f32).ln();
-                        }
-                        result / (n - m + 1) as f32
-                    }
-                    phi(m_val, r, values) - phi(m_val + 1, r, values)
+                    let mut buffer = Vec::new();
+                    crate::common::approx_entropy_phi(m_val, r, values, &mut buffer) -
+                    crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer)
                 }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);

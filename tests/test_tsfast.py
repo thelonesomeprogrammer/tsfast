@@ -104,6 +104,22 @@ def test_2d_extraction():
     assert np.allclose(df.iloc[1], [3.0, 5.0]) # s2
     print("test_2d_extraction passed!")
 
+def test_location_features():
+    x = np.array([2.0, 5.0, 1.0, 5.0, 1.0, 3.0], dtype=np.float32)
+    features = ["first_loc_max", "last_loc_max", "first_loc_min", "last_loc_min"]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    assert np.allclose(results[0], 1.0 / 6.0)
+    assert np.allclose(results[1], 4.0 / 6.0)
+    assert np.allclose(results[2], 2.0 / 6.0)
+    assert np.allclose(results[3], 5.0 / 6.0)
+    print("test_location_features passed!")
+
+
 if __name__ == "__main__":
     test_extract()
     test_new_features()
