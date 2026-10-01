@@ -171,94 +171,95 @@ pub enum AggFunc {
     Var,
 }
 
-impl From<String> for Feature {
-    fn from(s: String) -> Self {
-        match s.as_str() {
-            "total_sum" | "value__sum_values" => Feature::TotalSum,
-            "mean" | "value__mean" => Feature::Mean,
-            "variance" | "value__variance" => Feature::Variance,
-            "std" | "std_dev" | "value__standard_deviation" => Feature::Std,
-            "min" | "min_value" | "value__minimum" => Feature::Min,
-            "max" | "max_value" | "value__maximum" => Feature::Max,
-            "median" | "value__median" => Feature::Median,
-            "skew" | "skewness" | "value__skewness" => Feature::Skew,
-            "kurtosis" | "value__kurtosis" | "unbiased_fisher_kurtosis" => Feature::UnbiasedFisherKurtosis,
-            "biased_fisher_kurtosis" => Feature::BiasedFisherKurtosis,
-            "mad" => Feature::Mad,
-            "iqr" => Feature::Iqr,
-            "entropy" => Feature::Entropy,
-            "energy" | "torque_Absolute energy" => Feature::Energy,
-            "rms" => Feature::Rms,
-            "root_mean_square" => Feature::RootMeanSquare,
-            "zero_crossing_rate" => Feature::ZeroCrossingRate,
-            "peak_count" => Feature::PeakCount,
-            "autocorr_lag1" | "centered_autocorr_lag1" => Feature::AutocorrLag1,
-            "autocorrelation" | "autocorr_first_1e" => Feature::AutocorrFirst1e,
-            "mean_abs_change" => Feature::MeanAbsChange,
-            "mean_change" | "mean_diff" | "torque_Mean diff" => Feature::MeanChange,
-            "cid_ce" => Feature::CidCe,
-            "slope" | "torque_Slope" => Feature::Slope,
-            "intercept" => Feature::Intercept,
-            "abs_sum_change" => Feature::AbsSumChange,
-            "count_above_mean" => Feature::CountAboveMean,
-            "count_below_mean" => Feature::CountBelowMean,
-            "longest_strike_above_mean" => Feature::LongestStrikeAboveMean,
-            "longest_strike_below_mean" => Feature::LongestStrikeBelowMean,
-            "variation_coefficient" => Feature::VariationCoefficient,
-            "auc" => Feature::Auc,
-            "slope_sign_change" => Feature::SlopeSignChange,
-            "turning_points" => Feature::TurningPoints,
-            "zero_crossing_mean" => Feature::ZeroCrossingMean,
-            "zero_crossing_std" => Feature::ZeroCrossingStd,
-            "abs_max" | "value__absolute_maximum" => Feature::AbsMax,
-            "first_loc_max" | "value__first_location_of_maximum" => Feature::FirstLocMax,
-            "last_loc_max" | "value__last_location_of_maximum" => Feature::LastLocMax,
-            "first_loc_min" | "value__first_location_of_minimum" => Feature::FirstLocMin,
-            "last_loc_min" | "value__last_location_of_minimum" => Feature::LastLocMin,
-            "benford_correlation" | "value__benford_correlation" => Feature::BenfordCorrelation,
-            "sum_of_reoccurring_values" | "value__sum_of_reoccurring_values" => Feature::SumOfReoccurringValues,
-            "sum_of_reoccurring_data_points" | "value__sum_of_reoccurring_data_points" => Feature::SumOfReoccurringDataPoints,
-            "spectral_centroid" | "torque_Centroid" => Feature::SpectralCentroid,
-            "spectral_distance" | "torque_Spectral distance" => Feature::SpectralDistance,
-            "spectral_decrease" | "torque_Spectral decrease" => Feature::SpectralDecrease,
-            "spectral_slope" | "torque_Spectral slope" => Feature::SpectralSlope,
-            "signal_distance" | "torque_Signal distance" => Feature::SignalDistance,
-            "human_range_energy" | "torque_Human range energy" => Feature::HumanRangeEnergy(100.0f32.to_bits()), // Default fs=100
+impl std::str::FromStr for Feature {
+    type Err = String;
+    fn from_str(e: &str) -> Result<Self, Self::Err> {
+        match e {
+            "total_sum" | "value__sum_values" => Ok(Feature::TotalSum),
+            "mean" | "value__mean" => Ok(Feature::Mean),
+            "variance" | "value__variance" => Ok(Feature::Variance),
+            "std" | "std_dev" | "value__standard_deviation" => Ok(Feature::Std),
+            "min" | "min_value" | "value__minimum" => Ok(Feature::Min),
+            "max" | "max_value" | "value__maximum" => Ok(Feature::Max),
+            "median" | "value__median" => Ok(Feature::Median),
+            "skew" | "skewness" | "value__skewness" => Ok(Feature::Skew),
+            "kurtosis" | "value__kurtosis" | "unbiased_fisher_kurtosis" => Ok(Feature::UnbiasedFisherKurtosis),
+            "biased_fisher_kurtosis" => Ok(Feature::BiasedFisherKurtosis),
+            "mad" => Ok(Feature::Mad),
+            "iqr" => Ok(Feature::Iqr),
+            "entropy" => Ok(Feature::Entropy),
+            "energy" | "torque_Absolute energy" => Ok(Feature::Energy),
+            "rms" => Ok(Feature::Rms),
+            "root_mean_square" => Ok(Feature::RootMeanSquare),
+            "zero_crossing_rate" => Ok(Feature::ZeroCrossingRate),
+            "peak_count" => Ok(Feature::PeakCount),
+            "autocorr_lag1" | "centered_autocorr_lag1" => Ok(Feature::AutocorrLag1),
+            "autocorrelation" | "autocorr_first_1e" => Ok(Feature::AutocorrFirst1e),
+            "mean_abs_change" => Ok(Feature::MeanAbsChange),
+            "mean_change" | "mean_diff" | "torque_Mean diff" => Ok(Feature::MeanChange),
+            "cid_ce" => Ok(Feature::CidCe),
+            "slope" | "torque_Slope" => Ok(Feature::Slope),
+            "intercept" => Ok(Feature::Intercept),
+            "abs_sum_change" => Ok(Feature::AbsSumChange),
+            "count_above_mean" => Ok(Feature::CountAboveMean),
+            "count_below_mean" => Ok(Feature::CountBelowMean),
+            "longest_strike_above_mean" => Ok(Feature::LongestStrikeAboveMean),
+            "longest_strike_below_mean" => Ok(Feature::LongestStrikeBelowMean),
+            "variation_coefficient" => Ok(Feature::VariationCoefficient),
+            "auc" => Ok(Feature::Auc),
+            "slope_sign_change" => Ok(Feature::SlopeSignChange),
+            "turning_points" => Ok(Feature::TurningPoints),
+            "zero_crossing_mean" => Ok(Feature::ZeroCrossingMean),
+            "zero_crossing_std" => Ok(Feature::ZeroCrossingStd),
+            "abs_max" | "value__absolute_maximum" => Ok(Feature::AbsMax),
+            "first_loc_max" | "value__first_location_of_maximum" => Ok(Feature::FirstLocMax),
+            "last_loc_max" | "value__last_location_of_maximum" => Ok(Feature::LastLocMax),
+            "first_loc_min" | "value__first_location_of_minimum" => Ok(Feature::FirstLocMin),
+            "last_loc_min" | "value__last_location_of_minimum" => Ok(Feature::LastLocMin),
+            "benford_correlation" | "value__benford_correlation" => Ok(Feature::BenfordCorrelation),
+            "sum_of_reoccurring_values" | "value__sum_of_reoccurring_values" => Ok(Feature::SumOfReoccurringValues),
+            "sum_of_reoccurring_data_points" | "value__sum_of_reoccurring_data_points" => Ok(Feature::SumOfReoccurringDataPoints),
+            "spectral_centroid" | "torque_Centroid" => Ok(Feature::SpectralCentroid),
+            "spectral_distance" | "torque_Spectral distance" => Ok(Feature::SpectralDistance),
+            "spectral_decrease" | "torque_Spectral decrease" => Ok(Feature::SpectralDecrease),
+            "spectral_slope" | "torque_Spectral slope" => Ok(Feature::SpectralSlope),
+            "signal_distance" | "torque_Signal distance" => Ok(Feature::SignalDistance),
+            "human_range_energy" | "torque_Human range energy" => Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())), // Default fs=100
             e => {
                 if let Some(arg) = e.strip_prefix("paa-") {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2
                         && let (Ok(n), Ok(m)) = (params[0].parse::<u16>(), params[1].parse::<u16>())
                     {
-                        return Feature::Paa(n, m);
+                        return Ok(Feature::Paa(n, m));
                     }
                 } else if let Some(arg) = e.strip_prefix("c3-") {
                     let param = arg.trim();
                     if let Ok(n) = param.parse::<u16>() {
-                        return Feature::C3(n);
+                        return Ok(Feature::C3(n));
                     }
                 } else if e.contains("c3__lag_") {
                     if let Some(pos) = e.find("lag_") {
                         if let Ok(n) = e[pos+4..].parse::<u16>() {
-                            return Feature::C3(n);
+                            return Ok(Feature::C3(n));
                         }
                     }
                 } else if let Some(arg) = e.strip_prefix("autocorr-") {
                     if let Ok(n) = arg.parse::<u16>() {
-                        return Feature::Autocorr(n);
+                        return Ok(Feature::Autocorr(n));
                     }
                 } else if let Some(arg) = e.strip_prefix("partial_autocorr-") {
                     if let Ok(n) = arg.parse::<u16>() {
-                        return Feature::PartialAutocorr(n);
+                        return Ok(Feature::PartialAutocorr(n));
                     }
                 } else if let Some(arg) = e.strip_prefix("time_reversal_asymmetry-") {
                     if let Ok(n) = arg.parse::<u16>() {
-                        return Feature::TimeReversalAsymmetry(n);
+                        return Ok(Feature::TimeReversalAsymmetry(n));
                     }
                 } else if e.contains("time_reversal_asymmetry_statistic__lag_") {
                     if let Some(pos) = e.find("lag_") {
                         if let Ok(n) = e[pos+4..].parse::<u16>() {
-                            return Feature::TimeReversalAsymmetry(n);
+                            return Ok(Feature::TimeReversalAsymmetry(n));
                         }
                     }
                 } else if let Some(arg) = e.strip_prefix("fft_coeff-") {
@@ -270,16 +271,16 @@ impl From<String> for Feature {
                                 "imag" => FftAttr::Imag,
                                 "abs" => FftAttr::Abs,
                                 "angle" => FftAttr::Angle,
-                                _ => panic!("Unknown FFT attribute: {}", params[1]),
+                                _ => return Err(format!("Unknown FFT attribute: {}", params[1])),
                             };
-                            return Feature::FftCoefficient(coeff, attr);
+                            return Ok(Feature::FftCoefficient(coeff, attr));
                         }
                     }
                 } else if let Some(arg) = e.strip_prefix("approx_entropy-") {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2 {
                         if let (Ok(m), Ok(r)) = (params[0].parse::<u8>(), params[1].parse::<f32>()) {
-                            return Feature::ApproxEntropy(m, r.to_bits());
+                            return Ok(Feature::ApproxEntropy(m, r.to_bits()));
                         }
                     }
                 } else if let Some(arg) = e.strip_prefix("agg_linear_trend-") {
@@ -291,7 +292,7 @@ impl From<String> for Feature {
                             "stderr" => AggAttr::Stderr,
                             "rvalue" => AggAttr::RValue,
                             "pvalue" => AggAttr::PValue,
-                            _ => panic!("Unknown Agg attribute: {}", params[0]),
+                            _ => return Err(format!("Unknown Agg attribute: {}", params[0])),
                         };
                         if let Ok(chunk_len) = params[1].parse::<u16>() {
                             let func = match params[2] {
@@ -299,9 +300,9 @@ impl From<String> for Feature {
                                 "min" => AggFunc::Min,
                                 "mean" => AggFunc::Mean,
                                 "var" => AggFunc::Var,
-                                _ => panic!("Unknown Agg function: {}", params[2]),
+                                _ => return Err(format!("Unknown Agg function: {}", params[2])),
                             };
-                            return Feature::AggLinearTrend(attr, chunk_len, func);
+                            return Ok(Feature::AggLinearTrend(attr, chunk_len, func));
                         }
                     }
                 } else if e.contains("agg_linear_trend__attr_") {
@@ -322,32 +323,32 @@ impl From<String> for Feature {
                                else if e.contains("f_agg_\"min\"") { AggFunc::Min }
                                else { AggFunc::Mean };
                     
-                    return Feature::AggLinearTrend(attr, chunk_len, func);
+                    return Ok(Feature::AggLinearTrend(attr, chunk_len, func));
                 } else if let Some(arg) = e.strip_prefix("quantile-") {
                     if let Ok(q) = arg.parse::<f32>() {
-                        return Feature::Quantile(q.to_bits());
+                        return Ok(Feature::Quantile(q.to_bits()));
                     }
                 } else if e.contains("value__quantile__q_") {
                     if let Some(pos) = e.find("q_") {
                         if let Ok(q) = e[pos+2..].parse::<f32>() {
-                            return Feature::Quantile(q.to_bits());
+                            return Ok(Feature::Quantile(q.to_bits()));
                         }
                     }
                 } else if let Some(arg) = e.strip_prefix("index_mass_quantile-") {
                     if let Ok(q) = arg.parse::<f32>() {
-                        return Feature::IndexMassQuantile(q.to_bits());
+                        return Ok(Feature::IndexMassQuantile(q.to_bits()));
                     }
                 } else if e.contains("value__index_mass_quantile__q_") {
                     if let Some(pos) = e.find("q_") {
                         if let Ok(q) = e[pos+2..].parse::<f32>() {
-                            return Feature::IndexMassQuantile(q.to_bits());
+                            return Ok(Feature::IndexMassQuantile(q.to_bits()));
                         }
                     }
                 } else if let Some(arg) = e.strip_prefix("max_langevin_fixed_point-") {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2 {
                         if let (Ok(m), Ok(r)) = (params[0].parse::<u8>(), params[1].parse::<f32>()) {
-                            return Feature::MaxLangevinFixedPoint(m, r.to_bits());
+                            return Ok(Feature::MaxLangevinFixedPoint(m, r.to_bits()));
                         }
                     }
                 } else if e.contains("value__max_langevin_fixed_point__m_") {
@@ -362,16 +363,16 @@ impl From<String> for Feature {
                         let end = sub.find("__").unwrap_or(sub.len());
                         sub[..end].parse::<f32>().unwrap_or(30.0)
                     } else { 30.0 };
-                    return Feature::MaxLangevinFixedPoint(m, r.to_bits());
+                    return Ok(Feature::MaxLangevinFixedPoint(m, r.to_bits()));
                 } else if e.contains("value__mean_n_absolute_max__number_of_maxima_") {
                     if let Some(pos) = e.find("number_of_maxima_") {
                         if let Ok(n) = e[pos+17..].parse::<u16>() {
-                            return Feature::MeanNAbsoluteMax(n);
+                            return Ok(Feature::MeanNAbsoluteMax(n));
                         }
                     }
                 } else if let Some(arg) = e.strip_prefix("mean_n_absolute_max-") {
                     if let Ok(n) = arg.parse::<u16>() {
-                        return Feature::MeanNAbsoluteMax(n);
+                        return Ok(Feature::MeanNAbsoluteMax(n));
                     }
                 } else if let Some(arg) = e.strip_prefix("wavelet-") {
                     let params: Vec<&str> = arg.split('-').collect();
@@ -379,7 +380,7 @@ impl From<String> for Feature {
                         if let (Ok(w), Ok(f)) =
                             (params[0].parse::<u16>(), params[1].parse::<u16>())
                         {
-                            return Feature::WaveletFeatures(w, f);
+                            return Ok(Feature::WaveletFeatures(w, f));
                         }
                     }
                 } else if e.contains("torque_Wavelet") {
@@ -391,14 +392,14 @@ impl From<String> for Feature {
                             e[pos+1..end].parse::<f32>().unwrap_or(0.0)
                         } else { 0.0 }
                     } else { 0.0 };
-                    return Feature::WaveletFeatures(freq.to_bits() as u16, f_type); // Hacky storage
+                    return Ok(Feature::WaveletFeatures(freq.to_bits() as u16, f_type)); // Hacky storage
                 } else if let Some(arg) = e.strip_prefix("spectrogram-") {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2 {
                         if let (Ok(t), Ok(f)) =
                             (params[0].parse::<u16>(), params[1].parse::<u16>())
                         {
-                            return Feature::SpectrogramCoefficients(t, f);
+                            return Ok(Feature::SpectrogramCoefficients(t, f));
                         }
                     }
                 } else if e.contains("torque_Spectrogram mean coefficient_") {
@@ -406,11 +407,11 @@ impl From<String> for Feature {
                     if let Some(pos) = e.rfind('_') {
                         if let Some(end) = e.find("Hz") {
                             let freq = e[pos+1..end].parse::<f32>().unwrap_or(0.0);
-                            return Feature::SpectrogramCoefficients(0, freq.to_bits() as u16); // Hacky
+                            return Ok(Feature::SpectrogramCoefficients(0, freq.to_bits() as u16)); // Hacky
                         }
                     }
                 }
-                panic!("Unknown feature: {}", e);
+                Err(format!("Unknown feature: {}", e))
             }
         }
     }

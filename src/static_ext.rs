@@ -31,7 +31,7 @@ pub struct Extractor {
 impl Extractor {
     #[new]
     #[pyo3(signature = (feature_str, max_size=None))]
-    pub fn new(feature_str: Vec<String>, max_size: Option<usize>) -> Self {
+    pub fn new(feature_str: Vec<String>, max_size: Option<usize>) -> PyResult<Self> {
         let mut features = Vec::new();
         let mut paa_args = Vec::new();
         let mut c3_args = Vec::new();
@@ -39,7 +39,7 @@ impl Extractor {
         let mut unique_c3_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
-            let feat = Feature::from(i);
+            let feat = std::str::FromStr::from_str(&i).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             if let Feature::Paa(total, index) = feat {
                 paa_args.push((total, index));
                 unique_paa_totals.insert(total);
@@ -62,7 +62,7 @@ impl Extractor {
             }
         }
 
-        Self {
+        Ok(Self {
             features,
             compute,
             paa_args,
@@ -71,7 +71,7 @@ impl Extractor {
             unique_c3_lags: unique_c3_lags.into_iter().collect(),
             planner: planner_arc,
             max_size,
-        }
+        })
     }
 
     pub fn process_2d_floats(

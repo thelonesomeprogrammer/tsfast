@@ -30,14 +30,14 @@ pub struct SlidingExtractor {
 impl SlidingExtractor {
     #[new]
     #[pyo3(signature = (feature_str, n_cols, window_size, stride=1))]
-    pub fn new(feature_str: Vec<String>, n_cols: usize, window_size: usize, stride: usize) -> Self {
+    pub fn new(feature_str: Vec<String>, n_cols: usize, window_size: usize, stride: usize) -> PyResult<Self> {
         let mut features = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
         let mut unique_autocorr_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
-            let feat = Feature::from(i);
+            let feat = std::str::FromStr::from_str(&i).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             match feat {
                 Feature::Paa(total, _) => {
                     unique_paa_totals.insert(total);
@@ -70,7 +70,7 @@ impl SlidingExtractor {
             p.plan_fft_forward(next_good_fft_size(window_size));
         }
 
-        Self {
+        Ok(Self {
             features,
             compute,
             unique_paa_totals: unique_paa_totals.clone(),
@@ -90,7 +90,7 @@ impl SlidingExtractor {
                 .collect(),
             histories: vec![Vec::with_capacity(window_size + stride); n_cols],
             planner: planner_arc,
-        }
+        })
     }
 
     pub fn update(
@@ -173,15 +173,15 @@ impl SlidingExtractor {
                         batch_res.push(engine.process_column(history, state, false));
                     } else if history.len() == window_size + stride {
                         // We have reached a stride boundary
-                        let old_slice_vec: Vec<f32> = history[..stride].to_vec();
-                        let new_slice_vec: Vec<f32> = history[window_size..window_size + stride].to_vec();
+                        let old_slice = &history[..stride];
+                        let new_slice = &history[window_size..window_size + stride];
                         
                         let value_after_old = history[stride];
                         let value_before_new = history[window_size - 1];
                         
                         engine.update_batch(
-                            &old_slice_vec,
-                            &new_slice_vec,
+                            old_slice,
+                            new_slice,
                             None,
                             value_after_old,
                             value_before_new,
@@ -190,13 +190,13 @@ impl SlidingExtractor {
                             state
                         );
                         
-                        history.drain(..stride);
-                        
                         if let Some(ref mut sdft) = state.sliding_dft {
-                            for (i, &v) in old_slice_vec.iter().enumerate() {
-                                sdft.update(v, new_slice_vec[i]);
+                            for (i, &v) in old_slice.iter().enumerate() {
+                                sdft.update(v, new_slice[i]);
                             }
                         }
+
+                        history.drain(..stride);
                         
                         batch_res.push(engine.process_column(history, state, true));
                         state.n += stride as f32;
