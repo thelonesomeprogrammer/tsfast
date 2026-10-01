@@ -64,8 +64,6 @@ def select_features(X, y=None, correlation_threshold=0.98, fdr_level=0.05):
     if not any(significant):
         # If nothing is significant under FDR, we might want to return some top features 
         # but strictly following FRESH/FDR we should return nothing.
-        # For a demo/test, let's at least return something if it's better than random?
-        # No, let's be strict.
         return X[:, []], constant_mask
     
     max_idx = np.max(np.where(significant))
