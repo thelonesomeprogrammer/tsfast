@@ -194,16 +194,21 @@ pub fn eval_statistics(
             }
         }
         Feature::MeanNAbsoluteMax(n_max) => {
-            let mut abs_vals: Vec<f32> = full_series.iter().map(|v| v.abs()).collect();
+            // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
+            let mut abs_vals = std::mem::take(&mut state.sort_buffer);
+            abs_vals.clear();
+            abs_vals.extend(full_series.iter().map(|v| v.abs()));
             abs_vals.sort_unstable_by(|a, b| {
                 b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
             });
             let count = (*n_max as usize).min(abs_vals.len());
-            if count > 0 {
+            let res = if count > 0 {
                 Some(abs_vals.iter().take(count).sum::<f32>() / count as f32)
             } else {
                 Some(0.0)
-            }
+            };
+            state.sort_buffer = abs_vals;
+            res
         }
         _ => None,
     }

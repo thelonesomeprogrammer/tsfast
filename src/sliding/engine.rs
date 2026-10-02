@@ -1457,16 +1457,21 @@ impl<'a> SlidingEngine<'a> {
                         .sum()
                 }
                 Feature::MeanNAbsoluteMax(n_max) => {
-                    let mut abs_vals: Vec<f32> = values.iter().map(|v| v.abs()).collect();
+                    // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
+                    let mut abs_vals = std::mem::take(&mut state.sort_buffer);
+                    abs_vals.clear();
+                    abs_vals.extend(values.iter().map(|v| v.abs()));
                     abs_vals.sort_unstable_by(|a, b| {
                         b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
                     });
                     let count = (*n_max as usize).min(abs_vals.len());
-                    if count > 0 {
+                    let res = if count > 0 {
                         abs_vals.iter().take(count).sum::<f32>() / count as f32
                     } else {
                         0.0
-                    }
+                    };
+                    state.sort_buffer = abs_vals;
+                    res
                 }
                 Feature::HumanRangeEnergy(fs_bits) => {
                     if !spectrum.is_empty() {
