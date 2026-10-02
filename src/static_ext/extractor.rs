@@ -842,8 +842,8 @@ impl<'a> StaticEngine<'a> {
                     let m_val = *m as usize;
                     let r = f32::from_bits(*r_bits);
                     let mut buffer = Vec::new();
-                    crate::common::approx_entropy_phi(m_val, r, values, &mut buffer) -
-                    crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer)
+                    crate::common::approx_entropy_phi(m_val, r, values, &mut buffer)
+                        - crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer)
                 }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
@@ -905,7 +905,13 @@ impl<'a> StaticEngine<'a> {
                         .sum()
                 }
                 Feature::Length => n as f32,
-                Feature::VarianceLargerThanStandardDeviation => if var > 1.0 { 1.0 } else { 0.0 },
+                Feature::VarianceLargerThanStandardDeviation => {
+                    if var > 1.0 {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
                 Feature::SumOfReoccurringDataPoints => {
                     let mut counts = FxHashMap::default();
                     for &v in values {
