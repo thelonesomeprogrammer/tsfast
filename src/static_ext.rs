@@ -11,6 +11,7 @@ use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
 pub mod extractor;
+pub mod features;
 
 use crate::common::{map_features_to_indices, next_good_fft_size};
 use extractor::StaticEngine;
