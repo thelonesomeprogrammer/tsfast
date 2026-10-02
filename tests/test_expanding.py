@@ -141,3 +141,41 @@ def test_expanding_c3():
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+def test_expanding_duplicate_features():
+    from tsfast._tsfast import ExpandingExtractor
+    import pandas as pd
+    from tsfresh.feature_extraction.feature_calculators import has_duplicate, has_duplicate_max, has_duplicate_min
+
+    features = ["has_duplicate", "has_duplicate_max", "has_duplicate_min"]
+    n_cols = 1
+    extractor = ExpandingExtractor(features, n_cols)
+
+    # Update 1
+    x1 = np.array([1.0, 5.0, 3.0], dtype=np.float32)
+    data1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
+
+    result1 = extractor.update(data1).to_pandas()
+
+    # Update 2
+    x2 = np.array([4.0, 5.0, 1.0, 2.0], dtype=np.float32)
+    data2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
+
+    result2 = extractor.update(data2).to_pandas()
+
+    full_series = np.concatenate([x1, x2])
+
+    # Validate result1 (prefix chunks)
+    prefix1 = x1
+    series1 = pd.Series(prefix1)
+
+    assert result1.iloc[0].iloc[0] == (1.0 if has_duplicate(series1) else 0.0)
+    assert result1.iloc[0].iloc[1] == (1.0 if has_duplicate_max(series1) else 0.0)
+    assert result1.iloc[0].iloc[2] == (1.0 if has_duplicate_min(series1) else 0.0)
+
+    # Validate result2 (prefix chunks)
+    series2 = pd.Series(full_series)
+
+    assert result2.iloc[0].iloc[0] == (1.0 if has_duplicate(series2) else 0.0)
+    assert result2.iloc[0].iloc[1] == (1.0 if has_duplicate_max(series2) else 0.0)
+    assert result2.iloc[0].iloc[2] == (1.0 if has_duplicate_min(series2) else 0.0)

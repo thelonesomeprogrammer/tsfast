@@ -153,3 +153,49 @@ def test_sliding_higher_moments():
 
     assert np.allclose(res.iloc[0]['skewness'], expected_skew, atol=1e-5)
     assert np.allclose(res.iloc[0]['kurtosis'], expected_kurt, atol=1e-5)
+
+def test_sliding_duplicate_features():
+    from tsfast._tsfast import SlidingExtractor
+    import pandas as pd
+    from tsfresh.feature_extraction.feature_calculators import has_duplicate, has_duplicate_max, has_duplicate_min
+
+    features = ["has_duplicate", "has_duplicate_max", "has_duplicate_min"]
+    n_cols = 1
+    window_size = 3
+    stride = 1
+    extractor = SlidingExtractor(features, n_cols, window_size, stride)
+
+    # 5 rows total
+    x = np.array([1.0, 5.0, 3.0, 5.0, 1.0], dtype=np.float32)
+    data = pa.RecordBatch.from_arrays([pa.array(x)], names=['col1'])
+
+    result = extractor.update(data).to_pandas()
+
+    # Windows:
+    # 1: [1.0, 5.0, 3.0]
+    # 2: [5.0, 3.0, 5.0]
+    # 3: [3.0, 5.0, 1.0]
+
+    series1 = pd.Series([1.0, 5.0, 3.0])
+    series2 = pd.Series([5.0, 3.0, 5.0])
+    series3 = pd.Series([3.0, 5.0, 1.0])
+
+    expected_has_duplicate = [
+        1.0 if has_duplicate(series1) else 0.0,
+        1.0 if has_duplicate(series2) else 0.0,
+        1.0 if has_duplicate(series3) else 0.0,
+    ]
+    expected_has_duplicate_max = [
+        1.0 if has_duplicate_max(series1) else 0.0,
+        1.0 if has_duplicate_max(series2) else 0.0,
+        1.0 if has_duplicate_max(series3) else 0.0,
+    ]
+    expected_has_duplicate_min = [
+        1.0 if has_duplicate_min(series1) else 0.0,
+        1.0 if has_duplicate_min(series2) else 0.0,
+        1.0 if has_duplicate_min(series3) else 0.0,
+    ]
+
+    np.testing.assert_allclose(result['has_duplicate'].values, expected_has_duplicate)
+    np.testing.assert_allclose(result['has_duplicate_max'].values, expected_has_duplicate_max)
+    np.testing.assert_allclose(result['has_duplicate_min'].values, expected_has_duplicate_min)

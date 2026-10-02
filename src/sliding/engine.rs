@@ -1378,6 +1378,41 @@ impl<'a> SlidingEngine<'a> {
                     }
                     dist
                 }
+                Feature::HasDuplicateMax => {
+                    let mut count = 0;
+                    for &v in values {
+                        if v == state.max_value {
+                            count += 1;
+                            if count > 1 {
+                                break;
+                            }
+                        }
+                    }
+                    if count > 1 { 1.0 } else { 0.0 }
+                }
+                Feature::HasDuplicateMin => {
+                    let mut count = 0;
+                    for &v in values {
+                        if v == state.min_value {
+                            count += 1;
+                            if count > 1 {
+                                break;
+                            }
+                        }
+                    }
+                    if count > 1 { 1.0 } else { 0.0 }
+                }
+                Feature::HasDuplicate => {
+                    let mut unique = rustc_hash::FxHashSet::default();
+                    let mut has_dup = false;
+                    for &v in values {
+                        if !unique.insert(v.to_bits()) {
+                            has_dup = true;
+                            break;
+                        }
+                    }
+                    if has_dup { 1.0 } else { 0.0 }
+                }
                 Feature::WaveletFeatures(_w_bits, f_type) => {
                     if values.len() >= 2 {
                         let mut sum = 0.0;

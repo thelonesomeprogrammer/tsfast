@@ -149,6 +149,9 @@ pub enum Feature {
     MeanSecondDerivativeCentral,
     LargeStandardDeviation(u32),
     SymmetryLooking(u32),
+    HasDuplicateMax,
+    HasDuplicateMin,
+    HasDuplicate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -197,6 +200,9 @@ impl std::str::FromStr for Feature {
             "rms" => Ok(Feature::Rms),
             "root_mean_square" => Ok(Feature::RootMeanSquare),
             "zero_crossing_rate" => Ok(Feature::ZeroCrossingRate),
+            "has_duplicate_max" => Ok(Feature::HasDuplicateMax),
+            "has_duplicate_min" => Ok(Feature::HasDuplicateMin),
+            "has_duplicate" => Ok(Feature::HasDuplicate),
             "peak_count" => Ok(Feature::PeakCount),
             "autocorr_lag1" | "centered_autocorr_lag1" => Ok(Feature::AutocorrLag1),
             "autocorrelation" | "autocorr_first_1e" => Ok(Feature::AutocorrFirst1e),
@@ -561,6 +567,9 @@ impl Feature {
             Feature::MeanSecondDerivativeCentral => "mean_second_derivative_central".to_string(),
             Feature::LargeStandardDeviation(r_bits) => format!("large_standard_deviation-{}", f32::from_bits(*r_bits)),
             Feature::SymmetryLooking(r_bits) => format!("symmetry_looking-{}", f32::from_bits(*r_bits)),
+            Feature::HasDuplicateMax => "has_duplicate_max".to_string(),
+            Feature::HasDuplicateMin => "has_duplicate_min".to_string(),
+            Feature::HasDuplicate => "has_duplicate".to_string(),
         }
     }
 }
