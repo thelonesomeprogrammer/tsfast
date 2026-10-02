@@ -1004,7 +1004,7 @@ impl<'a> SlidingEngine<'a> {
                             .max_by(|a: &&f32, b: &&f32| {
                                 a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                             })
-                            .unwrap();
+                            .unwrap_or(&0.0);
                         median = (m1 + m2) / 2.0;
                     }
                 }
@@ -1186,7 +1186,11 @@ impl<'a> SlidingEngine<'a> {
                 Feature::ZeroCrossingMean => zc_mean,
                 Feature::ZeroCrossingStd => zc_std,
                 Feature::C3(lag) => {
-                    let l_idx = self.unique_c3_lags.iter().position(|&l| l == *lag).unwrap();
+                    let l_idx = self
+                        .unique_c3_lags
+                        .iter()
+                        .position(|&l| l == *lag)
+                        .unwrap_or(0);
                     let l = *lag as usize;
                     if values.len() > 2 * l {
                         state.c3_sums[l_idx] / (values.len() - 2 * l) as f32
@@ -1199,12 +1203,17 @@ impl<'a> SlidingEngine<'a> {
                         .unique_paa_totals
                         .iter()
                         .position(|&t| t == *total)
-                        .unwrap();
+                        .unwrap_or(0);
                     let b = &self.paa_boundaries[t_idx];
-                    let start = b[*index as usize];
-                    let end = b[*index as usize + 1];
-                    if start < end {
-                        state.paa_sums[t_idx][*index as usize] / (end - start) as f32
+                    let idx = *index as usize;
+                    if idx + 1 < b.len() && idx < state.paa_sums[t_idx].len() {
+                        let start = b[idx];
+                        let end = b[idx + 1];
+                        if start < end {
+                            state.paa_sums[t_idx][idx] / (end - start) as f32
+                        } else {
+                            0.0
+                        }
                     } else {
                         0.0
                     }

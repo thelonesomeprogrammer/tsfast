@@ -71,11 +71,13 @@ pub fn eval_fft(
         Feature::SpectralDistance => {
             if !spectrum.is_empty() {
                 let m = spectrum.iter().sum::<f32>() / spectrum.len() as f32;
-                Some(spectrum
-                    .iter()
-                    .map(|&s| (s - m).powi(2))
-                    .sum::<f32>()
-                    .sqrt())
+                Some(
+                    spectrum
+                        .iter()
+                        .map(|&s| (s - m).powi(2))
+                        .sum::<f32>()
+                        .sqrt(),
+                )
             } else {
                 Some(0.0)
             }

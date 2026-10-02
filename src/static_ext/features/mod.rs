@@ -1,6 +1,6 @@
-pub mod distribution;
-pub mod benford;
-pub mod spectral;
 pub mod autocorr;
-pub mod strikes;
+pub mod benford;
+pub mod distribution;
 pub mod extrema;
+pub mod spectral;
+pub mod strikes;

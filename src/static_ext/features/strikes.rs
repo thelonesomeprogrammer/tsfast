@@ -1,6 +1,6 @@
+use crate::common::LANES;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
-use crate::common::LANES;
 
 #[inline(always)]
 pub fn compute_strike_features(

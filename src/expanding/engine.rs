@@ -619,9 +619,9 @@ impl<'a> ExpandingEngine<'a> {
         self.features
             .iter()
             .map(|feat| {
-                if let Some(val) = crate::expanding::basic::eval_basic(
-                    feat, n, mean, var, std_dev, state,
-                ) {
+                if let Some(val) =
+                    crate::expanding::basic::eval_basic(feat, n, mean, var, std_dev, state)
+                {
                     return val;
                 }
                 if let Some(val) = crate::expanding::statistics::eval_statistics(

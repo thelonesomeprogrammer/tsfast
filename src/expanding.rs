@@ -9,10 +9,10 @@ use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
 pub mod basic;
+pub mod engine;
+pub mod fft;
 pub mod statistics;
 pub mod time_series;
-pub mod fft;
-pub mod engine;
 use engine::ExpandingEngine;
 
 #[pyclass(skip_from_py_object)]

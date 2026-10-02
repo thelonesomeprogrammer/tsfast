@@ -1,16 +1,12 @@
 #[inline(always)]
-pub fn compute_benford_correlation(
-    compute: &crate::types::FastBitArray,
-    values: &[f32],
-) -> f32 {
+pub fn compute_benford_correlation(compute: &crate::types::FastBitArray, values: &[f32]) -> f32 {
     let mut benford_corr = 0.0;
     if compute[51] {
         let mut counts = [0.0; 9];
         for &v in values {
             let abs_v = v.abs();
             if abs_v > 0.0 {
-                let first_digit =
-                    (abs_v / 10.0_f32.powf(abs_v.log10().floor())).floor() as usize;
+                let first_digit = (abs_v / 10.0_f32.powf(abs_v.log10().floor())).floor() as usize;
                 if (1..=9).contains(&first_digit) {
                     counts[first_digit - 1] += 1.0;
                 }

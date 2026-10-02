@@ -298,17 +298,21 @@ impl<'a> StaticEngine<'a> {
         let mut first_min_idx = 0;
         let mut last_min_idx = 0;
 
-        let mut sorted_copy = crate::static_ext::features::distribution::compute_distribution_features(
+        let mut sorted_copy =
+            crate::static_ext::features::distribution::compute_distribution_features(
+                &self.compute,
+                values,
+                &mut state,
+                n,
+                &mut median,
+                &mut iqr,
+                &mut entropy,
+            );
+
+        let benford_corr = crate::static_ext::features::benford::compute_benford_correlation(
             &self.compute,
             values,
-            &mut state,
-            n,
-            &mut median,
-            &mut iqr,
-            &mut entropy,
         );
-
-        let benford_corr = crate::static_ext::features::benford::compute_benford_correlation(&self.compute, values);
 
         let mut spectrum = Vec::new();
         let mut fft_complex = Vec::new();
@@ -336,7 +340,13 @@ impl<'a> StaticEngine<'a> {
             }
         }
 
-        let fft_autocorr = crate::static_ext::features::autocorr::compute_fft_autocorr(&self.compute, values, n, mean, m2);
+        let fft_autocorr = crate::static_ext::features::autocorr::compute_fft_autocorr(
+            &self.compute,
+            values,
+            n,
+            mean,
+            m2,
+        );
 
         if self.compute[37] {
             crate::static_ext::features::extrema::compute_extrema_features(
@@ -473,7 +483,11 @@ impl<'a> StaticEngine<'a> {
                 Feature::ZeroCrossingMean => zc_mean,
                 Feature::ZeroCrossingStd => zc_std,
                 Feature::C3(lag) => {
-                    let l_idx = self.unique_c3_lags.iter().position(|&l| l == *lag).unwrap();
+                    let l_idx = self
+                        .unique_c3_lags
+                        .iter()
+                        .position(|&l| l == *lag)
+                        .unwrap_or(0);
                     let l = *lag as usize;
                     if values.len() > 2 * l {
                         state.c3_sums[l_idx] / (values.len() - 2 * l) as f32
@@ -486,12 +500,17 @@ impl<'a> StaticEngine<'a> {
                         .unique_paa_totals
                         .iter()
                         .position(|&t| t == *total)
-                        .unwrap();
+                        .unwrap_or(0);
                     let b = &self.paa_boundaries[t_idx];
-                    let start = b[*index as usize];
-                    let end = b[*index as usize + 1];
-                    if start < end {
-                        state.paa_sums[t_idx][*index as usize] / (end - start) as f32
+                    let idx = *index as usize;
+                    if idx + 1 < b.len() && idx < state.paa_sums[t_idx].len() {
+                        let start = b[idx];
+                        let end = b[idx + 1];
+                        if start < end {
+                            state.paa_sums[t_idx][idx] / (end - start) as f32
+                        } else {
+                            0.0
+                        }
                     } else {
                         0.0
                     }

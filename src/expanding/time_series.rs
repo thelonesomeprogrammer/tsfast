@@ -21,8 +21,8 @@ pub fn eval_time_series(
         Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
             let x0 = full_series[0];
             let xn = full_series[full_series.len() - 1];
-            let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn)
-                + (n - 1.0) * mean * mean;
+            let cov =
+                state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn) + (n - 1.0) * mean * mean;
             Some(cov / m2)
         }
         Feature::AutocorrFirst1e => {
@@ -39,14 +39,14 @@ pub fn eval_time_series(
                     indata[i] = v - mean;
                 }
                 let mut outdata = r2c_ac.make_output_vec();
-                r2c_ac.process(&mut indata, &mut outdata).unwrap();
+                let _ = r2c_ac.process(&mut indata, &mut outdata);
 
                 for c in &mut outdata {
                     *c = realfft::num_complex::Complex::new(c.norm_sqr(), 0.0);
                 }
 
                 let mut outdata_inv = c2r_ac.make_output_vec();
-                c2r_ac.process(&mut outdata, &mut outdata_inv).unwrap();
+                let _ = c2r_ac.process(&mut outdata, &mut outdata_inv);
 
                 let m2_val = if n > 1.0 {
                     state.energy - (state.total_sum * state.total_sum) / n
@@ -81,7 +81,7 @@ pub fn eval_time_series(
         Feature::Auc => Some(state.auc_sum),
         Feature::ZeroCrossingRate => Some(state.zcr_count as f32 / n),
         Feature::C3(lag) => {
-            let l_idx = unique_c3_lags.iter().position(|&l| l == *lag).unwrap();
+            let l_idx = unique_c3_lags.iter().position(|&l| l == *lag).unwrap_or(0);
             let l = *lag as usize;
             if full_series.len() > 2 * l {
                 Some(state.c3_sums[l_idx] / (full_series.len() - 2 * l) as f32)
@@ -93,17 +93,22 @@ pub fn eval_time_series(
             let t_idx = unique_paa_totals
                 .iter()
                 .position(|&t| t == *total)
-                .unwrap();
+                .unwrap_or(0);
             let b = &paa_boundaries[t_idx];
-            let start = b[*index as usize];
-            let end = b[*index as usize + 1];
-            if start < end {
-                let sum = if start == 0 {
-                    state.prefix_sums[end - 1]
+            let idx = *index as usize;
+            if idx + 1 < b.len() {
+                let start = b[idx];
+                let end = b[idx + 1];
+                if start < end && end > 0 && end <= state.prefix_sums.len() {
+                    let sum = if start == 0 {
+                        state.prefix_sums[end - 1]
+                    } else {
+                        state.prefix_sums[end - 1] - state.prefix_sums[start - 1]
+                    };
+                    Some(sum / (end - start) as f32)
                 } else {
-                    state.prefix_sums[end - 1] - state.prefix_sums[start - 1]
-                };
-                Some(sum / (end - start) as f32)
+                    Some(0.0)
+                }
             } else {
                 Some(0.0)
             }
@@ -113,12 +118,11 @@ pub fn eval_time_series(
             let l_idx = unique_autocorr_lags
                 .iter()
                 .position(|&lg| lg == *lag)
-                .unwrap();
+                .unwrap_or(0);
             let n_l = full_series.len() - l;
 
             let sum_xi = state.prefix_sums[n_l - 1];
-            let sum_xil =
-                state.prefix_sums[full_series.len() - 1] - state.prefix_sums[l - 1];
+            let sum_xil = state.prefix_sums[full_series.len() - 1] - state.prefix_sums[l - 1];
             let cov = state.autocorr_sums[l_idx] as f32 - mean * (sum_xi + sum_xil)
                 + n_l as f32 * mean * mean;
 
@@ -137,9 +141,7 @@ pub fn eval_time_series(
             }
             Some(sum / (full_series.len() - 2 * l) as f32)
         }
-        Feature::PartialAutocorr(lag)
-            if var > 1e-9 && full_series.len() > *lag as usize =>
-        {
+        Feature::PartialAutocorr(lag) if var > 1e-9 && full_series.len() > *lag as usize => {
             let l = *lag as usize;
             let mut r = std::mem::take(&mut state.pacf_buffer);
             r.clear();
@@ -151,11 +153,10 @@ pub fn eval_time_series(
                 let k_idx = unique_autocorr_lags
                     .iter()
                     .position(|&lg| lg == k as u16)
-                    .unwrap();
+                    .unwrap_or(0);
                 let n_k = full_series.len() - k;
                 let sum_xi = state.prefix_sums[n_k - 1];
-                let sum_xk =
-                    state.prefix_sums[full_series.len() - 1] - state.prefix_sums[k - 1];
+                let sum_xk = state.prefix_sums[full_series.len() - 1] - state.prefix_sums[k - 1];
                 let cov = state.autocorr_sums[k_idx] as f32 - mean * (sum_xi + sum_xk)
                     + n_k as f32 * mean * mean;
                 r.push(cov / (n_k as f32 * var));
@@ -201,11 +202,13 @@ pub fn eval_time_series(
                 let bits = v.to_bits();
                 *counts.entry(bits).or_insert(0) += 1;
             }
-            Some(counts
-                .iter()
-                .filter(|&(_, &count)| count > 1)
-                .map(|(&bits, _)| f32::from_bits(bits))
-                .sum())
+            Some(
+                counts
+                    .iter()
+                    .filter(|&(_, &count)| count > 1)
+                    .map(|(&bits, _)| f32::from_bits(bits))
+                    .sum(),
+            )
         }
         Feature::SumOfReoccurringDataPoints => {
             use rustc_hash::FxHashMap;
@@ -214,11 +217,13 @@ pub fn eval_time_series(
                 let bits = v.to_bits();
                 *counts.entry(bits).or_insert(0) += 1;
             }
-            Some(counts
-                .iter()
-                .filter(|&(_, &count)| count > 1)
-                .map(|(&bits, &count)| f32::from_bits(bits) * count as f32)
-                .sum())
+            Some(
+                counts
+                    .iter()
+                    .filter(|&(_, &count)| count > 1)
+                    .map(|(&bits, &count)| f32::from_bits(bits) * count as f32)
+                    .sum(),
+            )
         }
         Feature::HasDuplicateMax => {
             let mut count = 0;

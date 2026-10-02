@@ -48,7 +48,11 @@ pub fn eval_statistics(
             let mean_i = (n - 1.0) * 0.5;
             let s_xx = (n * (n * n - 1.0)) / 12.0;
             let s_xy = state.sum_ix - n * mean_i * mean;
-            if s_xx.abs() > 1e-9 { Some(s_xy / s_xx) } else { Some(0.0) }
+            if s_xx.abs() > 1e-9 {
+                Some(s_xy / s_xx)
+            } else {
+                Some(0.0)
+            }
         }
         Feature::Intercept => {
             let mean_i = (n - 1.0) * 0.5;
@@ -195,9 +199,7 @@ pub fn eval_statistics(
         }
         Feature::MeanNAbsoluteMax(n_max) => {
             let mut abs_vals: Vec<f32> = full_series.iter().map(|v| v.abs()).collect();
-            abs_vals.sort_unstable_by(|a, b| {
-                b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
-            });
+            abs_vals.sort_unstable_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
             let count = (*n_max as usize).min(abs_vals.len());
             if count > 0 {
                 Some(abs_vals.iter().take(count).sum::<f32>() / count as f32)
