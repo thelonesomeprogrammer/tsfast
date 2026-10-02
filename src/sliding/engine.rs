@@ -1001,7 +1001,9 @@ impl<'a> SlidingEngine<'a> {
                             .1;
                         let m2 = *copy[..mid]
                             .iter()
-                            .max_by(|a: &&f32, b: &&f32| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                            .max_by(|a: &&f32, b: &&f32| {
+                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                            })
                             .unwrap();
                         median = (m1 + m2) / 2.0;
                     }
@@ -1215,7 +1217,7 @@ impl<'a> SlidingEngine<'a> {
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
                     // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
-                let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
+                    let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
                     copy.clear();
                     copy.extend_from_slice(values);
                     let res = if copy.is_empty() {

@@ -436,17 +436,33 @@ impl<'a> ExpandingEngine<'a> {
                         &mut state.fft_out_buffer[..complex_len],
                     )
                     .unwrap();
+                    spectrum = state.fft_out_buffer[..complex_len]
+                        .iter()
+                        .map(|c| c.norm())
+                        .collect();
                     fft_complex = state.fft_out_buffer[..complex_len].to_vec();
-                    spectrum = fft_complex.iter().map(|c| c.norm()).collect();
                 } else if self.compute.any([54, 55, 56, 57, 60, 64]) {
                     use realfft::RealFftPlanner;
                     let mut planner = RealFftPlanner::<f32>::new();
                     let r2c = planner.plan_fft_forward(n_total);
-                    let mut indata = full_series.to_vec();
-                    let mut outdata = r2c.make_output_vec();
-                    r2c.process(&mut indata, &mut outdata).unwrap();
-                    fft_complex = outdata;
-                    spectrum = fft_complex.iter().map(|c| c.norm()).collect();
+                    let complex_len = r2c.complex_len();
+                    state.fft_in_buffer.clear();
+                    state.fft_in_buffer.extend_from_slice(full_series);
+                    if state.fft_out_buffer.len() < complex_len {
+                        state
+                            .fft_out_buffer
+                            .resize(complex_len, num_complex::Complex::new(0.0, 0.0));
+                    }
+                    r2c.process(
+                        &mut state.fft_in_buffer,
+                        &mut state.fft_out_buffer[..complex_len],
+                    )
+                    .unwrap();
+                    spectrum = state.fft_out_buffer[..complex_len]
+                        .iter()
+                        .map(|c| c.norm())
+                        .collect();
+                    fft_complex = state.fft_out_buffer[..spectrum.len()].to_vec();
                 }
                 // Cache it
                 state.last_fft_n = n_total;

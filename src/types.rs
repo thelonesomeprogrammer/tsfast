@@ -602,11 +602,19 @@ impl Feature {
             Feature::SpectralDecrease => "spectral_decrease".to_string(),
             Feature::SpectralSlope => "spectral_slope".to_string(),
             Feature::SignalDistance => "signal_distance".to_string(),
-            Feature::WaveletFeatures(w_bits, f) => format!("wavelet-{}-{}", f32::from_bits(*w_bits), f),
-            Feature::SpectrogramCoefficients(t, f_bits) => format!("spectrogram-{}-{}", t, f32::from_bits(*f_bits)),
+            Feature::WaveletFeatures(w_bits, f) => {
+                format!("wavelet-{}-{}", f32::from_bits(*w_bits), f)
+            }
+            Feature::SpectrogramCoefficients(t, f_bits) => {
+                format!("spectrogram-{}-{}", t, f32::from_bits(*f_bits))
+            }
             Feature::MeanSecondDerivativeCentral => "mean_second_derivative_central".to_string(),
-            Feature::LargeStandardDeviation(r_bits) => format!("large_standard_deviation-{}", f32::from_bits(*r_bits)),
-            Feature::SymmetryLooking(r_bits) => format!("symmetry_looking-{}", f32::from_bits(*r_bits)),
+            Feature::LargeStandardDeviation(r_bits) => {
+                format!("large_standard_deviation-{}", f32::from_bits(*r_bits))
+            }
+            Feature::SymmetryLooking(r_bits) => {
+                format!("symmetry_looking-{}", f32::from_bits(*r_bits))
+            }
             Feature::HasDuplicateMax => "has_duplicate_max".to_string(),
             Feature::HasDuplicateMin => "has_duplicate_min".to_string(),
             Feature::HasDuplicate => "has_duplicate".to_string(),
