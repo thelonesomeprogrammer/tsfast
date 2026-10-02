@@ -979,26 +979,29 @@ impl<'a> SlidingEngine<'a> {
                 }
             }
             if self.compute.any([6, 10, 11]) {
-                let mut copy = values.to_vec();
+                // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
+                let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
+                copy.clear();
+                copy.extend_from_slice(values);
                 let _n_size = copy.len();
                 if self.compute[6] {
                     let n_len = copy.len();
                     if n_len % 2 == 1 {
                         median = *copy
-                            .select_nth_unstable_by(n_len / 2, |a, b| {
+                            .select_nth_unstable_by(n_len / 2, |a: &f32, b: &f32| {
                                 a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                             })
                             .1;
                     } else {
                         let mid = n_len / 2;
                         let m1 = *copy
-                            .select_nth_unstable_by(mid, |a, b| {
+                            .select_nth_unstable_by(mid, |a: &f32, b: &f32| {
                                 a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                             })
                             .1;
                         let m2 = *copy[..mid]
                             .iter()
-                            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                            .max_by(|a: &&f32, b: &&f32| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                             .unwrap();
                         median = (m1 + m2) / 2.0;
                     }
@@ -1038,6 +1041,7 @@ impl<'a> SlidingEngine<'a> {
                         }
                     }
                 }
+                state.sort_buffer = copy;
             }
 
             if self.compute.any([9, 25, 26, 27, 28]) {
@@ -1210,8 +1214,11 @@ impl<'a> SlidingEngine<'a> {
                 Feature::LastLocMin => (last_min_idx + 1) as f32 / n,
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
-                    let mut copy = values.to_vec();
-                    if copy.is_empty() {
+                    // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
+                let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
+                    copy.clear();
+                    copy.extend_from_slice(values);
+                    let res = if copy.is_empty() {
                         0.0
                     } else if copy.len() == 1 {
                         copy[0]
@@ -1220,7 +1227,7 @@ impl<'a> SlidingEngine<'a> {
                         let idx = q * (n_len as f32 - 1.0);
                         let i = idx.floor() as usize;
                         let f = idx - i as f32;
-                        copy.sort_unstable_by(|a, b| {
+                        copy.sort_unstable_by(|a: &f32, b: &f32| {
                             a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                         });
                         if i >= n_len - 1 {
@@ -1228,7 +1235,9 @@ impl<'a> SlidingEngine<'a> {
                         } else {
                             (1.0 - f) * copy[i] + f * copy[i + 1]
                         }
-                    }
+                    };
+                    state.sort_buffer = copy;
+                    res
                 }
                 Feature::BenfordCorrelation => {
                     let mut counts = [0.0; 9];

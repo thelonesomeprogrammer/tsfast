@@ -88,6 +88,7 @@ pub struct ColumnState {
     pub max_q_len: usize,
     pub approx_entropy_buffer: Vec<usize>,
     pub agg_linear_trend_buffer: Vec<f32>,
+    pub sort_buffer: Vec<f32>,
     pub pacf_buffer: Vec<f32>,
     // Incremental moments (Welford's or similar)
     pub n: f32,
@@ -183,6 +184,7 @@ impl ColumnState {
             max_q_len: 0,
             approx_entropy_buffer: Vec::new(),
             agg_linear_trend_buffer: Vec::new(),
+            sort_buffer: Vec::new(),
             pacf_buffer: Vec::new(),
             n: 0.0,
             mean: 0.0,
