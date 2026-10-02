@@ -425,7 +425,8 @@ impl<'a> StaticEngine<'a> {
                     outdata.resize(out_len, realfft::num_complex::Complex::new(0.0, 0.0));
                 }
 
-                r2c.process(&mut indata[..values.len()], &mut outdata[..out_len]).unwrap();
+                r2c.process(&mut indata[..values.len()], &mut outdata[..out_len])
+                    .unwrap();
                 let s = outdata[..out_len].iter().map(|c| c.norm()).collect();
                 (outdata[..out_len].to_vec(), s)
             } else {
