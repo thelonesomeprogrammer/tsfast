@@ -392,24 +392,48 @@ impl<'a> StaticEngine<'a> {
         let mut spectral_slope = 0.0;
 
         if self.compute.any_fft() {
+            let mut indata = std::mem::take(&mut state.fft_in_buffer);
+            let mut outdata = std::mem::take(&mut state.fft_out_buffer);
+
             let (complex_data, spec) = if let Some(r2c) = &self.r2c {
-                let mut indata = vec![0.0; self.fft_size];
+                if indata.len() < self.fft_size {
+                    indata.resize(self.fft_size, 0.0);
+                }
+                indata.fill(0.0);
                 indata[..values.len()].copy_from_slice(values);
-                let mut outdata = r2c.make_output_vec();
-                r2c.process(&mut indata, &mut outdata).unwrap();
-                let s = outdata.iter().map(|c| c.norm()).collect();
-                (outdata, s)
+
+                let out_len = r2c.complex_len();
+                if outdata.len() < out_len {
+                    outdata.resize(out_len, realfft::num_complex::Complex::new(0.0, 0.0));
+                }
+
+                r2c.process(&mut indata, &mut outdata[..out_len]).unwrap();
+                let s = outdata[..out_len].iter().map(|c| c.norm()).collect();
+                (outdata[..out_len].to_vec(), s)
             } else if self.compute.any([54, 55, 56, 57, 60]) {
                 let mut planner = RealFftPlanner::<f32>::new();
                 let r2c = planner.plan_fft_forward(values.len());
-                let mut indata = values.to_vec();
-                let mut outdata = r2c.make_output_vec();
-                r2c.process(&mut indata, &mut outdata).unwrap();
-                let s = outdata.iter().map(|c| c.norm()).collect();
-                (outdata, s)
+
+                if indata.len() < values.len() {
+                    indata.resize(values.len(), 0.0);
+                }
+                indata[..values.len()].copy_from_slice(values);
+
+                let out_len = r2c.complex_len();
+                if outdata.len() < out_len {
+                    outdata.resize(out_len, realfft::num_complex::Complex::new(0.0, 0.0));
+                }
+
+                r2c.process(&mut indata[..values.len()], &mut outdata[..out_len]).unwrap();
+                let s = outdata[..out_len].iter().map(|c| c.norm()).collect();
+                (outdata[..out_len].to_vec(), s)
             } else {
                 (Vec::new(), Vec::new())
             };
+
+            state.fft_in_buffer = indata;
+            state.fft_out_buffer = outdata;
+
             fft_complex = complex_data;
             spectrum = spec;
 
