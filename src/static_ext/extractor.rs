@@ -1,6 +1,6 @@
 use crate::common::{ColumnState, LANES};
 use crate::types::{Compute, Feature};
-use realfft::{RealFftPlanner, RealToComplex};
+use realfft::RealToComplex;
 use rustc_hash::FxHashMap;
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
@@ -285,9 +285,9 @@ impl<'a> StaticEngine<'a> {
         let mut count_a = 0;
         let mut count_b = 0;
         let mut max_strike_a = 0;
-        let mut current_strike_a = 0;
+
         let mut max_strike_b = 0;
-        let mut current_strike_b = 0;
+
         let mut median = 0.0;
         let mut iqr = 0.0;
         let mut entropy = 0.0;
@@ -298,93 +298,17 @@ impl<'a> StaticEngine<'a> {
         let mut first_min_idx = 0;
         let mut last_min_idx = 0;
 
-        let mut sorted_copy: Option<Vec<f32>> = None;
-        if self.compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::ENTROPY | Compute::QUANTILE) {
-            // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
-            let mut copy = std::mem::take(&mut state.sort_buffer);
-            copy.clear();
-            copy.extend_from_slice(values);
-            copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let mut sorted_copy = crate::static_ext::features::distribution::compute_distribution_features(
+            &self.compute,
+            values,
+            &mut state,
+            n,
+            &mut median,
+            &mut iqr,
+            &mut entropy,
+        );
 
-            if self.compute.contains(Compute::MEDIAN) {
-                let n_len = copy.len();
-                if n_len > 0 {
-                    if n_len % 2 == 1 {
-                        median = copy[n_len / 2];
-                    } else {
-                        median = (copy[n_len / 2] + copy[n_len / 2 - 1]) / 2.0;
-                    }
-                }
-            }
-            if self.compute.contains(Compute::IQR) {
-                let n_f = n as f32;
-                let get_q = |q: f32, data: &[f32]| -> f32 {
-                    if data.is_empty() {
-                        return 0.0;
-                    }
-                    let idx = q * (n_f - 1.0);
-                    let i = idx.floor() as usize;
-                    let f = idx - i as f32;
-                    if i >= data.len() - 1 {
-                        data[data.len() - 1]
-                    } else {
-                        (1.0 - f) * data[i] + f * data[i + 1]
-                    }
-                };
-                iqr = get_q(0.75, &copy) - get_q(0.25, &copy);
-            }
-            if self.compute.contains(Compute::ENTROPY) {
-                let range = state.max_value - state.min_value;
-                if range > 1e-9 {
-                    let bins = 10;
-                    let mut counts = vec![0usize; bins];
-                    for &v in values {
-                        let b = (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
-                        counts[b.min(bins - 1)] += 1;
-                    }
-                    for &c in &counts {
-                        if c > 0 {
-                            let p = c as f32 / n;
-                            entropy -= p * p.ln();
-                        }
-                    }
-                }
-            }
-            sorted_copy = Some(copy);
-        }
-
-        let mut benford_corr = 0.0;
-        if self.compute.contains(Compute::BENFORD) {
-            let mut counts = [0.0; 9];
-            for &v in values {
-                let abs_v = v.abs();
-                if abs_v > 0.0 {
-                    let first_digit =
-                        (abs_v / 10.0_f32.powf(abs_v.log10().floor())).floor() as usize;
-                    if (1..=9).contains(&first_digit) {
-                        counts[first_digit - 1] += 1.0;
-                    }
-                }
-            }
-            let total: f32 = counts.iter().sum();
-            if total > 0.0 {
-                let p: Vec<f32> = counts.iter().map(|&c| c / total).collect();
-                let b: Vec<f32> = (1..10).map(|i| (1.0 + 1.0 / i as f32).log10()).collect();
-                let mu_p = p.iter().sum::<f32>() / 9.0;
-                let mu_b = b.iter().sum::<f32>() / 9.0;
-                let mut num = 0.0;
-                let mut den_p = 0.0;
-                let mut den_b = 0.0;
-                for i in 0..9 {
-                    num += (p[i] - mu_p) * (b[i] - mu_b);
-                    den_p += (p[i] - mu_p).powi(2);
-                    den_b += (b[i] - mu_b).powi(2);
-                }
-                if den_p > 0.0 && den_b > 0.0 {
-                    benford_corr = num / (den_p * den_b).sqrt();
-                }
-            }
-        }
+        let benford_corr = crate::static_ext::features::benford::compute_benford_correlation(&self.compute, values);
 
         let mut spectrum = Vec::new();
         let mut fft_complex = Vec::new();
@@ -392,92 +316,18 @@ impl<'a> StaticEngine<'a> {
         let mut spectral_decrease = 0.0;
         let mut spectral_slope = 0.0;
 
-        if self.compute.intersects(Compute::ANY_FFT) {
-            let mut indata = std::mem::take(&mut state.fft_in_buffer);
-            let mut outdata = std::mem::take(&mut state.fft_out_buffer);
-
-            let (complex_data, spec) = if let Some(r2c) = &self.r2c {
-                if indata.len() < self.fft_size {
-                    indata.resize(self.fft_size, 0.0);
-                }
-                indata.fill(0.0);
-                indata[..values.len()].copy_from_slice(values);
-
-                let out_len = r2c.complex_len();
-                if outdata.len() < out_len {
-                    outdata.resize(out_len, realfft::num_complex::Complex::new(0.0, 0.0));
-                }
-
-                r2c.process(&mut indata, &mut outdata[..out_len]).unwrap();
-                let s = outdata[..out_len].iter().map(|c| c.norm()).collect();
-                (outdata[..out_len].to_vec(), s)
-            } else if self.compute.intersects(Compute::SPEC_CENTROID | Compute::SPEC_DISTANCE | Compute::SPEC_DECREASE | Compute::SPEC_SLOPE | Compute::SPECTROGRAM) {
-                let mut planner = RealFftPlanner::<f32>::new();
-                let r2c = planner.plan_fft_forward(values.len());
-
-                if indata.len() < values.len() {
-                    indata.resize(values.len(), 0.0);
-                }
-                indata[..values.len()].copy_from_slice(values);
-
-                let out_len = r2c.complex_len();
-                if outdata.len() < out_len {
-                    outdata.resize(out_len, realfft::num_complex::Complex::new(0.0, 0.0));
-                }
-
-                r2c.process(&mut indata[..values.len()], &mut outdata[..out_len])
-                    .unwrap();
-                let s = outdata[..out_len].iter().map(|c| c.norm()).collect();
-                (outdata[..out_len].to_vec(), s)
-            } else {
-                (Vec::new(), Vec::new())
-            };
-
-            state.fft_in_buffer = indata;
-            state.fft_out_buffer = outdata;
-
-            fft_complex = complex_data;
-            spectrum = spec;
-
-            if !spectrum.is_empty() {
-                let spec_sum: f32 = spectrum.iter().sum();
-                if spec_sum > 0.0 {
-                    freq_centroid = spectrum
-                        .iter()
-                        .enumerate()
-                        .map(|(i, &mag)| i as f32 * mag)
-                        .sum::<f32>()
-                        / spec_sum;
-
-                    if spectrum.len() > 1 {
-                        let spec_sum_no_first: f32 = spectrum[1..].iter().sum();
-                        if spec_sum_no_first > 0.0 {
-                            spectral_decrease = spectrum[1..]
-                                .iter()
-                                .enumerate()
-                                .map(|(i, &mag)| (mag - spectrum[0]) / (i + 1) as f32)
-                                .sum::<f32>()
-                                / spec_sum_no_first;
-                        }
-
-                        let m_n = spectrum.len() as f32;
-                        let sum_x: f32 = (0..spectrum.len()).map(|i| i as f32).sum();
-                        let sum_y: f32 = spectrum.iter().sum();
-                        let sum_xx: f32 = (0..spectrum.len()).map(|i| (i as f32).powi(2)).sum();
-                        let sum_xy: f32 = spectrum
-                            .iter()
-                            .enumerate()
-                            .map(|(i, &mag)| i as f32 * mag)
-                            .sum();
-                        let s_xx = sum_xx - (sum_x * sum_x) / m_n;
-                        let s_xy = sum_xy - (sum_x * sum_y) / m_n;
-                        if s_xx.abs() > 1e-9 {
-                            spectral_slope = s_xy / s_xx;
-                        }
-                    }
-                }
-            }
-        }
+        crate::static_ext::features::spectral::compute_spectral_features(
+            &self.compute,
+            values,
+            &mut state,
+            self.fft_size,
+            &self.r2c,
+            &mut spectrum,
+            &mut fft_complex,
+            &mut freq_centroid,
+            &mut spectral_decrease,
+            &mut spectral_slope,
+        );
 
         let mut signal_dist = 0.0;
         if self.compute.contains(Compute::SIG_DISTANCE) {
@@ -486,99 +336,30 @@ impl<'a> StaticEngine<'a> {
             }
         }
 
-        let mut fft_autocorr = Vec::new();
-        if self.compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) && n > 1.0 {
-            let n2 = values.len() * 2;
-            let fft_size_ac = crate::common::next_good_fft_size(n2);
-            let mut planner = realfft::RealFftPlanner::<f32>::new();
-            let r2c_ac = planner.plan_fft_forward(fft_size_ac);
-            let c2r_ac = planner.plan_fft_inverse(fft_size_ac);
-
-            let mut indata = vec![0.0; fft_size_ac];
-            for (i, &v) in values.iter().enumerate() {
-                indata[i] = v - mean;
-            }
-            let mut outdata = r2c_ac.make_output_vec();
-            r2c_ac.process(&mut indata, &mut outdata).unwrap();
-
-            for c in &mut outdata {
-                *c = realfft::num_complex::Complex::new(c.norm_sqr(), 0.0);
-            }
-
-            let mut outdata_inv = c2r_ac.make_output_vec();
-            c2r_ac.process(&mut outdata, &mut outdata_inv).unwrap();
-
-            let m2_ac = m2; // var * (n - 1.0)
-            if m2_ac.abs() > 1e-9 {
-                let scale = 1.0 / (fft_size_ac as f32);
-                fft_autocorr = outdata_inv
-                    .into_iter()
-                    .take(values.len())
-                    .map(|v| (v * scale) / m2_ac)
-                    .collect();
-            }
-        }
+        let fft_autocorr = crate::static_ext::features::autocorr::compute_fft_autocorr(&self.compute, values, n, mean, m2);
 
         if self.compute.contains(Compute::NEEDS_SORT) {
-            if self.compute.intersects(Compute::FIRST_LOC_MAX | Compute::LAST_LOC_MAX | Compute::FIRST_LOC_MIN | Compute::LAST_LOC_MIN) {
-                let mut found_max = false;
-                let mut found_min = false;
-                for (i, &v) in values.iter().enumerate() {
-                    if v == state.max_value {
-                        if !found_max {
-                            first_max_idx = i;
-                            found_max = true;
-                        }
-                        last_max_idx = i;
-                    }
-                    if v == state.min_value {
-                        if !found_min {
-                            first_min_idx = i;
-                            found_min = true;
-                        }
-                        last_min_idx = i;
-                    }
-                }
-            }
+            crate::static_ext::features::extrema::compute_extrema_features(
+                &self.compute,
+                values,
+                state.max_value,
+                state.min_value,
+                &mut first_max_idx,
+                &mut last_max_idx,
+                &mut first_min_idx,
+                &mut last_min_idx,
+            );
 
-            if self.compute.intersects(Compute::MAD | Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
-                let mean_vec = f32x4::splat(mean);
-                let mut mad_sum_vec = f32x4::splat(0.0);
-
-                for chunk in values.chunks_exact(LANES) {
-                    let c = f32x4::from_slice(chunk);
-                    if self.compute.contains(Compute::MAD) {
-                        mad_sum_vec += (c - mean_vec).abs();
-                    }
-                }
-                mad_sum = mad_sum_vec.reduce_sum();
-
-                let rem_start = (values.len() / LANES) * LANES;
-                for &val in &values[rem_start..] {
-                    if self.compute.contains(Compute::MAD) {
-                        mad_sum += (val - mean).abs();
-                    }
-                }
-
-                if self.compute.intersects(Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
-                    for &val in values {
-                        if val > mean {
-                            count_a += 1;
-                            current_strike_a += 1;
-                            max_strike_a = max_strike_a.max(current_strike_a);
-                            current_strike_b = 0;
-                        } else if val < mean {
-                            count_b += 1;
-                            current_strike_b += 1;
-                            max_strike_b = max_strike_b.max(current_strike_b);
-                            current_strike_a = 0;
-                        } else {
-                            current_strike_a = 0;
-                            current_strike_b = 0;
-                        }
-                    }
-                }
-            }
+            crate::static_ext::features::strikes::compute_strike_features(
+                &self.compute,
+                values,
+                mean,
+                &mut mad_sum,
+                &mut count_a,
+                &mut count_b,
+                &mut max_strike_a,
+                &mut max_strike_b,
+            );
 
             if self.compute.contains(Compute::ZC_STATS) && !state.zc_indices.is_empty() {
                 zc_mean = state.zc_indices.iter().sum::<f32>() / state.zc_indices.len() as f32;
