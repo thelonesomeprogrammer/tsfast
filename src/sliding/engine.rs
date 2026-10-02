@@ -1337,7 +1337,8 @@ impl<'a> SlidingEngine<'a> {
                     if values.len() >= *chunk_len as usize =>
                 {
                     let cl = *chunk_len as usize;
-                    let mut agg_series = Vec::new();
+                    let mut agg_series = std::mem::take(&mut state.agg_linear_trend_buffer);
+                    agg_series.clear();
                     for chunk in values.chunks_exact(cl) {
                         let val = match func {
                             crate::types::AggFunc::Max => {
@@ -1370,7 +1371,7 @@ impl<'a> SlidingEngine<'a> {
                         let s_xy = m_sum_xy - (m_sum_x * m_sum_y) / m_n;
                         let slope = if s_xx.abs() > 1e-9 { s_xy / s_xx } else { 0.0 };
                         let intercept = (m_sum_y - slope * m_sum_x) / m_n;
-                        match attr {
+                        let res = match attr {
                             crate::types::AggAttr::Slope => slope,
                             crate::types::AggAttr::Intercept => intercept,
                             crate::types::AggAttr::Stderr | crate::types::AggAttr::RValue => {
@@ -1397,7 +1398,9 @@ impl<'a> SlidingEngine<'a> {
                                 }
                             }
                             _ => 0.0,
-                        }
+                        };
+                        state.agg_linear_trend_buffer = agg_series;
+                        res
                     }
                 }
                 Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {

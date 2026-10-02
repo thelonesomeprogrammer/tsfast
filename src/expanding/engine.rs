@@ -801,7 +801,8 @@ impl<'a> ExpandingEngine<'a> {
                     if var > 1e-9 && full_series.len() > *lag as usize =>
                 {
                     let l = *lag as usize;
-                    let mut r = Vec::with_capacity(l + 1);
+                    let mut r = std::mem::take(&mut state.pacf_buffer);
+                    r.clear();
                     for k in 0..=l {
                         if k == 0 {
                             r.push(1.0);
@@ -841,13 +842,16 @@ impl<'a> ExpandingEngine<'a> {
                             break;
                         }
                     }
-                    phi[l][l]
+                    let res = phi[l][l];
+                    state.pacf_buffer = r;
+                    res
                 }
                 Feature::AggLinearTrend(attr, chunk_len, func)
                     if full_series.len() >= *chunk_len as usize =>
                 {
                     let cl = *chunk_len as usize;
-                    let mut agg_series = Vec::new();
+                    let mut agg_series = std::mem::take(&mut state.agg_linear_trend_buffer);
+                    agg_series.clear();
                     for chunk in full_series.chunks_exact(cl) {
                         let val = match func {
                             crate::types::AggFunc::Max => {
@@ -880,7 +884,7 @@ impl<'a> ExpandingEngine<'a> {
                     let s_xy = m_sum_xy - (m_sum_x * m_sum_y) / m_n;
                     let slope = if s_xx.abs() > 1e-9 { s_xy / s_xx } else { 0.0 };
                     let intercept = (m_sum_y - slope * m_sum_x) / m_n;
-                    match attr {
+                    let res = match attr {
                         crate::types::AggAttr::Slope => slope,
                         crate::types::AggAttr::Intercept => intercept,
                         crate::types::AggAttr::Stderr | crate::types::AggAttr::RValue => {
@@ -907,14 +911,18 @@ impl<'a> ExpandingEngine<'a> {
                             }
                         }
                         _ => 0.0,
-                    }
+                    };
+                    state.agg_linear_trend_buffer = agg_series;
+                    res
                 }
                 Feature::ApproxEntropy(m, r_bits) if full_series.len() > *m as usize + 1 => {
                     let m_val = *m as usize;
                     let r = f32::from_bits(*r_bits);
-                    let mut buffer = Vec::new();
-                    crate::common::approx_entropy_phi(m_val, r, full_series, &mut buffer)
-                        - crate::common::approx_entropy_phi(m_val + 1, r, full_series, &mut buffer)
+                    let mut buffer = std::mem::take(&mut state.approx_entropy_buffer);
+                    let res = crate::common::approx_entropy_phi(m_val, r, full_series, &mut buffer)
+                        - crate::common::approx_entropy_phi(m_val + 1, r, full_series, &mut buffer);
+                    state.approx_entropy_buffer = buffer;
+                    res
                 }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
