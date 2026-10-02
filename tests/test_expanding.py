@@ -37,7 +37,8 @@ def test_expanding_multiple_columns():
 def test_expanding_all_basic_features():
     features = [
         "mean", "total_sum", "min_value", "max_value", 
-        "energy", "root_mean_square", "mean_abs_change", "mean_change"
+        "energy", "root_mean_square", "mean_abs_change", "mean_change",
+        "length", "variance_larger_than_standard_deviation"
     ]
     n_cols = 1
     extractor = ExpandingExtractor(features, n_cols)

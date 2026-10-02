@@ -47,7 +47,8 @@ def test_sliding_multiple_columns():
 def test_basic_features():
     features = [
         "mean", "total_sum",
-        "energy", "root_mean_square"
+        "energy", "root_mean_square",
+        "length", "variance_larger_than_standard_deviation"
     ]
     n_cols = 1
     window_size = 3

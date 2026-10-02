@@ -258,6 +258,8 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::MaxLangevinFixedPoint(_, _) => bits.set_batch([52, 37]),
             Feature::SumOfReoccurringValues => bits.set_batch([53, 37]),
             Feature::SumOfReoccurringDataPoints => bits.set_batch([62, 37]),
+            Feature::Length => bits.set_batch([65, 37]),
+            Feature::VarianceLargerThanStandardDeviation => bits.set_batch([0, 1, 2, 12, 37, 66]),
             Feature::MeanNAbsoluteMax(_) => bits.set_batch([63, 37]),
             Feature::HumanRangeEnergy(_) => bits.set_batch([64, 37]),
             Feature::SpectralCentroid => bits.set_batch([54, 37]),

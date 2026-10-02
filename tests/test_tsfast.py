@@ -5,7 +5,7 @@ import pytest
 
 def test_extract():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
-    features = ["mean", "std", "energy", "min", "max", "autocorr_lag1"]
+    features = ["mean", "std", "energy", "min", "max", "autocorr_lag1", "length", "variance_larger_than_standard_deviation"]
     
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
@@ -23,6 +23,10 @@ def test_extract():
     # AutocorrLag1 parity with manual calculation (including the x[0]*x[0] start in Rust implementation)
     # Manual: ( (1*1 + 2*1 + 3*2 + 4*3 + 5*4) / 4 - 3*3 ) / 2.5 = (41/4 - 9) / 2.5 = 1.25 / 2.5 = 0.5
     assert np.allclose(results[5], 0.5)
+
+    assert results[6] == 5.0 # length
+    # var of [1,2,3,4,5] is 2.5. 2.5 > 1.0, so 1.0
+    assert results[7] == 1.0 # variance_larger_than_standard_deviation
     print("test_extract passed!")
 
 def test_new_features():

@@ -981,6 +981,8 @@ impl<'a> ExpandingEngine<'a> {
                         .map(|(&bits, _)| f32::from_bits(bits))
                         .sum()
                 }
+                Feature::Length => n as f32,
+                Feature::VarianceLargerThanStandardDeviation => if var > 1.0 { 1.0 } else { 0.0 },
                 Feature::SumOfReoccurringDataPoints => {
                     use rustc_hash::FxHashMap;
                     let mut counts = FxHashMap::default();

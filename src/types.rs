@@ -136,6 +136,8 @@ pub enum Feature {
     SumOfReoccurringValues,
     SumOfReoccurringDataPoints,
     MeanNAbsoluteMax(u16),
+    Length,
+    VarianceLargerThanStandardDeviation,
     HumanRangeEnergy(u32), // fs as bits
     SpectralCentroid,
     SpectralDistance,
@@ -219,6 +221,8 @@ impl std::str::FromStr for Feature {
             "benford_correlation" | "value__benford_correlation" => Ok(Feature::BenfordCorrelation),
             "sum_of_reoccurring_values" | "value__sum_of_reoccurring_values" => Ok(Feature::SumOfReoccurringValues),
             "sum_of_reoccurring_data_points" | "value__sum_of_reoccurring_data_points" => Ok(Feature::SumOfReoccurringDataPoints),
+            "length" | "value__length" => Ok(Feature::Length),
+            "variance_larger_than_standard_deviation" | "value__variance_larger_than_standard_deviation" => Ok(Feature::VarianceLargerThanStandardDeviation),
             "spectral_centroid" | "torque_Centroid" => Ok(Feature::SpectralCentroid),
             "spectral_distance" | "torque_Spectral distance" => Ok(Feature::SpectralDistance),
             "spectral_decrease" | "torque_Spectral decrease" => Ok(Feature::SpectralDecrease),
@@ -504,6 +508,8 @@ impl Feature {
             }
             Feature::SumOfReoccurringValues => "sum_of_reoccurring_values".to_string(),
             Feature::SumOfReoccurringDataPoints => "sum_of_reoccurring_data_points".to_string(),
+            Feature::Length => "length".to_string(),
+            Feature::VarianceLargerThanStandardDeviation => "variance_larger_than_standard_deviation".to_string(),
             Feature::MeanNAbsoluteMax(n) => format!("mean_n_absolute_max-{}", n),
             Feature::HumanRangeEnergy(fs_bits) => format!("human_range_energy-{}", f32::from_bits(*fs_bits)),
             Feature::SpectralCentroid => "spectral_centroid".to_string(),
