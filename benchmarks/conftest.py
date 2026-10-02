@@ -24,7 +24,8 @@ def full_30_features():
         "mean_abs_change", "mean_change", "cid_ce", "auc",
         "abs_sum_change", "count_above_mean", "count_below_mean",
         "longest_strike_above_mean", "longest_strike_below_mean",
-        "abs_max", "first_loc_max", "last_loc_max", "first_loc_min", "last_loc_min"
+        "abs_max", "first_loc_max", "last_loc_max", "first_loc_min", "last_loc_min",
+        "length", "variance_larger_than_standard_deviation"
     ]
 
 @pytest.fixture(scope="session")
