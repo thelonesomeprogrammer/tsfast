@@ -5,8 +5,8 @@ use arrow::datatypes::{DataType, Field, Schema};
 use arrow::pyarrow::PyArrowType;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use std::sync::{Arc, Mutex};
 use realfft::RealFftPlanner;
+use std::sync::{Arc, Mutex};
 
 pub mod engine;
 use engine::SlidingEngine;
@@ -31,14 +31,20 @@ pub struct SlidingExtractor {
 impl SlidingExtractor {
     #[new]
     #[pyo3(signature = (feature_str, n_cols, window_size, stride=1))]
-    pub fn new(feature_str: Vec<String>, n_cols: usize, window_size: usize, stride: usize) -> PyResult<Self> {
+    pub fn new(
+        feature_str: Vec<String>,
+        n_cols: usize,
+        window_size: usize,
+        stride: usize,
+    ) -> PyResult<Self> {
         let mut features = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
         let mut unique_autocorr_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
-            let feat = std::str::FromStr::from_str(&i).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+            let feat = std::str::FromStr::from_str(&i)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             match feat {
                 Feature::Paa(total, _) => {
                     unique_paa_totals.insert(total);
@@ -114,7 +120,8 @@ impl SlidingExtractor {
                     &self.unique_autocorr_lags,
                     0.0,
                 ));
-                self.histories.push(Vec::with_capacity(self.window_size + self.stride));
+                self.histories
+                    .push(Vec::with_capacity(self.window_size + self.stride));
             }
         }
 
@@ -147,64 +154,66 @@ impl SlidingExtractor {
             .par_iter_mut()
             .zip(self.histories[..n_cols].par_iter_mut())
             .zip(record_batch.columns().par_iter())
-            .map(|((state, history), column)| -> Result<Vec<Vec<f32>>, String> {
-                let array = column
-                    .as_any()
-                    .downcast_ref::<Float32Array>()
-                    .expect("Expected Float32Array");
+            .map(
+                |((state, history), column)| -> Result<Vec<Vec<f32>>, String> {
+                    let array = column
+                        .as_any()
+                        .downcast_ref::<Float32Array>()
+                        .expect("Expected Float32Array");
 
-                let values = array.values();
-                let engine = SlidingEngine {
-                    compute: self.compute,
-                    features: &self.features,
-                    unique_paa_totals: &self.unique_paa_totals,
-                    unique_c3_lags: &self.unique_c3_lags,
-                    paa_boundaries: &paa_boundaries,
-                    r2c: r2c.as_ref().cloned(),
-                    fft_size,
-                };
-                
-                let mut batch_res = Vec::new();
-                
-                for &val in values {
-                    history.push(val);
-                    
-                    if history.len() == window_size {
-                        // First time window is full
-                        batch_res.push(engine.process_column(history, state, false)?);
-                    } else if history.len() == window_size + stride {
-                        // We have reached a stride boundary
-                        let old_slice = &history[..stride];
-                        let new_slice = &history[window_size..window_size + stride];
-                        
-                        let value_after_old = history[stride];
-                        let value_before_new = history[window_size - 1];
-                        
-                        engine.update_batch(
-                            old_slice,
-                            new_slice,
-                            None,
-                            value_after_old,
-                            value_before_new,
-                            state.n as usize + window_size,
-                            window_size,
-                            state
-                        );
-                        
-                        if let Some(ref mut sdft) = state.sliding_dft {
-                            for (i, &v) in old_slice.iter().enumerate() {
-                                sdft.update(v, new_slice[i]);
+                    let values = array.values();
+                    let engine = SlidingEngine {
+                        compute: self.compute,
+                        features: &self.features,
+                        unique_paa_totals: &self.unique_paa_totals,
+                        unique_c3_lags: &self.unique_c3_lags,
+                        paa_boundaries: &paa_boundaries,
+                        r2c: r2c.as_ref().cloned(),
+                        fft_size,
+                    };
+
+                    let mut batch_res = Vec::new();
+
+                    for &val in values {
+                        history.push(val);
+
+                        if history.len() == window_size {
+                            // First time window is full
+                            batch_res.push(engine.process_column(history, state, false)?);
+                        } else if history.len() == window_size + stride {
+                            // We have reached a stride boundary
+                            let old_slice = &history[..stride];
+                            let new_slice = &history[window_size..window_size + stride];
+
+                            let value_after_old = history[stride];
+                            let value_before_new = history[window_size - 1];
+
+                            engine.update_batch(
+                                old_slice,
+                                new_slice,
+                                None,
+                                value_after_old,
+                                value_before_new,
+                                state.n as usize + window_size,
+                                window_size,
+                                state,
+                            );
+
+                            if let Some(ref mut sdft) = state.sliding_dft {
+                                for (i, &v) in old_slice.iter().enumerate() {
+                                    sdft.update(v, new_slice[i]);
+                                }
                             }
-                        }
 
-                        history.drain(..stride);
-                        
-                        batch_res.push(engine.process_column(history, state, true)?);
-                        state.n += stride as f32;
+                            history.drain(..stride);
+
+                            batch_res.push(engine.process_column(history, state, true)?);
+                            state.n += stride as f32;
+                        }
                     }
-                }
-                Ok(batch_res)
-            })
+                    Ok(batch_res)
+                },
+            )
             .collect();
 
         let column_results = column_results.map_err(PyTypeError::new_err)?;
