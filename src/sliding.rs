@@ -9,6 +9,7 @@ use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
 pub mod engine;
+pub mod features;
 use engine::SlidingEngine;
 
 #[pyclass(skip_from_py_object)]
