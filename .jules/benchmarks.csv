@@ -1,0 +1,10 @@
+Date,CommitHash,Benchmark_Name,Metric_Value,Unit,Delta_From_Last
+2026-10-02 08:41:07,7241b38,Static_Extraction_OPS,344.83,ops/s,0.0
+2026-10-02 08:41:07,7241b38,Expanding_Extraction_OPS,23.42,ops/s,0.0
+2026-10-02 08:41:07,7241b38,Sliding_Extraction_OPS,32.47,ops/s,0.0
+2026-10-02 08:44:17,7241b38,Static_Extraction_OPS,303.03,ops/s,-12.12
+2026-10-02 08:44:17,7241b38,Expanding_Extraction_OPS,22.94,ops/s,-2.05
+2026-10-02 08:44:17,7241b38,Sliding_Extraction_OPS,32.36,ops/s,-0.34
+2026-10-02 08:44:57,7241b38,Static_Extraction_OPS,263.16,ops/s,-13.16
+2026-10-02 08:44:57,7241b38,Expanding_Extraction_OPS,20.04,ops/s,-12.64
+2026-10-02 08:44:57,7241b38,Sliding_Extraction_OPS,31.45,ops/s,-2.81
