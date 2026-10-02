@@ -1,6 +1,6 @@
 #[inline(always)]
 pub fn compute_extrema_features(
-    compute: &crate::types::FastBitArray,
+    compute: &crate::types::Compute,
     values: &[f32],
     max_value: f32,
     min_value: f32,
@@ -9,7 +9,7 @@ pub fn compute_extrema_features(
     first_min_idx: &mut usize,
     last_min_idx: &mut usize,
 ) {
-    if compute.any([39, 40, 41, 42]) {
+    if compute.intersects(crate::types::Compute::FIRST_LOC_MAX | crate::types::Compute::LAST_LOC_MAX | crate::types::Compute::FIRST_LOC_MIN | crate::types::Compute::LAST_LOC_MIN) {
         let mut found_max = false;
         let mut found_min = false;
         for (i, &v) in values.iter().enumerate() {
