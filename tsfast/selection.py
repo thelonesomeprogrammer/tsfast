@@ -53,8 +53,6 @@ def select_features(X, y=None, correlation_threshold=0.98, fdr_level=0.05):
     
     p_values = np.array(p_values)
     m = len(p_values)
-    if m == 0:
-        return X, constant_mask
 
     # Benjamini-Hochberg (FDR) control
     sorted_indices = np.argsort(p_values)

@@ -864,7 +864,7 @@ impl<'a> SlidingEngine<'a> {
             }
             if self.compute.any([6, 10, 11]) {
                 let mut copy = values.to_vec();
-                let n_size = copy.len();
+                let _n_size = copy.len();
                 if self.compute[6] {
                     let n_len = copy.len();
                     if n_len % 2 == 1 {
