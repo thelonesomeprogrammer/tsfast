@@ -10,109 +10,25 @@ TSFast is a high-performance time-series feature extraction library written in R
 - **Selective Execution**: Only computes the features you request, using a bitmask-based engine to skip unnecessary calculations.
 - **Python-Friendly**: Simple API based on `Extractor` and `ExpandingExtractor` classes.
 
-## Benchmarks & Comparisons
-
-TSFast demonstrates a **>100x speedup** over TSFEL and a **>6000x speedup** over tsfresh for common feature sets, while maintaining identical predictive power.
-
-| Library | Extraction Time (s) | Feature Count | Primary Strength |
-|---------|----------------------|---------------|------------------|
-| **TSFast** | **0.0081s** | ~50 (Optimized) | Extreme Speed & Streaming |
-| TSFEL | 0.9002s | 60+ | Domain-specific (Health/Acoustic) |
-| tsfresh | 56.0196s | 777+ | Exhaustive Feature Mining |
-
-### Historical Trends
-
-| Benchmark | OPS | Trend |
-|-----------|-----|-------|
-| Static_Extraction_OPS | 263.16 | 🔴 (-13.16%) |
-| Expanding_Extraction_OPS | 20.04 | 🔴 (-12.64%) |
-| Sliding_Extraction_OPS | 31.45 | 🔴 (-2.81%) |
+## Benchmarks
 
 ![Benchmark Trends](.jules/benchmark_trends.png)
 
-### Library Strengths & When to Use
-
-1. **TSFast**: Best for high-throughput production environments, real-time streaming (via `ExpandingExtractor`), and scenarios where speed is critical. It focuses on a highly optimized subset of the most predictive features.
-2. **tsfresh**: Best for exploratory data analysis where you want to exhaustively mine hundreds of features to find any potential signal, regardless of computational cost.
-3. **TSFEL**: A great middle ground, offering a solid library of features with specific domains (like medical or signal processing) and better performance than tsfresh.
-
-*Note: Benchmarks were performed on 1000 samples of 1000 points each, using comparable feature subsets where possible to ensure a fair representation of core engine performance.*
-
-## Installation
-
-```bash
-# Requires Rust (nightly) for SIMD features
-pip install .
-```
-
-## Quick Start
-
-### 1. Batch Extraction (Static)
-
-```python
-import tsfast
-import numpy as np
-import pyarrow as pa
-
-# Sample signal (1000 samples)
-x = np.random.randn(1000).astype(np.float32)
-
-# Initialize Extractor
-features = ["mean", "std_dev", "energy", "min_value", "max_value", "autocorr_lag1"]
-extractor = tsfast.Extractor(features)
-
-# Wrap data in an Arrow RecordBatch (each column is a time series)
-batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['series1'])
-
-# Process
-result_batch = extractor.process_2d_floats(batch)
-
-# Get results as a Pandas DataFrame or NumPy array
-results_df = result_batch.to_pandas()
-print(results_df)
-```
-
-### 2. Expanding Window Extraction
-
-```python
-import tsfast
-import pyarrow as pa
-import numpy as np
-
-# Initialize ExpandingExtractor for 1 series
-features = ["mean", "max_value", "total_sum"]
-extractor = tsfast.ExpandingExtractor(features, n_cols=1)
-
-# Stream data in batches
-for i in range(5):
-    chunk = np.random.randn(10).astype(np.float32)
-    batch = pa.RecordBatch.from_arrays([pa.array(chunk)], names=['c1'])
-    
-    # Returns expanding features for EACH point in the chunk
-    expanding_results = extractor.update(batch).to_pandas()
-    print(f"Batch {i} processed, shape: {expanding_results.shape}")
-```
-
-## Supported Features
-
-TSFast supports a wide range of features, including:
-
-- **Statistical**: `mean`, `variance`, `std_dev`, `min_value`, `max_value`, `median`, `skewness`, `kurtosis`, `mad`, `iqr`, `entropy`, `variation_coefficient`.
-- **Energy/Signal**: `total_sum`, `energy`, `rms`, `root_mean_square`, `zero_crossing_rate`, `peak_count`, `auc`, `abs_max`.
-- **Temporal/Change**: `mean_abs_change`, `mean_change`, `abs_sum_change`, `cid_ce`.
-- **Location-based**: `first_loc_max`, `last_loc_max`, `first_loc_min`, `last_loc_min`.
-- **Advanced Statistics**:
-  - `autocorr_lag1`, `autocorr-N` (e.g., `autocorr-5`)
-  - `partial_autocorr-N`
-  - `c3-N` (higher-order statistics)
-  - `time_reversal_asymmetry-N`
-- **Transforms**:
-  - `paa-N-M` (Piecewise Aggregate Approximation: N segments, return index M)
-  - `fft_coeff-N-ATTR` (FFT coefficient N, ATTR is real/imag/abs/angle)
-- **Complex Features**:
-  - `approx_entropy-M-R` (Approximate Entropy)
-  - `agg_linear_trend-ATTR-CHUNK_LEN-FUNC` (Aggregated linear trend)
-
-## License
-
-GPLv3
+## Latest Results
+| Date                | CommitHash                               | Benchmark_Name                                 |   Metric_Value | Unit    |   Delta_From_Last |
+|:--------------------|:-----------------------------------------|:-----------------------------------------------|---------------:|:--------|------------------:|
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_compare_tsfast                      |    0.000430235 | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_compare_tsfresh                     |    0.0412214   | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_compare_tsfel                       |    0.226905    | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_expanding_initial_batch             |    0.000170247 | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_expanding_incremental_update_10cols |    0.00411744  | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_expanding_full_stream_20_chunks     |    0.00747471  | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_select_features_supervised          |    0.0533461   | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_select_features_unsupervised        |    0.000529458 | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_sliding_window200_stride50          |    0.003663    | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_sliding_single_chunk_stride50       |    0.000176392 | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_static_single_series_basic          |    0.000164075 | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_static_single_series_advanced       |    0.000222132 | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_static_single_series_30_features    |    0.000314366 | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_static_batched_100_series           |    0.00178709  | seconds |                 0 |
+| 2026-10-02 10:05:33 | bb2d1514ff1982fa9236feb2148749bf386445d5 | test_bench_static_batched_1000_series          |    0.0136822   | seconds |                 0 |

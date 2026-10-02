@@ -146,6 +146,9 @@ pub enum Feature {
     SignalDistance,
     WaveletFeatures(u32, u16), // mother wavelet (freq stored as f32 bits), feature type
     SpectrogramCoefficients(u16, u32), // time, freq stored as f32 bits
+    MeanSecondDerivativeCentral,
+    LargeStandardDeviation(u32),
+    SymmetryLooking(u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -414,6 +417,42 @@ impl std::str::FromStr for Feature {
                             return Ok(Feature::SpectrogramCoefficients(0, freq.to_bits()));
                         }
                     }
+                } else if e == "mean_second_derivative_central" {
+                    return Ok(Feature::MeanSecondDerivativeCentral);
+                } else if let Some(arg) = e.strip_prefix("large_standard_deviation-") {
+                    if let Ok(r) = arg.parse::<f32>() {
+                        return Ok(Feature::LargeStandardDeviation(r.to_bits()));
+                    }
+                } else if let Some(arg) = e.strip_prefix("large_standard_deviation__r_") {
+                    if let Ok(r) = arg.parse::<f32>() {
+                        return Ok(Feature::LargeStandardDeviation(r.to_bits()));
+                    }
+                } else if let Some(arg) = e.strip_prefix("symmetry_looking-") {
+                    if let Ok(r) = arg.parse::<f32>() {
+                        return Ok(Feature::SymmetryLooking(r.to_bits()));
+                    }
+                } else if let Some(arg) = e.strip_prefix("symmetry_looking__r_") {
+                    if let Ok(r) = arg.parse::<f32>() {
+                        return Ok(Feature::SymmetryLooking(r.to_bits()));
+                    }
+                } else if e == "mean_second_derivative_central" {
+                    return Ok(Feature::MeanSecondDerivativeCentral);
+                } else if let Some(arg) = e.strip_prefix("large_standard_deviation-") {
+                    if let Ok(r) = arg.parse::<f32>() {
+                        return Ok(Feature::LargeStandardDeviation(r.to_bits()));
+                    }
+                } else if let Some(arg) = e.strip_prefix("large_standard_deviation__r_") {
+                    if let Ok(r) = arg.parse::<f32>() {
+                        return Ok(Feature::LargeStandardDeviation(r.to_bits()));
+                    }
+                } else if let Some(arg) = e.strip_prefix("symmetry_looking-") {
+                    if let Ok(r) = arg.parse::<f32>() {
+                        return Ok(Feature::SymmetryLooking(r.to_bits()));
+                    }
+                } else if let Some(arg) = e.strip_prefix("symmetry_looking__r_") {
+                    if let Ok(r) = arg.parse::<f32>() {
+                        return Ok(Feature::SymmetryLooking(r.to_bits()));
+                    }
                 }
                 Err(format!("Unknown feature: {}", e))
             }
@@ -519,6 +558,9 @@ impl Feature {
             Feature::SignalDistance => "signal_distance".to_string(),
             Feature::WaveletFeatures(w_bits, f) => format!("wavelet-{}-{}", f32::from_bits(*w_bits), f),
             Feature::SpectrogramCoefficients(t, f_bits) => format!("spectrogram-{}-{}", t, f32::from_bits(*f_bits)),
+            Feature::MeanSecondDerivativeCentral => "mean_second_derivative_central".to_string(),
+            Feature::LargeStandardDeviation(r_bits) => format!("large_standard_deviation-{}", f32::from_bits(*r_bits)),
+            Feature::SymmetryLooking(r_bits) => format!("symmetry_looking-{}", f32::from_bits(*r_bits)),
         }
     }
 }

@@ -4,7 +4,7 @@ import numpy as np
 from tsfast._tsfast import ExpandingExtractor
 
 def test_expanding_multiple_columns():
-    features = ["mean", "max_value", "total_sum"]
+    features = ["mean", "max_value", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
     n_cols = 2
     extractor = ExpandingExtractor(features, n_cols)
     
@@ -18,8 +18,8 @@ def test_expanding_multiple_columns():
     # col1 mean: 1.5, max: 2.0, sum: 3.0
     # col2 mean: 15.0, max: 20.0, sum: 30.0
     
-    assert np.allclose(result1.iloc[0], [1.5, 2.0, 3.0])
-    assert np.allclose(result1.iloc[1], [15.0, 20.0, 30.0])
+    assert np.allclose(result1.iloc[0].iloc[:3], [1.5, 2.0, 3.0])
+    assert np.allclose(result1.iloc[1].iloc[:3], [15.0, 20.0, 30.0])
     
     # Update 2
     data2 = pa.RecordBatch.from_arrays([
@@ -31,8 +31,8 @@ def test_expanding_multiple_columns():
     # col1 mean: (1+2+3)/3 = 2.0, max: 3.0, sum: 6.0
     # col2 mean: (10+20+30)/3 = 20.0, max: 30.0, sum: 60.0
     
-    assert np.allclose(result2.iloc[0], [2.0, 3.0, 6.0])
-    assert np.allclose(result2.iloc[1], [20.0, 30.0, 60.0])
+    assert np.allclose(result2.iloc[0].iloc[:3], [2.0, 3.0, 6.0])
+    assert np.allclose(result2.iloc[1].iloc[:3], [20.0, 30.0, 60.0])
 
 def test_expanding_all_basic_features():
     features = [
