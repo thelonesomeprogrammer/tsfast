@@ -40,7 +40,8 @@ impl Extractor {
         let mut unique_c3_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
-            let feat = std::str::FromStr::from_str(&i).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+            let feat = std::str::FromStr::from_str(&i)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             if let Feature::Paa(total, index) = feat {
                 paa_args.push((total, index));
                 unique_paa_totals.insert(total);

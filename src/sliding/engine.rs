@@ -46,8 +46,12 @@ impl<'a> SlidingEngine<'a> {
                 let sq = v * v;
                 sum_old += v;
                 energy_old += sq;
-                if self.compute[7] { cubes_old += sq * v; }
-                if self.compute[8] { quads_old += sq * sq; }
+                if self.compute[7] {
+                    cubes_old += sq * v;
+                }
+                if self.compute[8] {
+                    quads_old += sq * sq;
+                }
             }
 
             let mut sum_new = 0.0;
@@ -58,14 +62,22 @@ impl<'a> SlidingEngine<'a> {
                 let sq = v * v;
                 sum_new += v;
                 energy_new += sq;
-                if self.compute[7] { cubes_new += sq * v; }
-                if self.compute[8] { quads_new += sq * sq; }
+                if self.compute[7] {
+                    cubes_new += sq * v;
+                }
+                if self.compute[8] {
+                    quads_new += sq * sq;
+                }
             }
 
             state.total_sum += sum_new - sum_old;
             state.energy += energy_new - energy_old;
-            if self.compute[7] { state.sum_cubes += cubes_new - cubes_old; }
-            if self.compute[8] { state.sum_quads += quads_new - quads_old; }
+            if self.compute[7] {
+                state.sum_cubes += cubes_new - cubes_old;
+            }
+            if self.compute[8] {
+                state.sum_quads += quads_new - quads_old;
+            }
         }
 
         // 2. Diffs (MAC, MC, sum_sq_diff, sum_prod, AUC, ZCR)
@@ -74,53 +86,113 @@ impl<'a> SlidingEngine<'a> {
             // Boundary diff: (old_slice[0], value_before_old)
             if let Some(prev) = value_before_old {
                 let diff = old_slice[0] - prev;
-                if self.compute[18] { state.mac_sum -= diff.abs(); }
-                if self.compute[19] { state.mc_sum -= diff; }
-                if self.compute[20] { state.sum_sq_diff -= diff * diff; }
-                if self.compute[17] { state.sum_prod -= old_slice[0] * prev; }
-                if self.compute[31] { state.auc_sum -= (old_slice[0] + prev) * 0.5; }
-                if self.compute[15] && (old_slice[0] < 0.0) != (prev < 0.0) { state.zcr_count -= 1; }
+                if self.compute[18] {
+                    state.mac_sum -= diff.abs();
+                }
+                if self.compute[19] {
+                    state.mc_sum -= diff;
+                }
+                if self.compute[20] {
+                    state.sum_sq_diff -= diff * diff;
+                }
+                if self.compute[17] {
+                    state.sum_prod -= old_slice[0] * prev;
+                }
+                if self.compute[31] {
+                    state.auc_sum -= (old_slice[0] + prev) * 0.5;
+                }
+                if self.compute[15] && (old_slice[0] < 0.0) != (prev < 0.0) {
+                    state.zcr_count -= 1;
+                }
             }
-            
+
             // Internal diffs in old_slice
             for i in 1..y {
-                let diff = old_slice[i] - old_slice[i-1];
-                if self.compute[18] { state.mac_sum -= diff.abs(); }
-                if self.compute[19] { state.mc_sum -= diff; }
-                if self.compute[20] { state.sum_sq_diff -= diff * diff; }
-                if self.compute[17] { state.sum_prod -= old_slice[i] * old_slice[i-1]; }
-                if self.compute[31] { state.auc_sum -= (old_slice[i] + old_slice[i-1]) * 0.5; }
-                if self.compute[15] && (old_slice[i] < 0.0) != (old_slice[i-1] < 0.0) { state.zcr_count -= 1; }
+                let diff = old_slice[i] - old_slice[i - 1];
+                if self.compute[18] {
+                    state.mac_sum -= diff.abs();
+                }
+                if self.compute[19] {
+                    state.mc_sum -= diff;
+                }
+                if self.compute[20] {
+                    state.sum_sq_diff -= diff * diff;
+                }
+                if self.compute[17] {
+                    state.sum_prod -= old_slice[i] * old_slice[i - 1];
+                }
+                if self.compute[31] {
+                    state.auc_sum -= (old_slice[i] + old_slice[i - 1]) * 0.5;
+                }
+                if self.compute[15] && (old_slice[i] < 0.0) != (old_slice[i - 1] < 0.0) {
+                    state.zcr_count -= 1;
+                }
             }
-            
+
             // Boundary diff between old_slice and remaining window: (value_after_old, old_slice[y-1])
-            let diff_after = value_after_old - old_slice[y-1];
-            if self.compute[18] { state.mac_sum -= diff_after.abs(); }
-            if self.compute[19] { state.mc_sum -= diff_after; }
-            if self.compute[20] { state.sum_sq_diff -= diff_after * diff_after; }
-            if self.compute[17] { state.sum_prod -= value_after_old * old_slice[y-1]; }
-            if self.compute[31] { state.auc_sum -= (value_after_old + old_slice[y-1]) * 0.5; }
-            if self.compute[15] && (value_after_old < 0.0) != (old_slice[y-1] < 0.0) { state.zcr_count -= 1; }
+            let diff_after = value_after_old - old_slice[y - 1];
+            if self.compute[18] {
+                state.mac_sum -= diff_after.abs();
+            }
+            if self.compute[19] {
+                state.mc_sum -= diff_after;
+            }
+            if self.compute[20] {
+                state.sum_sq_diff -= diff_after * diff_after;
+            }
+            if self.compute[17] {
+                state.sum_prod -= value_after_old * old_slice[y - 1];
+            }
+            if self.compute[31] {
+                state.auc_sum -= (value_after_old + old_slice[y - 1]) * 0.5;
+            }
+            if self.compute[15] && (value_after_old < 0.0) != (old_slice[y - 1] < 0.0) {
+                state.zcr_count -= 1;
+            }
 
             // Add effect of diffs in new_slice
             // Boundary diff: (new_slice[0], value_before_new)
             let diff_new_start = new_slice[0] - value_before_new;
-            if self.compute[18] { state.mac_sum += diff_new_start.abs(); }
-            if self.compute[19] { state.mc_sum += diff_new_start; }
-            if self.compute[20] { state.sum_sq_diff += diff_new_start * diff_new_start; }
-            if self.compute[17] { state.sum_prod += new_slice[0] * value_before_new; }
-            if self.compute[31] { state.auc_sum += (new_slice[0] + value_before_new) * 0.5; }
-            if self.compute[15] && (new_slice[0] < 0.0) != (value_before_new < 0.0) { state.zcr_count += 1; }
+            if self.compute[18] {
+                state.mac_sum += diff_new_start.abs();
+            }
+            if self.compute[19] {
+                state.mc_sum += diff_new_start;
+            }
+            if self.compute[20] {
+                state.sum_sq_diff += diff_new_start * diff_new_start;
+            }
+            if self.compute[17] {
+                state.sum_prod += new_slice[0] * value_before_new;
+            }
+            if self.compute[31] {
+                state.auc_sum += (new_slice[0] + value_before_new) * 0.5;
+            }
+            if self.compute[15] && (new_slice[0] < 0.0) != (value_before_new < 0.0) {
+                state.zcr_count += 1;
+            }
 
             // Internal diffs in new_slice
             for i in 1..y {
-                let diff = new_slice[i] - new_slice[i-1];
-                if self.compute[18] { state.mac_sum += diff.abs(); }
-                if self.compute[19] { state.mc_sum += diff; }
-                if self.compute[20] { state.sum_sq_diff += diff * diff; }
-                if self.compute[17] { state.sum_prod += new_slice[i] * new_slice[i-1]; }
-                if self.compute[31] { state.auc_sum += (new_slice[i] + new_slice[i-1]) * 0.5; }
-                if self.compute[15] && (new_slice[i] < 0.0) != (new_slice[i-1] < 0.0) { state.zcr_count += 1; }
+                let diff = new_slice[i] - new_slice[i - 1];
+                if self.compute[18] {
+                    state.mac_sum += diff.abs();
+                }
+                if self.compute[19] {
+                    state.mc_sum += diff;
+                }
+                if self.compute[20] {
+                    state.sum_sq_diff += diff * diff;
+                }
+                if self.compute[17] {
+                    state.sum_prod += new_slice[i] * new_slice[i - 1];
+                }
+                if self.compute[31] {
+                    state.auc_sum += (new_slice[i] + new_slice[i - 1]) * 0.5;
+                }
+                if self.compute[15] && (new_slice[i] < 0.0) != (new_slice[i - 1] < 0.0) {
+                    state.zcr_count += 1;
+                }
             }
         }
 
@@ -130,21 +202,21 @@ impl<'a> SlidingEngine<'a> {
             // = (sum_{i=y}^{W-1} i*x_i - y*sum_{i=y}^{W-1} x_i) + sum_{j=0}^{y-1} (W-y+j)new_j
             // sum_{i=y}^{W-1} i*x_i = old_sum_ix - sum_{i=0}^{y-1} i*x_i
             // sum_{i=y}^{W-1} x_i = old_total_sum - sum_{i=0}^{y-1} x_i
-            
+
             let mut sum_old = 0.0;
             let mut sum_ix_old = 0.0;
             for (i, &v) in old_slice.iter().enumerate() {
                 sum_old += v;
                 sum_ix_old += (i as f32) * v;
             }
-            
+
             let mut sum_ix_new = 0.0;
             let w_f = window_size as f32;
             let y_f = y as f32;
             for (j, &v) in new_slice.iter().enumerate() {
                 sum_ix_new += (w_f - y_f + j as f32) * v;
             }
-            
+
             // To be safe, let's use the OLD total sum.
             let old_total_sum = state.total_sum - (new_slice.iter().sum::<f32>() - sum_old);
             let rem_sum = old_total_sum - sum_old;
@@ -156,44 +228,58 @@ impl<'a> SlidingEngine<'a> {
         if self.compute.any([4, 5, 10, 11]) {
             for (i, &val) in new_slice.iter().enumerate() {
                 let idx = global_start_idx + i;
-                
+
                 // Remove elements out of window
-                if state.min_q_head != state.min_q_tail
+                if state.min_q_len > 0
                     && idx >= window_size
                     && state.min_queue[state.min_q_head].0 <= idx - window_size
                 {
                     state.min_q_head = (state.min_q_head + 1) % window_size;
+                    state.min_q_len -= 1;
                 }
-                if state.max_q_head != state.max_q_tail
+                if state.max_q_len > 0
                     && idx >= window_size
                     && state.max_queue[state.max_q_head].0 <= idx - window_size
                 {
                     state.max_q_head = (state.max_q_head + 1) % window_size;
+                    state.max_q_len -= 1;
                 }
 
                 // Min Queue
-                while state.min_q_tail != state.min_q_head {
-                    let prev_tail = if state.min_q_tail == 0 { window_size - 1 } else { state.min_q_tail - 1 };
+                while state.min_q_len > 0 {
+                    let prev_tail = if state.min_q_tail == 0 {
+                        window_size - 1
+                    } else {
+                        state.min_q_tail - 1
+                    };
                     if state.min_queue[prev_tail].1 >= val {
                         state.min_q_tail = prev_tail;
+                        state.min_q_len -= 1;
                     } else {
                         break;
                     }
                 }
                 state.min_queue[state.min_q_tail] = (idx, val);
                 state.min_q_tail = (state.min_q_tail + 1) % window_size;
+                state.min_q_len += 1;
 
                 // Max Queue
-                while state.max_q_tail != state.max_q_head {
-                    let prev_tail = if state.max_q_tail == 0 { window_size - 1 } else { state.max_q_tail - 1 };
+                while state.max_q_len > 0 {
+                    let prev_tail = if state.max_q_tail == 0 {
+                        window_size - 1
+                    } else {
+                        state.max_q_tail - 1
+                    };
                     if state.max_queue[prev_tail].1 <= val {
                         state.max_q_tail = prev_tail;
+                        state.max_q_len -= 1;
                     } else {
                         break;
                     }
                 }
                 state.max_queue[state.max_q_tail] = (idx, val);
                 state.max_q_tail = (state.max_q_tail + 1) % window_size;
+                state.max_q_len += 1;
             }
             state.min_value = state.min_queue[state.min_q_head].1;
             state.max_value = state.max_queue[state.max_q_head].1;
@@ -305,21 +391,23 @@ impl<'a> SlidingEngine<'a> {
             }
 
             // Remove elements out of window
-            if state.min_q_head != state.min_q_tail
+            if state.min_q_len > 0
                 && global_idx >= window_size
                 && state.min_queue[state.min_q_head].0 <= global_idx - window_size
             {
                 state.min_q_head = (state.min_q_head + 1) % window_size;
+                state.min_q_len -= 1;
             }
-            if state.max_q_head != state.max_q_tail
+            if state.max_q_len > 0
                 && global_idx >= window_size
                 && state.max_queue[state.max_q_head].0 <= global_idx - window_size
             {
                 state.max_q_head = (state.max_q_head + 1) % window_size;
+                state.max_q_len -= 1;
             }
 
             // Min Queue: remove larger elements from tail
-            while state.min_q_tail != state.min_q_head {
+            while state.min_q_len > 0 {
                 let prev_tail = if state.min_q_tail == 0 {
                     window_size - 1
                 } else {
@@ -327,16 +415,18 @@ impl<'a> SlidingEngine<'a> {
                 };
                 if state.min_queue[prev_tail].1 >= new_val {
                     state.min_q_tail = prev_tail;
+                    state.min_q_len -= 1;
                 } else {
                     break;
                 }
             }
             state.min_queue[state.min_q_tail] = (global_idx, new_val);
             state.min_q_tail = (state.min_q_tail + 1) % window_size;
+            state.min_q_len += 1;
             state.min_value = state.min_queue[state.min_q_head].1;
 
             // Max Queue: remove smaller elements from tail
-            while state.max_q_tail != state.max_q_head {
+            while state.max_q_len > 0 {
                 let prev_tail = if state.max_q_tail == 0 {
                     window_size - 1
                 } else {
@@ -344,12 +434,14 @@ impl<'a> SlidingEngine<'a> {
                 };
                 if state.max_queue[prev_tail].1 <= new_val {
                     state.max_q_tail = prev_tail;
+                    state.max_q_len -= 1;
                 } else {
                     break;
                 }
             }
             state.max_queue[state.max_q_tail] = (global_idx, new_val);
             state.max_q_tail = (state.max_q_tail + 1) % window_size;
+            state.max_q_len += 1;
             state.max_value = state.max_queue[state.max_q_head].1;
         }
     }
@@ -381,6 +473,12 @@ impl<'a> SlidingEngine<'a> {
             state.sum_ix = 0.0;
             state.auc_sum = 0.0;
             state.zcr_count = 0;
+            state.min_q_head = 0;
+            state.min_q_tail = 0;
+            state.min_q_len = 0;
+            state.max_q_head = 0;
+            state.max_q_tail = 0;
+            state.max_q_len = 0;
         }
         state.mac_sum_vec = f32x4::splat(0.0);
         state.mc_sum_vec = f32x4::splat(0.0);
@@ -460,7 +558,7 @@ impl<'a> SlidingEngine<'a> {
                     for (j, &val) in i.iter().enumerate() {
                         let idx = global_idx + j;
                         // Min Queue
-                        while state.min_q_tail != state.min_q_head {
+                        while state.min_q_len > 0 {
                             let prev_tail = if state.min_q_tail == 0 {
                                 window_size - 1
                             } else {
@@ -468,15 +566,17 @@ impl<'a> SlidingEngine<'a> {
                             };
                             if state.min_queue[prev_tail].1 >= val {
                                 state.min_q_tail = prev_tail;
+                                state.min_q_len -= 1;
                             } else {
                                 break;
                             }
                         }
                         state.min_queue[state.min_q_tail] = (idx, val);
                         state.min_q_tail = (state.min_q_tail + 1) % window_size;
+                        state.min_q_len += 1;
 
                         // Max Queue
-                        while state.max_q_tail != state.max_q_head {
+                        while state.max_q_len > 0 {
                             let prev_tail = if state.max_q_tail == 0 {
                                 window_size - 1
                             } else {
@@ -484,12 +584,14 @@ impl<'a> SlidingEngine<'a> {
                             };
                             if state.max_queue[prev_tail].1 <= val {
                                 state.max_q_tail = prev_tail;
+                                state.max_q_len -= 1;
                             } else {
                                 break;
                             }
                         }
                         state.max_queue[state.max_q_tail] = (idx, val);
                         state.max_q_tail = (state.max_q_tail + 1) % window_size;
+                        state.max_q_len += 1;
                     }
                 }
             }
@@ -629,7 +731,7 @@ impl<'a> SlidingEngine<'a> {
                 if self.compute.any([4, 5, 10, 11]) {
                     // Fill queues for initial window
                     // Min Queue
-                    while state.min_q_tail != state.min_q_head {
+                    while state.min_q_len > 0 {
                         let prev_tail = if state.min_q_tail == 0 {
                             window_size - 1
                         } else {
@@ -637,15 +739,17 @@ impl<'a> SlidingEngine<'a> {
                         };
                         if state.min_queue[prev_tail].1 >= val {
                             state.min_q_tail = prev_tail;
+                            state.min_q_len -= 1;
                         } else {
                             break;
                         }
                     }
                     state.min_queue[state.min_q_tail] = (i, val);
                     state.min_q_tail = (state.min_q_tail + 1) % window_size;
+                    state.min_q_len += 1;
 
                     // Max Queue
-                    while state.max_q_tail != state.max_q_head {
+                    while state.max_q_len > 0 {
                         let prev_tail = if state.max_q_tail == 0 {
                             window_size - 1
                         } else {
@@ -653,12 +757,14 @@ impl<'a> SlidingEngine<'a> {
                         };
                         if state.max_queue[prev_tail].1 <= val {
                             state.max_q_tail = prev_tail;
+                            state.max_q_len -= 1;
                         } else {
                             break;
                         }
                     }
                     state.max_queue[state.max_q_tail] = (i, val);
                     state.max_q_tail = (state.max_q_tail + 1) % window_size;
+                    state.max_q_len += 1;
                 }
             }
             if self.compute[38] {
@@ -716,7 +822,12 @@ impl<'a> SlidingEngine<'a> {
     }
 
     #[inline(always)]
-    pub(crate) fn finalize_results(&self, values: &[f32], n: f32, state: &mut ColumnState) -> Result<Vec<f32>, String> {
+    pub(crate) fn finalize_results(
+        &self,
+        values: &[f32],
+        n: f32,
+        state: &mut ColumnState,
+    ) -> Result<Vec<f32>, String> {
         let mean = state.total_sum / n;
         let mac_sum = state.mac_sum;
         let mc_sum = state.mc_sum;
@@ -754,7 +865,8 @@ impl<'a> SlidingEngine<'a> {
                 let mut indata = vec![0.0; self.fft_size];
                 indata[..values.len()].copy_from_slice(values);
                 let mut outdata = r2c.make_output_vec();
-                r2c.process(&mut indata, &mut outdata).map_err(|e| e.to_string())?;
+                r2c.process(&mut indata, &mut outdata)
+                    .map_err(|e| e.to_string())?;
                 state.sliding_dft = Some(SlidingDFT::from_fft(outdata, values.len()));
             }
 
@@ -781,14 +893,18 @@ impl<'a> SlidingEngine<'a> {
                 indata[i] = v - mean;
             }
             let mut outdata = r2c_ac.make_output_vec();
-            r2c_ac.process(&mut indata, &mut outdata).map_err(|e| e.to_string())?;
+            r2c_ac
+                .process(&mut indata, &mut outdata)
+                .map_err(|e| e.to_string())?;
 
             for c in &mut outdata {
                 *c = realfft::num_complex::Complex::new(c.norm_sqr(), 0.0);
             }
 
             let mut outdata_inv = c2r_ac.make_output_vec();
-            c2r_ac.process(&mut outdata, &mut outdata_inv).map_err(|e| e.to_string())?;
+            c2r_ac
+                .process(&mut outdata, &mut outdata_inv)
+                .map_err(|e| e.to_string())?;
 
             let var_ac = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
             let m2_val = var_ac * (n - 1.0);
@@ -888,7 +1004,9 @@ impl<'a> SlidingEngine<'a> {
                     }
                 }
                 if self.compute[10] {
-                    copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                    copy.sort_unstable_by(|a, b| {
+                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                    });
                     let n_len = copy.len() as f32;
                     let get_q = |q: f32, data: &[f32]| -> f32 {
                         let idx = q * (n_len - 1.0);
@@ -1011,7 +1129,8 @@ impl<'a> SlidingEngine<'a> {
                 Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
                     let x0 = values[0];
                     let xn = values[values.len() - 1];
-                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn) + (n - 1.0) * mean * mean;
+                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn)
+                        + (n - 1.0) * mean * mean;
                     (cov / m2) as f32
                 }
                 Feature::AutocorrFirst1e => {
@@ -1101,11 +1220,13 @@ impl<'a> SlidingEngine<'a> {
                         let idx = q * (n_len as f32 - 1.0);
                         let i = idx.floor() as usize;
                         let f = idx - i as f32;
-                        copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                        copy.sort_unstable_by(|a, b| {
+                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                        });
                         if i >= n_len - 1 {
                             copy[n_len - 1]
                         } else {
-                            (1.0 - f) * copy[i] + f * copy[i+1]
+                            (1.0 - f) * copy[i] + f * copy[i + 1]
                         }
                     }
                 }
@@ -1114,8 +1235,12 @@ impl<'a> SlidingEngine<'a> {
                     for &v in values {
                         let mut abs_v = v.abs();
                         if abs_v > 0.0 {
-                            while abs_v < 1.0 { abs_v *= 10.0; }
-                            while abs_v >= 10.0 { abs_v /= 10.0; }
+                            while abs_v < 1.0 {
+                                abs_v *= 10.0;
+                            }
+                            while abs_v >= 10.0 {
+                                abs_v /= 10.0;
+                            }
                             let first_digit = abs_v.floor() as usize;
                             if (1..=9).contains(&first_digit) {
                                 counts[first_digit - 1] += 1.0;
@@ -1138,8 +1263,12 @@ impl<'a> SlidingEngine<'a> {
                         }
                         if den_p > 0.0 && den_b > 0.0 {
                             num / (den_p * den_b).sqrt()
-                        } else { 0.0 }
-                    } else { 0.0 }
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
                 }
                 Feature::Autocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
                     let l = *lag as usize;
@@ -1192,7 +1321,8 @@ impl<'a> SlidingEngine<'a> {
                                 }
                                 phi[k + 1][k + 1] = (r[k + 1] - sum) / error as f32;
                                 for i in 1..=k {
-                                    phi[k + 1][i] = phi[k][i] - phi[k + 1][k + 1] * phi[k][k + 1 - i];
+                                    phi[k + 1][i] =
+                                        phi[k][i] - phi[k + 1][k + 1] * phi[k][k + 1 - i];
                                 }
                                 error *= 1.0 - (phi[k + 1][k + 1] * phi[k + 1][k + 1]) as f64;
                                 if error.abs() < 1e-9 {
@@ -1229,45 +1359,45 @@ impl<'a> SlidingEngine<'a> {
                         0.0
                     } else {
                         let m_sum_x: f32 = (0..agg_series.len()).map(|i| i as f32).sum();
-                    let m_sum_y: f32 = agg_series.iter().sum();
-                    let m_sum_xx: f32 = (0..agg_series.len()).map(|i| (i as f32).powi(2)).sum();
-                    let m_sum_xy: f32 = agg_series
-                        .iter()
-                        .enumerate()
-                        .map(|(i, &v)| i as f32 * v)
-                        .sum();
-                    let s_xx = m_sum_xx - (m_sum_x * m_sum_x) / m_n;
-                    let s_xy = m_sum_xy - (m_sum_x * m_sum_y) / m_n;
-                    let slope = if s_xx.abs() > 1e-9 { s_xy / s_xx } else { 0.0 };
-                    let intercept = (m_sum_y - slope * m_sum_x) / m_n;
-                    match attr {
-                        crate::types::AggAttr::Slope => slope,
-                        crate::types::AggAttr::Intercept => intercept,
-                        crate::types::AggAttr::Stderr | crate::types::AggAttr::RValue => {
-                            let mut ss_res = 0.0;
-                            let mut ss_tot = 0.0;
-                            let m_y = m_sum_y / m_n;
-                            for (i, &y) in agg_series.iter().enumerate() {
-                                let y_hat = intercept + slope * i as f32;
-                                ss_res += (y - y_hat).powi(2);
-                                ss_tot += (y - m_y).powi(2);
-                            }
-                            if matches!(attr, crate::types::AggAttr::Stderr) {
-                                if m_n > 2.0 && s_xx.abs() > 1e-9 {
-                                    (ss_res / (m_n - 2.0) / s_xx).sqrt()
-                                } else {
-                                    0.0
+                        let m_sum_y: f32 = agg_series.iter().sum();
+                        let m_sum_xx: f32 = (0..agg_series.len()).map(|i| (i as f32).powi(2)).sum();
+                        let m_sum_xy: f32 = agg_series
+                            .iter()
+                            .enumerate()
+                            .map(|(i, &v)| i as f32 * v)
+                            .sum();
+                        let s_xx = m_sum_xx - (m_sum_x * m_sum_x) / m_n;
+                        let s_xy = m_sum_xy - (m_sum_x * m_sum_y) / m_n;
+                        let slope = if s_xx.abs() > 1e-9 { s_xy / s_xx } else { 0.0 };
+                        let intercept = (m_sum_y - slope * m_sum_x) / m_n;
+                        match attr {
+                            crate::types::AggAttr::Slope => slope,
+                            crate::types::AggAttr::Intercept => intercept,
+                            crate::types::AggAttr::Stderr | crate::types::AggAttr::RValue => {
+                                let mut ss_res = 0.0;
+                                let mut ss_tot = 0.0;
+                                let m_y = m_sum_y / m_n;
+                                for (i, &y) in agg_series.iter().enumerate() {
+                                    let y_hat = intercept + slope * i as f32;
+                                    ss_res += (y - y_hat).powi(2);
+                                    ss_tot += (y - m_y).powi(2);
                                 }
-                            } else {
-                                if ss_tot > 1e-9 {
-                                    (1.0 - ss_res / ss_tot).sqrt() * slope.signum()
+                                if matches!(attr, crate::types::AggAttr::Stderr) {
+                                    if m_n > 2.0 && s_xx.abs() > 1e-9 {
+                                        (ss_res / (m_n - 2.0) / s_xx).sqrt()
+                                    } else {
+                                        0.0
+                                    }
                                 } else {
-                                    0.0
+                                    if ss_tot > 1e-9 {
+                                        (1.0 - ss_res / ss_tot).sqrt() * slope.signum()
+                                    } else {
+                                        0.0
+                                    }
                                 }
                             }
+                            _ => 0.0,
                         }
-                        _ => 0.0,
-                    }
                     }
                 }
                 Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
@@ -1275,9 +1405,8 @@ impl<'a> SlidingEngine<'a> {
                     let r = f32::from_bits(*r_bits);
                     let mut buffer = std::mem::take(&mut state.approx_entropy_buffer);
 
-                    let res =
-                        crate::common::approx_entropy_phi(m_val, r, values, &mut buffer) -
-                        crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer);
+                    let res = crate::common::approx_entropy_phi(m_val, r, values, &mut buffer)
+                        - crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer);
                     state.approx_entropy_buffer = buffer;
                     res
                 }
@@ -1294,7 +1423,13 @@ impl<'a> SlidingEngine<'a> {
                         .sum()
                 }
                 Feature::Length => n as f32,
-                Feature::VarianceLargerThanStandardDeviation => if var > 1.0 { 1.0 } else { 0.0 },
+                Feature::VarianceLargerThanStandardDeviation => {
+                    if var > 1.0 {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                }
                 Feature::SumOfReoccurringDataPoints => {
                     let mut counts = std::collections::HashMap::new();
                     for &v in values {

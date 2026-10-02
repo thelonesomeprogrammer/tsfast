@@ -56,11 +56,16 @@ impl FastBitArray {
     }
 
     pub fn any_fft(&self) -> bool {
-        // Bits: 46 (FftCoefficient), 64 (HumanRangeEnergy), 54 (SpectralCentroid), 
-        // 55 (SpectralDistance), 56 (SpectralDecrease), 57 (SpectralSlope), 
+        // Bits: 46 (FftCoefficient), 64 (HumanRangeEnergy), 54 (SpectralCentroid),
+        // 55 (SpectralDistance), 56 (SpectralDecrease), 57 (SpectralSlope),
         // 60 (SpectrogramCoefficients)
-        let mask = (1u128 << 46) | (1u128 << 64) | (1u128 << 54) | (1u128 << 55) | 
-                   (1u128 << 56) | (1u128 << 57) | (1u128 << 60);
+        let mask = (1u128 << 46)
+            | (1u128 << 64)
+            | (1u128 << 54)
+            | (1u128 << 55)
+            | (1u128 << 56)
+            | (1u128 << 57)
+            | (1u128 << 60);
         (self.0 & mask) != 0
     }
 }
@@ -89,7 +94,7 @@ pub enum Feature {
     Median,
     Skew,
     UnbiasedFisherKurtosis, // tsfresh default
-    BiasedFisherKurtosis, // tsfel default
+    BiasedFisherKurtosis,   // tsfel default
     Mad,
     Iqr,
     Entropy,
@@ -98,7 +103,7 @@ pub enum Feature {
     RootMeanSquare,
     ZeroCrossingRate,
     PeakCount,
-    AutocorrLag1, // Centered (tsfresh default)
+    AutocorrLag1,    // Centered (tsfresh default)
     AutocorrFirst1e, // tsfel 'Autocorrelation' feature
     MeanAbsChange,
     MeanChange,
@@ -129,8 +134,8 @@ pub enum Feature {
     FftCoefficient(u16, FftAttr),
     ApproxEntropy(u8, u32), // r is encoded as u32 (fixed point or bitcast)
     AggLinearTrend(AggAttr, u16, AggFunc),
-    Quantile(u32),           // q encoded as u32 bits
-    IndexMassQuantile(u32),  // q encoded as u32 bits
+    Quantile(u32),          // q encoded as u32 bits
+    IndexMassQuantile(u32), // q encoded as u32 bits
     BenfordCorrelation,
     MaxLangevinFixedPoint(u8, u32), // m, r as bits
     SumOfReoccurringValues,
@@ -185,7 +190,9 @@ impl std::str::FromStr for Feature {
             "max" | "max_value" | "value__maximum" => Ok(Feature::Max),
             "median" | "value__median" => Ok(Feature::Median),
             "skew" | "skewness" | "value__skewness" => Ok(Feature::Skew),
-            "kurtosis" | "value__kurtosis" | "unbiased_fisher_kurtosis" => Ok(Feature::UnbiasedFisherKurtosis),
+            "kurtosis" | "value__kurtosis" | "unbiased_fisher_kurtosis" => {
+                Ok(Feature::UnbiasedFisherKurtosis)
+            }
             "biased_fisher_kurtosis" => Ok(Feature::BiasedFisherKurtosis),
             "mad" => Ok(Feature::Mad),
             "iqr" => Ok(Feature::Iqr),
@@ -219,16 +226,25 @@ impl std::str::FromStr for Feature {
             "first_loc_min" | "value__first_location_of_minimum" => Ok(Feature::FirstLocMin),
             "last_loc_min" | "value__last_location_of_minimum" => Ok(Feature::LastLocMin),
             "benford_correlation" | "value__benford_correlation" => Ok(Feature::BenfordCorrelation),
-            "sum_of_reoccurring_values" | "value__sum_of_reoccurring_values" => Ok(Feature::SumOfReoccurringValues),
-            "sum_of_reoccurring_data_points" | "value__sum_of_reoccurring_data_points" => Ok(Feature::SumOfReoccurringDataPoints),
+            "sum_of_reoccurring_values" | "value__sum_of_reoccurring_values" => {
+                Ok(Feature::SumOfReoccurringValues)
+            }
+            "sum_of_reoccurring_data_points" | "value__sum_of_reoccurring_data_points" => {
+                Ok(Feature::SumOfReoccurringDataPoints)
+            }
             "length" | "value__length" => Ok(Feature::Length),
-            "variance_larger_than_standard_deviation" | "value__variance_larger_than_standard_deviation" => Ok(Feature::VarianceLargerThanStandardDeviation),
+            "variance_larger_than_standard_deviation"
+            | "value__variance_larger_than_standard_deviation" => {
+                Ok(Feature::VarianceLargerThanStandardDeviation)
+            }
             "spectral_centroid" | "torque_Centroid" => Ok(Feature::SpectralCentroid),
             "spectral_distance" | "torque_Spectral distance" => Ok(Feature::SpectralDistance),
             "spectral_decrease" | "torque_Spectral decrease" => Ok(Feature::SpectralDecrease),
             "spectral_slope" | "torque_Spectral slope" => Ok(Feature::SpectralSlope),
             "signal_distance" | "torque_Signal distance" => Ok(Feature::SignalDistance),
-            "human_range_energy" | "torque_Human range energy" => Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())), // Default fs=100
+            "human_range_energy" | "torque_Human range energy" => {
+                Ok(Feature::HumanRangeEnergy(100.0f32.to_bits()))
+            } // Default fs=100
             e => {
                 if let Some(arg) = e.strip_prefix("paa-") {
                     let params: Vec<&str> = arg.split('-').collect();
@@ -244,7 +260,7 @@ impl std::str::FromStr for Feature {
                     }
                 } else if e.contains("c3__lag_") {
                     if let Some(pos) = e.find("lag_") {
-                        if let Ok(n) = e[pos+4..].parse::<u16>() {
+                        if let Ok(n) = e[pos + 4..].parse::<u16>() {
                             return Ok(Feature::C3(n));
                         }
                     }
@@ -262,7 +278,7 @@ impl std::str::FromStr for Feature {
                     }
                 } else if e.contains("time_reversal_asymmetry_statistic__lag_") {
                     if let Some(pos) = e.find("lag_") {
-                        if let Ok(n) = e[pos+4..].parse::<u16>() {
+                        if let Ok(n) = e[pos + 4..].parse::<u16>() {
                             return Ok(Feature::TimeReversalAsymmetry(n));
                         }
                     }
@@ -283,7 +299,8 @@ impl std::str::FromStr for Feature {
                 } else if let Some(arg) = e.strip_prefix("approx_entropy-") {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2 {
-                        if let (Ok(m), Ok(r)) = (params[0].parse::<u8>(), params[1].parse::<f32>()) {
+                        if let (Ok(m), Ok(r)) = (params[0].parse::<u8>(), params[1].parse::<f32>())
+                        {
                             return Ok(Feature::ApproxEntropy(m, r.to_bits()));
                         }
                     }
@@ -311,22 +328,34 @@ impl std::str::FromStr for Feature {
                     }
                 } else if e.contains("agg_linear_trend__attr_") {
                     // value__agg_linear_trend__attr_"slope"__chunk_len_5__f_agg_"mean"
-                    let attr = if e.contains("attr_\"slope\"") { AggAttr::Slope }
-                              else if e.contains("attr_\"intercept\"") { AggAttr::Intercept }
-                              else { AggAttr::Slope };
-                    
+                    let attr = if e.contains("attr_\"slope\"") {
+                        AggAttr::Slope
+                    } else if e.contains("attr_\"intercept\"") {
+                        AggAttr::Intercept
+                    } else {
+                        AggAttr::Slope
+                    };
+
                     let chunk_len = if let Some(pos) = e.find("chunk_len_") {
-                        let sub = &e[pos+10..];
+                        let sub = &e[pos + 10..];
                         let end = sub.find("__").unwrap_or(sub.len());
                         sub[..end].parse::<u16>().unwrap_or(5)
-                    } else { 5 };
+                    } else {
+                        5
+                    };
 
-                    let func = if e.contains("f_agg_\"mean\"") { AggFunc::Mean }
-                               else if e.contains("f_agg_\"var\"") { AggFunc::Var }
-                               else if e.contains("f_agg_\"max\"") { AggFunc::Max }
-                               else if e.contains("f_agg_\"min\"") { AggFunc::Min }
-                               else { AggFunc::Mean };
-                    
+                    let func = if e.contains("f_agg_\"mean\"") {
+                        AggFunc::Mean
+                    } else if e.contains("f_agg_\"var\"") {
+                        AggFunc::Var
+                    } else if e.contains("f_agg_\"max\"") {
+                        AggFunc::Max
+                    } else if e.contains("f_agg_\"min\"") {
+                        AggFunc::Min
+                    } else {
+                        AggFunc::Mean
+                    };
+
                     return Ok(Feature::AggLinearTrend(attr, chunk_len, func));
                 } else if let Some(arg) = e.strip_prefix("quantile-") {
                     if let Ok(q) = arg.parse::<f32>() {
@@ -334,7 +363,7 @@ impl std::str::FromStr for Feature {
                     }
                 } else if e.contains("value__quantile__q_") {
                     if let Some(pos) = e.find("q_") {
-                        if let Ok(q) = e[pos+2..].parse::<f32>() {
+                        if let Ok(q) = e[pos + 2..].parse::<f32>() {
                             return Ok(Feature::Quantile(q.to_bits()));
                         }
                     }
@@ -344,33 +373,38 @@ impl std::str::FromStr for Feature {
                     }
                 } else if e.contains("value__index_mass_quantile__q_") {
                     if let Some(pos) = e.find("q_") {
-                        if let Ok(q) = e[pos+2..].parse::<f32>() {
+                        if let Ok(q) = e[pos + 2..].parse::<f32>() {
                             return Ok(Feature::IndexMassQuantile(q.to_bits()));
                         }
                     }
                 } else if let Some(arg) = e.strip_prefix("max_langevin_fixed_point-") {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2 {
-                        if let (Ok(m), Ok(r)) = (params[0].parse::<u8>(), params[1].parse::<f32>()) {
+                        if let (Ok(m), Ok(r)) = (params[0].parse::<u8>(), params[1].parse::<f32>())
+                        {
                             return Ok(Feature::MaxLangevinFixedPoint(m, r.to_bits()));
                         }
                     }
                 } else if e.contains("value__max_langevin_fixed_point__m_") {
                     // value__max_langevin_fixed_point__m_3__r_30
                     let m = if let Some(pos) = e.find("m_") {
-                        let sub = &e[pos+2..];
+                        let sub = &e[pos + 2..];
                         let end = sub.find("__").unwrap_or(sub.len());
                         sub[..end].parse::<u8>().unwrap_or(3)
-                    } else { 3 };
+                    } else {
+                        3
+                    };
                     let r = if let Some(pos) = e.find("r_") {
-                        let sub = &e[pos+2..];
+                        let sub = &e[pos + 2..];
                         let end = sub.find("__").unwrap_or(sub.len());
                         sub[..end].parse::<f32>().unwrap_or(30.0)
-                    } else { 30.0 };
+                    } else {
+                        30.0
+                    };
                     return Ok(Feature::MaxLangevinFixedPoint(m, r.to_bits()));
                 } else if e.contains("value__mean_n_absolute_max__number_of_maxima_") {
                     if let Some(pos) = e.find("number_of_maxima_") {
-                        if let Ok(n) = e[pos+17..].parse::<u16>() {
+                        if let Ok(n) = e[pos + 17..].parse::<u16>() {
                             return Ok(Feature::MeanNAbsoluteMax(n));
                         }
                     }
@@ -381,8 +415,7 @@ impl std::str::FromStr for Feature {
                 } else if let Some(arg) = e.strip_prefix("wavelet-") {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2 {
-                        if let (Ok(w), Ok(f)) =
-                            (params[0].parse::<f32>(), params[1].parse::<u16>())
+                        if let (Ok(w), Ok(f)) = (params[0].parse::<f32>(), params[1].parse::<u16>())
                         {
                             return Ok(Feature::WaveletFeatures(w.to_bits(), f));
                         }
@@ -393,15 +426,18 @@ impl std::str::FromStr for Feature {
                     let f_type = if e.contains("absolute mean") { 0 } else { 1 };
                     let freq = if let Some(pos) = e.find('_') {
                         if let Some(end) = e.find("Hz") {
-                            e[pos+1..end].parse::<f32>().unwrap_or(0.0)
-                        } else { 0.0 }
-                    } else { 0.0 };
+                            e[pos + 1..end].parse::<f32>().unwrap_or(0.0)
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    };
                     return Ok(Feature::WaveletFeatures(freq.to_bits(), f_type));
                 } else if let Some(arg) = e.strip_prefix("spectrogram-") {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2 {
-                        if let (Ok(t), Ok(f)) =
-                            (params[0].parse::<u16>(), params[1].parse::<f32>())
+                        if let (Ok(t), Ok(f)) = (params[0].parse::<u16>(), params[1].parse::<f32>())
                         {
                             return Ok(Feature::SpectrogramCoefficients(t, f.to_bits()));
                         }
@@ -410,7 +446,7 @@ impl std::str::FromStr for Feature {
                     // torque_Spectrogram mean coefficient_322.58Hz
                     if let Some(pos) = e.rfind('_') {
                         if let Some(end) = e.find("Hz") {
-                            let freq = e[pos+1..end].parse::<f32>().unwrap_or(0.0);
+                            let freq = e[pos + 1..end].parse::<f32>().unwrap_or(0.0);
                             return Ok(Feature::SpectrogramCoefficients(0, freq.to_bits()));
                         }
                     }
@@ -509,17 +545,24 @@ impl Feature {
             Feature::SumOfReoccurringValues => "sum_of_reoccurring_values".to_string(),
             Feature::SumOfReoccurringDataPoints => "sum_of_reoccurring_data_points".to_string(),
             Feature::Length => "length".to_string(),
-            Feature::VarianceLargerThanStandardDeviation => "variance_larger_than_standard_deviation".to_string(),
+            Feature::VarianceLargerThanStandardDeviation => {
+                "variance_larger_than_standard_deviation".to_string()
+            }
             Feature::MeanNAbsoluteMax(n) => format!("mean_n_absolute_max-{}", n),
-            Feature::HumanRangeEnergy(fs_bits) => format!("human_range_energy-{}", f32::from_bits(*fs_bits)),
+            Feature::HumanRangeEnergy(fs_bits) => {
+                format!("human_range_energy-{}", f32::from_bits(*fs_bits))
+            }
             Feature::SpectralCentroid => "spectral_centroid".to_string(),
             Feature::SpectralDistance => "spectral_distance".to_string(),
             Feature::SpectralDecrease => "spectral_decrease".to_string(),
             Feature::SpectralSlope => "spectral_slope".to_string(),
             Feature::SignalDistance => "signal_distance".to_string(),
-            Feature::WaveletFeatures(w_bits, f) => format!("wavelet-{}-{}", f32::from_bits(*w_bits), f),
-            Feature::SpectrogramCoefficients(t, f_bits) => format!("spectrogram-{}-{}", t, f32::from_bits(*f_bits)),
+            Feature::WaveletFeatures(w_bits, f) => {
+                format!("wavelet-{}-{}", f32::from_bits(*w_bits), f)
+            }
+            Feature::SpectrogramCoefficients(t, f_bits) => {
+                format!("spectrogram-{}-{}", t, f32::from_bits(*f_bits))
+            }
         }
     }
 }
-

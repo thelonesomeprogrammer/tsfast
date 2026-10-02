@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use std::time::Duration;
 use arrow::array::{Float32Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::pyarrow::PyArrowType;
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use std::sync::Arc;
+use std::time::Duration;
 use tsfast::{ExpandingExtractor, Extractor, SlidingExtractor};
 
 const FEATURES: &[&str] = &[

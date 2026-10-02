@@ -5,8 +5,8 @@ use arrow::datatypes::{DataType, Field, Schema};
 use arrow::pyarrow::PyArrowType;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use std::sync::{Arc, Mutex};
 use realfft::RealFftPlanner;
+use std::sync::{Arc, Mutex};
 
 pub mod engine;
 use engine::ExpandingEngine;
@@ -33,14 +33,20 @@ pub struct ExpandingExtractor {
 impl ExpandingExtractor {
     #[new]
     #[pyo3(signature = (feature_str, n_cols, max_size=None, fft_update_period=1))]
-    pub fn new(feature_str: Vec<String>, n_cols: usize, max_size: Option<usize>, fft_update_period: usize) -> PyResult<Self> {
+    pub fn new(
+        feature_str: Vec<String>,
+        n_cols: usize,
+        max_size: Option<usize>,
+        fft_update_period: usize,
+    ) -> PyResult<Self> {
         let mut features = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
         let mut unique_autocorr_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
-            let feat = std::str::FromStr::from_str(&i).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+            let feat = std::str::FromStr::from_str(&i)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             match feat {
                 Feature::Paa(total, _) => {
                     unique_paa_totals.insert(total);
@@ -191,13 +197,7 @@ impl ExpandingExtractor {
                     fft_update_period: self.fft_update_period,
                 };
 
-                engine.process_expanding(
-                    values,
-                    history.len(),
-                    state,
-                    history,
-                    sorted_history,
-                )
+                engine.process_expanding(values, history.len(), state, history, sorted_history)
             })
             .collect();
 
