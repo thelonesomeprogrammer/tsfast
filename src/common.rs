@@ -269,6 +269,9 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::SignalDistance => bits.set_batch([58, 37]),
             Feature::WaveletFeatures(_, _) => bits.set_batch([59, 37]),
             Feature::SpectrogramCoefficients(_, _) => bits.set_batch([60, 37]),
+            Feature::MeanSecondDerivativeCentral => bits.set_batch([65, 37]),
+            Feature::LargeStandardDeviation(_) => bits.set_batch([0, 1, 2, 4, 5, 12, 37]),
+            Feature::SymmetryLooking(_) => bits.set_batch([0, 1, 4, 5, 6, 37]),
         }
     }
     bits

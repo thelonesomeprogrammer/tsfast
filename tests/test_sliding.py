@@ -4,7 +4,7 @@ import numpy as np
 from tsfast._tsfast import SlidingExtractor
 
 def test_sliding_multiple_columns():
-    features = ["mean", "total_sum"]
+    features = ["mean", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
     n_cols = 2
     window_size = 2
     stride = 1
@@ -37,12 +37,12 @@ def test_sliding_multiple_columns():
     assert len(result1) == 4
 
     # Col1: 2 windows
-    assert np.allclose(result1.iloc[0], [1.5, 3.0])
-    assert np.allclose(result1.iloc[1], [2.5, 5.0])
+    assert np.allclose(result1.iloc[0].iloc[:2], [1.5, 3.0])
+    assert np.allclose(result1.iloc[1].iloc[:2], [2.5, 5.0])
 
     # Col2: 2 windows
-    assert np.allclose(result1.iloc[2], [15.0, 30.0])
-    assert np.allclose(result1.iloc[3], [25.0, 50.0])
+    assert np.allclose(result1.iloc[2].iloc[:2], [15.0, 30.0])
+    assert np.allclose(result1.iloc[3].iloc[:2], [25.0, 50.0])
 
 def test_basic_features():
     features = [
