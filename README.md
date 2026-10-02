@@ -20,6 +20,16 @@ TSFast demonstrates a **>100x speedup** over TSFEL and a **>6000x speedup** over
 | TSFEL | 0.9002s | 60+ | Domain-specific (Health/Acoustic) |
 | tsfresh | 56.0196s | 777+ | Exhaustive Feature Mining |
 
+### Historical Trends
+
+| Benchmark | OPS | Trend |
+|-----------|-----|-------|
+| Static_Extraction_OPS | 263.16 | 🔴 (-13.16%) |
+| Expanding_Extraction_OPS | 20.04 | 🔴 (-12.64%) |
+| Sliding_Extraction_OPS | 31.45 | 🔴 (-2.81%) |
+
+![Benchmark Trends](.jules/benchmark_trends.png)
+
 ### Library Strengths & When to Use
 
 1. **TSFast**: Best for high-throughput production environments, real-time streaming (via `ExpandingExtractor`), and scenarios where speed is critical. It focuses on a highly optimized subset of the most predictive features.
