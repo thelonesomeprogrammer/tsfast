@@ -201,93 +201,12 @@ impl ColumnState {
     }
 }
 
-use crate::types::{FastBitArray, Feature};
+use crate::types::{Compute, Feature};
 
-pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
-    let mut bits = FastBitArray::ZERO;
-    for feat in features {
-        match feat {
-            Feature::TotalSum => bits.set_batch([0]),
-            Feature::Mean => bits.set_batch([0, 1]),
-            Feature::Variance => bits.set_batch([0, 1, 2, 12, 37]),
-            Feature::Std => bits.set_batch([0, 1, 2, 3, 12, 37]),
-            Feature::Min => bits.set_batch([4]),
-            Feature::Max => bits.set_batch([5]),
-            Feature::Median => bits.set_batch([6, 37]),
-            Feature::Skew => bits.set_batch([0, 1, 2, 7, 12, 37]),
-            Feature::UnbiasedFisherKurtosis => bits.set_batch([0, 1, 2, 8, 12, 37]),
-            Feature::BiasedFisherKurtosis => bits.set_batch([0, 1, 2, 8, 12, 37]),
-            Feature::Mad => bits.set_batch([0, 1, 9, 37]),
-            Feature::Iqr => bits.set_batch([4, 5, 6, 10, 37]),
-            Feature::Entropy => bits.set_batch([4, 5, 6, 10, 11, 37]),
-            Feature::Energy => bits.set_batch([12]),
-            Feature::Rms => bits.set_batch([12, 13]),
-            Feature::RootMeanSquare => bits.set_batch([12, 14]),
-            Feature::ZeroCrossingRate => bits.set_batch([15]),
-            Feature::PeakCount => bits.set_batch([16]),
-            Feature::AutocorrLag1 => bits.set_batch([0, 1, 12, 17]),
-            Feature::AutocorrFirst1e => bits.set_batch([0, 1, 12, 43, 37]),
-            Feature::MeanAbsChange => bits.set_batch([0, 1, 18]),
-            Feature::MeanChange => bits.set_batch([0, 1, 19]),
-            Feature::CidCe => bits.set_batch([0, 1, 20]),
-            Feature::Slope => bits.set_batch([0, 1, 21]),
-            Feature::Intercept => bits.set_batch([0, 1, 21, 22]),
-            Feature::Paa(_, _) => bits.set_batch([23]),
-            Feature::AbsSumChange => bits.set_batch([24]),
-            Feature::CountAboveMean => bits.set_batch([0, 1, 25, 37]),
-            Feature::CountBelowMean => bits.set_batch([0, 1, 26, 37]),
-            Feature::LongestStrikeAboveMean => bits.set_batch([0, 1, 27, 37]),
-            Feature::LongestStrikeBelowMean => bits.set_batch([0, 1, 28, 37]),
-            Feature::VariationCoefficient => bits.set_batch([0, 1, 2, 3, 12, 29, 37]),
-            Feature::C3(_) => bits.set_batch([30]),
-            Feature::Auc => bits.set_batch([31]),
-            Feature::SlopeSignChange => bits.set_batch([16, 32]),
-            Feature::TurningPoints => bits.set_batch([16, 33]),
-            Feature::ZeroCrossingMean => bits.set_batch([0, 1, 15, 34, 36, 37]),
-            Feature::ZeroCrossingStd => bits.set_batch([0, 1, 15, 34, 35, 36, 37]),
-            Feature::AbsMax => bits.set_batch([38]),
-            Feature::FirstLocMax => bits.set_batch([5, 37, 39]),
-            Feature::LastLocMax => bits.set_batch([5, 37, 40]),
-            Feature::FirstLocMin => bits.set_batch([4, 37, 41]),
-            Feature::LastLocMin => bits.set_batch([4, 37, 42]),
-            Feature::Autocorr(lag) => {
-                if *lag == 1 {
-                    bits.set_batch([0, 1, 12, 17, 37]);
-                } else {
-                    bits.set_batch([0, 1, 2, 12, 43, 37]);
-                }
-            }
-            Feature::PartialAutocorr(_) => bits.set_batch([0, 1, 2, 12, 44, 37]),
-            Feature::TimeReversalAsymmetry(_) => bits.set_batch([45, 37]),
-            Feature::FftCoefficient(_, _) => bits.set_batch([46, 37]),
-            Feature::ApproxEntropy(_, _) => bits.set_batch([47, 37]),
-            Feature::AggLinearTrend(_, _, _) => bits.set_batch([48, 37]),
-            Feature::Quantile(_) => bits.set_batch([49, 37]),
-            Feature::IndexMassQuantile(_) => bits.set_batch([61, 50, 37]),
-            Feature::BenfordCorrelation => bits.set_batch([51, 37]),
-            Feature::MaxLangevinFixedPoint(_, _) => bits.set_batch([52, 37]),
-            Feature::SumOfReoccurringValues => bits.set_batch([53, 37]),
-            Feature::SumOfReoccurringDataPoints => bits.set_batch([62, 37]),
-            Feature::Length => bits.set_batch([65, 37]),
-            Feature::VarianceLargerThanStandardDeviation => bits.set_batch([0, 1, 2, 12, 37, 66]),
-            Feature::MeanNAbsoluteMax(_) => bits.set_batch([63, 37]),
-            Feature::HumanRangeEnergy(_) => bits.set_batch([64, 37]),
-            Feature::SpectralCentroid => bits.set_batch([54, 37]),
-            Feature::SpectralDistance => bits.set_batch([55, 37]),
-            Feature::SpectralDecrease => bits.set_batch([56, 37]),
-            Feature::SpectralSlope => bits.set_batch([57, 37]),
-            Feature::SignalDistance => bits.set_batch([58, 37]),
-            Feature::WaveletFeatures(_, _) => bits.set_batch([59, 37]),
-            Feature::SpectrogramCoefficients(_, _) => bits.set_batch([60, 37]),
-            Feature::MeanSecondDerivativeCentral => bits.set_batch([65, 37]),
-            Feature::LargeStandardDeviation(_) => bits.set_batch([0, 1, 2, 4, 5, 12, 37]),
-            Feature::SymmetryLooking(_) => bits.set_batch([0, 1, 4, 5, 6, 37]),
-            Feature::HasDuplicateMax => bits.set_batch([5, 68, 37]),
-            Feature::HasDuplicateMin => bits.set_batch([4, 69, 37]),
-            Feature::HasDuplicate => bits.set_batch([67, 37]),
-        }
-    }
-    bits
+pub(crate) fn map_features_to_indices(features: &[Feature]) -> Compute {
+    features
+        .iter()
+        .fold(Compute::empty(), |acc, f| acc | f.required_compute())
 }
 
 pub fn approx_entropy_phi(m: usize, r: f32, data: &[f32], sorted_idx: &mut Vec<usize>) -> f32 {

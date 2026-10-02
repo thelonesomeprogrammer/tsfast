@@ -1,4 +1,4 @@
-use crate::types::FastBitArray;
+use crate::types::Compute;
 use crate::types::Feature;
 use arrow::array::{ArrayRef, Float32Array, RecordBatch};
 use arrow::datatypes::DataType;
@@ -19,7 +19,7 @@ use extractor::StaticEngine;
 #[derive(Clone)]
 pub struct Extractor {
     pub features: Vec<Feature>,
-    pub compute: FastBitArray,
+    pub compute: Compute,
     pub paa_args: Vec<(u16, u16)>,
     pub c3_args: Vec<u16>,
     pub unique_paa_totals: Vec<u16>,
@@ -58,7 +58,7 @@ impl Extractor {
         let planner_arc = Arc::new(Mutex::new(planner));
 
         if let Some(size) = planned_size {
-            if compute.any_fft() {
+            if compute.intersects(Compute::ANY_FFT) {
                 let mut p = planner_arc.lock().unwrap_or_else(|e| e.into_inner());
                 p.plan_fft_forward(size);
             }
@@ -104,7 +104,7 @@ impl Extractor {
             n_rows
         };
 
-        let r2c = if compute.any_fft() && fft_size > 0 {
+        let r2c = if compute.intersects(Compute::ANY_FFT) && fft_size > 0 {
             let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
             Some(p.plan_fft_forward(fft_size))
         } else {

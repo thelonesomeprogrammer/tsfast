@@ -1,5 +1,5 @@
 use crate::common::{ColumnState, map_features_to_indices, next_good_fft_size};
-use crate::types::{FastBitArray, Feature};
+use crate::types::{Compute, Feature};
 use arrow::array::{ArrayRef, Float32Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::pyarrow::PyArrowType;
@@ -15,7 +15,7 @@ use engine::ExpandingEngine;
 #[derive(Clone)]
 pub struct ExpandingExtractor {
     pub features: Vec<Feature>,
-    pub compute: FastBitArray,
+    pub compute: Compute,
     pub unique_paa_totals: Vec<u16>,
     pub unique_c3_lags: Vec<u16>,
     pub unique_autocorr_lags: Vec<u16>,
@@ -77,7 +77,7 @@ impl ExpandingExtractor {
         let planner_arc = Arc::new(Mutex::new(planner));
 
         if let Some(size) = planned_size {
-            if compute.any_fft() {
+            if compute.intersects(Compute::ANY_FFT) {
                 let mut p = planner_arc.lock().unwrap_or_else(|e| e.into_inner());
                 p.plan_fft_forward(size);
             }
@@ -154,7 +154,7 @@ impl ExpandingExtractor {
             total_n
         };
 
-        let r2c = if self.compute.any_fft() && fft_size > 0 {
+        let r2c = if self.compute.intersects(Compute::ANY_FFT) && fft_size > 0 {
             let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
             Some(p.plan_fft_forward(fft_size))
         } else {

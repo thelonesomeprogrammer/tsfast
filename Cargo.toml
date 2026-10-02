@@ -17,6 +17,7 @@ arrow = { version = "58.1.0", features = ["pyarrow"] }
 smallvec = "1.10"
 realfft = "3.5.0"
 rustc-hash = "2.1.3"
+bitflags = "2"
 
 [features]
 extension-module = ["pyo3/extension-module"]

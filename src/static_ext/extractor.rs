@@ -1,5 +1,5 @@
 use crate::common::{ColumnState, LANES};
-use crate::types::{FastBitArray, Feature};
+use crate::types::{Compute, Feature};
 use realfft::{RealFftPlanner, RealToComplex};
 use rustc_hash::FxHashMap;
 use std::simd::cmp::SimdPartialOrd;
@@ -8,7 +8,7 @@ use std::simd::num::SimdFloat;
 use std::sync::Arc;
 
 pub(crate) struct StaticEngine<'a> {
-    pub(crate) compute: FastBitArray,
+    pub(crate) compute: Compute,
     pub(crate) features: &'a [Feature],
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
@@ -48,58 +48,58 @@ impl<'a> StaticEngine<'a> {
             let global_idx = chunk_idx * LANES;
             let offset = global_idx as f32;
 
-            if self.compute[0] {
+            if self.compute.contains(Compute::SUM) {
                 state.total_sum += chunk.reduce_sum();
             }
-            if self.compute[4] {
+            if self.compute.contains(Compute::MIN) {
                 state.min_value = state.min_value.min(chunk.reduce_min());
             }
-            if self.compute[5] {
+            if self.compute.contains(Compute::MAX) {
                 state.max_value = state.max_value.max(chunk.reduce_max());
             }
-            if self.compute[12] {
+            if self.compute.contains(Compute::ENERGY) {
                 let sq = chunk * chunk;
                 state.energy += sq.reduce_sum();
-                if self.compute[7] {
+                if self.compute.contains(Compute::SKEW) {
                     state.sum_cubes += (sq * chunk).reduce_sum();
                 }
-                if self.compute[8] {
+                if self.compute.contains(Compute::KURTOSIS) {
                     state.sum_quads += (sq * sq).reduce_sum();
                 }
             }
 
-            if self.compute[38] {
+            if self.compute.contains(Compute::ABS_MAX) {
                 state.abs_max = state.abs_max.max(chunk.abs().reduce_max());
             }
 
-            if self.compute[61] {
+            if self.compute.contains(Compute::ABS_SUM) {
                 state.abs_sum += chunk.abs().reduce_sum();
             }
 
-            if self.compute.any([15, 17, 18, 19, 20, 31]) {
+            if self.compute.intersects(Compute::ZERO_CROSS | Compute::AUTOCORR_LAG1 | Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUC) {
                 let shifted = f32x4::from_array([state.prev_last, i[0], i[1], i[2]]);
                 let diff = chunk - shifted;
-                if self.compute[18] {
+                if self.compute.contains(Compute::MAC) {
                     state.mac_sum_vec += diff.abs();
                 }
-                if self.compute[19] {
+                if self.compute.contains(Compute::MC) {
                     state.mc_sum_vec += diff;
                 }
-                if self.compute[20] {
+                if self.compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff += (diff * diff).reduce_sum();
                 }
-                if self.compute[17] {
+                if self.compute.contains(Compute::AUTOCORR_LAG1) {
                     state.sum_prod += (chunk * shifted).reduce_sum();
                 }
-                if self.compute[31] {
+                if self.compute.contains(Compute::AUC) {
                     state.auc_sum += (chunk + shifted).reduce_sum() * 0.5;
                 }
-                if self.compute[15] {
+                if self.compute.contains(Compute::ZERO_CROSS) {
                     let signs = chunk.simd_lt(f32x4::splat(0.0));
                     let prev_signs = shifted.simd_lt(f32x4::splat(0.0));
                     let mask = (signs ^ prev_signs).to_bitmask();
                     state.zcr_count += mask.count_ones();
-                    if self.compute[36] {
+                    if self.compute.contains(Compute::ZC_INDICES) {
                         for bit in 0..4 {
                             if (mask >> bit) & 1 == 1 {
                                 state.zc_indices.push(offset + bit as f32);
@@ -110,7 +110,7 @@ impl<'a> StaticEngine<'a> {
                 state.prev_last = i[LANES - 1];
             }
 
-            if self.compute[16] {
+            if self.compute.contains(Compute::PEAKS) {
                 let left = f32x4::from_array([
                     if global_idx > 0 {
                         values[global_idx - 1]
@@ -135,12 +135,12 @@ impl<'a> StaticEngine<'a> {
                 state.peaks += mask.to_bitmask().count_ones();
             }
 
-            if self.compute[21] {
+            if self.compute.contains(Compute::SLOPE) {
                 let indices = f32x4::from_array([offset, offset + 1.0, offset + 2.0, offset + 3.0]);
                 state.sum_ix += (indices * chunk).reduce_sum();
             }
 
-            if self.compute[23] {
+            if self.compute.contains(Compute::PAA) {
                 for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
                     let b = &self.paa_boundaries[t_idx];
                     let seg_idx = &mut state.current_paa_segs[t_idx];
@@ -160,7 +160,7 @@ impl<'a> StaticEngine<'a> {
                 }
             }
 
-            if self.compute[30] {
+            if self.compute.contains(Compute::C3) {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
                     if global_idx >= 2 * l {
@@ -188,56 +188,56 @@ impl<'a> StaticEngine<'a> {
     fn process_remainder(&self, values: &[f32], rem_start: usize, state: &mut ColumnState) {
         for i in rem_start..values.len() {
             let val = values[i];
-            if self.compute[0] {
+            if self.compute.contains(Compute::SUM) {
                 state.total_sum += val;
             }
-            if self.compute[4] {
+            if self.compute.contains(Compute::MIN) {
                 state.min_value = state.min_value.min(val);
             }
-            if self.compute[5] {
+            if self.compute.contains(Compute::MAX) {
                 state.max_value = state.max_value.max(val);
             }
-            if self.compute[38] {
+            if self.compute.contains(Compute::ABS_MAX) {
                 state.abs_max = state.abs_max.max(val.abs());
             }
-            if self.compute[61] {
+            if self.compute.contains(Compute::ABS_SUM) {
                 state.abs_sum += val.abs();
             }
-            if self.compute[12] {
+            if self.compute.contains(Compute::ENERGY) {
                 let sq = val * val;
                 state.energy += sq;
-                if self.compute[7] {
+                if self.compute.contains(Compute::SKEW) {
                     state.sum_cubes += sq * val;
                 }
-                if self.compute[8] {
+                if self.compute.contains(Compute::KURTOSIS) {
                     state.sum_quads += sq * sq;
                 }
             }
             if i > 0 {
                 let diff = val - values[i - 1];
-                if self.compute[18] {
+                if self.compute.contains(Compute::MAC) {
                     state.mac_sum_vec += f32x4::from_array([diff.abs(), 0.0, 0.0, 0.0]);
                 }
-                if self.compute[19] {
+                if self.compute.contains(Compute::MC) {
                     state.mc_sum_vec += f32x4::from_array([diff, 0.0, 0.0, 0.0]);
                 }
-                if self.compute[20] {
+                if self.compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff += diff * diff;
                 }
-                if self.compute[17] {
+                if self.compute.contains(Compute::AUTOCORR_LAG1) {
                     state.sum_prod += val * values[i - 1];
                 }
-                if self.compute[31] {
+                if self.compute.contains(Compute::AUC) {
                     state.auc_sum += (val + values[i - 1]) * 0.5;
                 }
-                if self.compute[15] && (val < 0.0) != (values[i - 1] < 0.0) {
+                if self.compute.contains(Compute::ZERO_CROSS) && (val < 0.0) != (values[i - 1] < 0.0) {
                     state.zcr_count += 1;
-                    if self.compute[36] {
+                    if self.compute.contains(Compute::ZC_INDICES) {
                         state.zc_indices.push(i as f32);
                     }
                 }
             }
-            if self.compute[16]
+            if self.compute.contains(Compute::PEAKS)
                 && i > 0
                 && i < values.len() - 1
                 && val > values[i - 1]
@@ -245,10 +245,10 @@ impl<'a> StaticEngine<'a> {
             {
                 state.peaks += 1;
             }
-            if self.compute[21] {
+            if self.compute.contains(Compute::SLOPE) {
                 state.sum_ix += (i as f32) * val;
             }
-            if self.compute[23] {
+            if self.compute.contains(Compute::PAA) {
                 for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
                     let b = &self.paa_boundaries[t_idx];
                     let seg_idx = &mut state.current_paa_segs[t_idx];
@@ -258,7 +258,7 @@ impl<'a> StaticEngine<'a> {
                     state.paa_sums[t_idx][*seg_idx] += val;
                 }
             }
-            if self.compute[30] {
+            if self.compute.contains(Compute::C3) {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
                     if i >= 2 * l {
@@ -299,14 +299,14 @@ impl<'a> StaticEngine<'a> {
         let mut last_min_idx = 0;
 
         let mut sorted_copy: Option<Vec<f32>> = None;
-        if self.compute.any([6, 10, 11, 49]) {
+        if self.compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::ENTROPY | Compute::QUANTILE) {
             // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
             let mut copy = std::mem::take(&mut state.sort_buffer);
             copy.clear();
             copy.extend_from_slice(values);
             copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
-            if self.compute[6] {
+            if self.compute.contains(Compute::MEDIAN) {
                 let n_len = copy.len();
                 if n_len > 0 {
                     if n_len % 2 == 1 {
@@ -316,7 +316,7 @@ impl<'a> StaticEngine<'a> {
                     }
                 }
             }
-            if self.compute[10] {
+            if self.compute.contains(Compute::IQR) {
                 let n_f = n as f32;
                 let get_q = |q: f32, data: &[f32]| -> f32 {
                     if data.is_empty() {
@@ -333,7 +333,7 @@ impl<'a> StaticEngine<'a> {
                 };
                 iqr = get_q(0.75, &copy) - get_q(0.25, &copy);
             }
-            if self.compute[11] {
+            if self.compute.contains(Compute::ENTROPY) {
                 let range = state.max_value - state.min_value;
                 if range > 1e-9 {
                     let bins = 10;
@@ -354,7 +354,7 @@ impl<'a> StaticEngine<'a> {
         }
 
         let mut benford_corr = 0.0;
-        if self.compute[51] {
+        if self.compute.contains(Compute::BENFORD) {
             let mut counts = [0.0; 9];
             for &v in values {
                 let abs_v = v.abs();
@@ -392,7 +392,7 @@ impl<'a> StaticEngine<'a> {
         let mut spectral_decrease = 0.0;
         let mut spectral_slope = 0.0;
 
-        if self.compute.any_fft() {
+        if self.compute.intersects(Compute::ANY_FFT) {
             let mut indata = std::mem::take(&mut state.fft_in_buffer);
             let mut outdata = std::mem::take(&mut state.fft_out_buffer);
 
@@ -411,7 +411,7 @@ impl<'a> StaticEngine<'a> {
                 r2c.process(&mut indata, &mut outdata[..out_len]).unwrap();
                 let s = outdata[..out_len].iter().map(|c| c.norm()).collect();
                 (outdata[..out_len].to_vec(), s)
-            } else if self.compute.any([54, 55, 56, 57, 60]) {
+            } else if self.compute.intersects(Compute::SPEC_CENTROID | Compute::SPEC_DISTANCE | Compute::SPEC_DECREASE | Compute::SPEC_SLOPE | Compute::SPECTROGRAM) {
                 let mut planner = RealFftPlanner::<f32>::new();
                 let r2c = planner.plan_fft_forward(values.len());
 
@@ -480,14 +480,14 @@ impl<'a> StaticEngine<'a> {
         }
 
         let mut signal_dist = 0.0;
-        if self.compute[58] {
+        if self.compute.contains(Compute::SIG_DISTANCE) {
             for i in 1..values.len() {
                 signal_dist += ((values[i] - values[i - 1]).powi(2) + 1.0).sqrt();
             }
         }
 
         let mut fft_autocorr = Vec::new();
-        if self.compute.any([43, 44]) && n > 1.0 {
+        if self.compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) && n > 1.0 {
             let n2 = values.len() * 2;
             let fft_size_ac = crate::common::next_good_fft_size(n2);
             let mut planner = realfft::RealFftPlanner::<f32>::new();
@@ -519,8 +519,8 @@ impl<'a> StaticEngine<'a> {
             }
         }
 
-        if self.compute[37] {
-            if self.compute.any([39, 40, 41, 42]) {
+        if self.compute.contains(Compute::NEEDS_SORT) {
+            if self.compute.intersects(Compute::FIRST_LOC_MAX | Compute::LAST_LOC_MAX | Compute::FIRST_LOC_MIN | Compute::LAST_LOC_MIN) {
                 let mut found_max = false;
                 let mut found_min = false;
                 for (i, &v) in values.iter().enumerate() {
@@ -541,13 +541,13 @@ impl<'a> StaticEngine<'a> {
                 }
             }
 
-            if self.compute.any([9, 25, 26, 27, 28]) {
+            if self.compute.intersects(Compute::MAD | Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
                 let mean_vec = f32x4::splat(mean);
                 let mut mad_sum_vec = f32x4::splat(0.0);
 
                 for chunk in values.chunks_exact(LANES) {
                     let c = f32x4::from_slice(chunk);
-                    if self.compute[9] {
+                    if self.compute.contains(Compute::MAD) {
                         mad_sum_vec += (c - mean_vec).abs();
                     }
                 }
@@ -555,12 +555,12 @@ impl<'a> StaticEngine<'a> {
 
                 let rem_start = (values.len() / LANES) * LANES;
                 for &val in &values[rem_start..] {
-                    if self.compute[9] {
+                    if self.compute.contains(Compute::MAD) {
                         mad_sum += (val - mean).abs();
                     }
                 }
 
-                if self.compute.any([25, 26, 27, 28]) {
+                if self.compute.intersects(Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
                     for &val in values {
                         if val > mean {
                             count_a += 1;
@@ -580,9 +580,9 @@ impl<'a> StaticEngine<'a> {
                 }
             }
 
-            if self.compute[34] && !state.zc_indices.is_empty() {
+            if self.compute.contains(Compute::ZC_STATS) && !state.zc_indices.is_empty() {
                 zc_mean = state.zc_indices.iter().sum::<f32>() / state.zc_indices.len() as f32;
-                if self.compute[35] {
+                if self.compute.contains(Compute::ZC_STD) {
                     let zc_m2 = state
                         .zc_indices
                         .iter()

@@ -1,12 +1,12 @@
 use crate::common::{ColumnState, LANES, SlidingDFT};
-use crate::types::{FastBitArray, Feature};
+use crate::types::{Compute, Feature};
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
 use std::sync::Arc;
 
 pub(crate) struct SlidingEngine<'a> {
-    pub(crate) compute: FastBitArray,
+    pub(crate) compute: Compute,
     pub(crate) features: &'a [Feature],
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
@@ -36,7 +36,7 @@ impl<'a> SlidingEngine<'a> {
         // 1. Moments (TotalSum, Energy, Cubes, Quads)
         if self
             .compute
-            .any([0, 1, 2, 3, 7, 8, 9, 12, 13, 14, 25, 26, 27, 28, 29, 43, 44])
+            .intersects(Compute::SUM | Compute::MEAN | Compute::VARIANCE | Compute::STD | Compute::SKEW | Compute::KURTOSIS | Compute::MAD | Compute::ENERGY | Compute::RMS | Compute::ROOT_MEAN_SQ | Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW | Compute::VAR_COEFF | Compute::FULL_AUTOCORR | Compute::PACF)
         {
             let mut sum_old = 0.0;
             let mut energy_old = 0.0;
@@ -46,10 +46,10 @@ impl<'a> SlidingEngine<'a> {
                 let sq = v * v;
                 sum_old += v;
                 energy_old += sq;
-                if self.compute[7] {
+                if self.compute.contains(Compute::SKEW) {
                     cubes_old += sq * v;
                 }
-                if self.compute[8] {
+                if self.compute.contains(Compute::KURTOSIS) {
                     quads_old += sq * sq;
                 }
             }
@@ -62,46 +62,46 @@ impl<'a> SlidingEngine<'a> {
                 let sq = v * v;
                 sum_new += v;
                 energy_new += sq;
-                if self.compute[7] {
+                if self.compute.contains(Compute::SKEW) {
                     cubes_new += sq * v;
                 }
-                if self.compute[8] {
+                if self.compute.contains(Compute::KURTOSIS) {
                     quads_new += sq * sq;
                 }
             }
 
             state.total_sum += sum_new - sum_old;
             state.energy += energy_new - energy_old;
-            if self.compute[7] {
+            if self.compute.contains(Compute::SKEW) {
                 state.sum_cubes += cubes_new - cubes_old;
             }
-            if self.compute[8] {
+            if self.compute.contains(Compute::KURTOSIS) {
                 state.sum_quads += quads_new - quads_old;
             }
         }
 
         // 2. Diffs (MAC, MC, sum_sq_diff, sum_prod, AUC, ZCR)
-        if self.compute.any([18, 19, 20, 17, 31, 15]) {
+        if self.compute.intersects(Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUTOCORR_LAG1 | Compute::AUC | Compute::ZERO_CROSS) {
             // Remove effect of diffs starting within or at boundary of old_slice
             // Boundary diff: (old_slice[0], value_before_old)
             if let Some(prev) = value_before_old {
                 let diff = old_slice[0] - prev;
-                if self.compute[18] {
+                if self.compute.contains(Compute::MAC) {
                     state.mac_sum -= diff.abs();
                 }
-                if self.compute[19] {
+                if self.compute.contains(Compute::MC) {
                     state.mc_sum -= diff;
                 }
-                if self.compute[20] {
+                if self.compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff -= diff * diff;
                 }
-                if self.compute[17] {
+                if self.compute.contains(Compute::AUTOCORR_LAG1) {
                     state.sum_prod -= old_slice[0] * prev;
                 }
-                if self.compute[31] {
+                if self.compute.contains(Compute::AUC) {
                     state.auc_sum -= (old_slice[0] + prev) * 0.5;
                 }
-                if self.compute[15] && (old_slice[0] < 0.0) != (prev < 0.0) {
+                if self.compute.contains(Compute::ZERO_CROSS) && (old_slice[0] < 0.0) != (prev < 0.0) {
                     state.zcr_count -= 1;
                 }
             }
@@ -109,95 +109,95 @@ impl<'a> SlidingEngine<'a> {
             // Internal diffs in old_slice
             for i in 1..y {
                 let diff = old_slice[i] - old_slice[i - 1];
-                if self.compute[18] {
+                if self.compute.contains(Compute::MAC) {
                     state.mac_sum -= diff.abs();
                 }
-                if self.compute[19] {
+                if self.compute.contains(Compute::MC) {
                     state.mc_sum -= diff;
                 }
-                if self.compute[20] {
+                if self.compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff -= diff * diff;
                 }
-                if self.compute[17] {
+                if self.compute.contains(Compute::AUTOCORR_LAG1) {
                     state.sum_prod -= old_slice[i] * old_slice[i - 1];
                 }
-                if self.compute[31] {
+                if self.compute.contains(Compute::AUC) {
                     state.auc_sum -= (old_slice[i] + old_slice[i - 1]) * 0.5;
                 }
-                if self.compute[15] && (old_slice[i] < 0.0) != (old_slice[i - 1] < 0.0) {
+                if self.compute.contains(Compute::ZERO_CROSS) && (old_slice[i] < 0.0) != (old_slice[i - 1] < 0.0) {
                     state.zcr_count -= 1;
                 }
             }
 
             // Boundary diff between old_slice and remaining window: (value_after_old, old_slice[y-1])
             let diff_after = value_after_old - old_slice[y - 1];
-            if self.compute[18] {
+            if self.compute.contains(Compute::MAC) {
                 state.mac_sum -= diff_after.abs();
             }
-            if self.compute[19] {
+            if self.compute.contains(Compute::MC) {
                 state.mc_sum -= diff_after;
             }
-            if self.compute[20] {
+            if self.compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff -= diff_after * diff_after;
             }
-            if self.compute[17] {
+            if self.compute.contains(Compute::AUTOCORR_LAG1) {
                 state.sum_prod -= value_after_old * old_slice[y - 1];
             }
-            if self.compute[31] {
+            if self.compute.contains(Compute::AUC) {
                 state.auc_sum -= (value_after_old + old_slice[y - 1]) * 0.5;
             }
-            if self.compute[15] && (value_after_old < 0.0) != (old_slice[y - 1] < 0.0) {
+            if self.compute.contains(Compute::ZERO_CROSS) && (value_after_old < 0.0) != (old_slice[y - 1] < 0.0) {
                 state.zcr_count -= 1;
             }
 
             // Add effect of diffs in new_slice
             // Boundary diff: (new_slice[0], value_before_new)
             let diff_new_start = new_slice[0] - value_before_new;
-            if self.compute[18] {
+            if self.compute.contains(Compute::MAC) {
                 state.mac_sum += diff_new_start.abs();
             }
-            if self.compute[19] {
+            if self.compute.contains(Compute::MC) {
                 state.mc_sum += diff_new_start;
             }
-            if self.compute[20] {
+            if self.compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff += diff_new_start * diff_new_start;
             }
-            if self.compute[17] {
+            if self.compute.contains(Compute::AUTOCORR_LAG1) {
                 state.sum_prod += new_slice[0] * value_before_new;
             }
-            if self.compute[31] {
+            if self.compute.contains(Compute::AUC) {
                 state.auc_sum += (new_slice[0] + value_before_new) * 0.5;
             }
-            if self.compute[15] && (new_slice[0] < 0.0) != (value_before_new < 0.0) {
+            if self.compute.contains(Compute::ZERO_CROSS) && (new_slice[0] < 0.0) != (value_before_new < 0.0) {
                 state.zcr_count += 1;
             }
 
             // Internal diffs in new_slice
             for i in 1..y {
                 let diff = new_slice[i] - new_slice[i - 1];
-                if self.compute[18] {
+                if self.compute.contains(Compute::MAC) {
                     state.mac_sum += diff.abs();
                 }
-                if self.compute[19] {
+                if self.compute.contains(Compute::MC) {
                     state.mc_sum += diff;
                 }
-                if self.compute[20] {
+                if self.compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff += diff * diff;
                 }
-                if self.compute[17] {
+                if self.compute.contains(Compute::AUTOCORR_LAG1) {
                     state.sum_prod += new_slice[i] * new_slice[i - 1];
                 }
-                if self.compute[31] {
+                if self.compute.contains(Compute::AUC) {
                     state.auc_sum += (new_slice[i] + new_slice[i - 1]) * 0.5;
                 }
-                if self.compute[15] && (new_slice[i] < 0.0) != (new_slice[i - 1] < 0.0) {
+                if self.compute.contains(Compute::ZERO_CROSS) && (new_slice[i] < 0.0) != (new_slice[i - 1] < 0.0) {
                     state.zcr_count += 1;
                 }
             }
         }
 
         // 3. sum_ix
-        if self.compute[21] {
+        if self.compute.contains(Compute::SLOPE) {
             // New sum = sum_{i=y}^{W-1} (i-y)x_i + sum_{j=0}^{y-1} (W-y+j)new_j
             // = (sum_{i=y}^{W-1} i*x_i - y*sum_{i=y}^{W-1} x_i) + sum_{j=0}^{y-1} (W-y+j)new_j
             // sum_{i=y}^{W-1} i*x_i = old_sum_ix - sum_{i=0}^{y-1} i*x_i
@@ -225,7 +225,7 @@ impl<'a> SlidingEngine<'a> {
         }
 
         // 4. Min/Max Queue
-        if self.compute.any([4, 5, 10, 11]) {
+        if self.compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
             for (i, &val) in new_slice.iter().enumerate() {
                 let idx = global_start_idx + i;
 
@@ -305,64 +305,64 @@ impl<'a> SlidingEngine<'a> {
         // Moments
         if self
             .compute
-            .any([0, 1, 2, 3, 7, 8, 9, 12, 13, 14, 25, 26, 27, 28, 29, 43, 44])
+            .intersects(Compute::SUM | Compute::MEAN | Compute::VARIANCE | Compute::STD | Compute::SKEW | Compute::KURTOSIS | Compute::MAD | Compute::ENERGY | Compute::RMS | Compute::ROOT_MEAN_SQ | Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW | Compute::VAR_COEFF | Compute::FULL_AUTOCORR | Compute::PACF)
         {
             state.total_sum += new_f64 - old_f64;
             let old_sq = old_f64 * old_f64;
             let new_sq = new_f64 * new_f64;
             state.energy += new_sq - old_sq;
-            if self.compute[7] {
+            if self.compute.contains(Compute::SKEW) {
                 state.sum_cubes += new_sq * new_f64 - old_sq * old_f64;
             }
-            if self.compute[8] {
+            if self.compute.contains(Compute::KURTOSIS) {
                 state.sum_quads += new_sq * new_sq - old_sq * old_sq;
             }
         }
 
         // Mean Abs Change, Mean Change, CidCe, AutocorrLag1, AUC
-        if self.compute.any([18, 19, 20, 17, 31]) {
+        if self.compute.intersects(Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUTOCORR_LAG1 | Compute::AUC) {
             // Remove effect of (old_val, old_val_next)
             let old_diff = old_next_f64 - old_f64;
-            if self.compute[18] {
+            if self.compute.contains(Compute::MAC) {
                 state.mac_sum -= old_diff.abs();
             }
-            if self.compute[19] {
+            if self.compute.contains(Compute::MC) {
                 state.mc_sum -= old_diff;
             }
-            if self.compute[20] {
+            if self.compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff -= old_diff * old_diff;
             }
-            if self.compute[17] {
+            if self.compute.contains(Compute::AUTOCORR_LAG1) {
                 state.sum_prod -= old_next_f64 * old_f64;
                 // But wait, sum_prod is sum(x_i * x_{i+1}).
                 // When sliding, we remove x_0*x_1 AND add x_{n-1}*x_n.
                 // The current logic only removes x_0*x_1. Correct.
             }
-            if self.compute[31] {
+            if self.compute.contains(Compute::AUC) {
                 state.auc_sum -= (old_f64 + old_next_f64) * 0.5;
             }
 
             // Add effect of (old_last, new_val)
             let new_diff = new_f64 - old_last_f64;
-            if self.compute[18] {
+            if self.compute.contains(Compute::MAC) {
                 state.mac_sum += new_diff.abs();
             }
-            if self.compute[19] {
+            if self.compute.contains(Compute::MC) {
                 state.mc_sum += new_diff;
             }
-            if self.compute[20] {
+            if self.compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff += new_diff * new_diff;
             }
-            if self.compute[17] {
+            if self.compute.contains(Compute::AUTOCORR_LAG1) {
                 state.sum_prod += new_f64 * old_last_f64;
             }
-            if self.compute[31] {
+            if self.compute.contains(Compute::AUC) {
                 state.auc_sum += (new_f64 + old_last_f64) * 0.5;
             }
         }
 
         // Slope Sum (sum_ix)
-        if self.compute[21] {
+        if self.compute.contains(Compute::SLOPE) {
             // Relative indices: 0..W-1
             // sum(i * x_i) for i in 1..W-1 moves to i-1
             // New sum = sum_{i=1}^{W-1} (i-1)x_i + (W-1)x_new
@@ -374,7 +374,7 @@ impl<'a> SlidingEngine<'a> {
         }
 
         // Zero Crossing Rate
-        if self.compute[15] {
+        if self.compute.contains(Compute::ZERO_CROSS) {
             if (old_val < 0.0) != (old_val_next < 0.0) {
                 state.zcr_count -= 1;
             }
@@ -384,7 +384,7 @@ impl<'a> SlidingEngine<'a> {
         }
 
         // Min Max Queue (Circular Vec implementation)
-        if self.compute.any([4, 5, 10, 11]) {
+        if self.compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
             if state.min_queue.is_empty() {
                 state.min_queue = vec![(0, 0.0); window_size];
                 state.max_queue = vec![(0, 0.0); window_size];
@@ -529,27 +529,27 @@ impl<'a> SlidingEngine<'a> {
             let offset = global_idx as f32;
 
             if !is_incremental {
-                if self.compute[0] {
+                if self.compute.contains(Compute::SUM) {
                     state.total_sum += chunk.reduce_sum();
                 }
-                if self.compute[4] {
+                if self.compute.contains(Compute::MIN) {
                     state.min_value = state.min_value.min(chunk.reduce_min());
                 }
-                if self.compute[5] {
+                if self.compute.contains(Compute::MAX) {
                     state.max_value = state.max_value.max(chunk.reduce_max());
                 }
-                if self.compute[12] {
+                if self.compute.contains(Compute::ENERGY) {
                     let sq = chunk * chunk;
                     state.energy += sq.reduce_sum();
-                    if self.compute[7] {
+                    if self.compute.contains(Compute::SKEW) {
                         state.sum_cubes += (sq * chunk).reduce_sum();
                     }
-                    if self.compute[8] {
+                    if self.compute.contains(Compute::KURTOSIS) {
                         state.sum_quads += (sq * sq).reduce_sum();
                     }
                 }
 
-                if self.compute.any([4, 5, 10, 11]) {
+                if self.compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
                     let window_size = values.len();
                     if state.min_queue.is_empty() {
                         state.min_queue = vec![(0, 0.0); window_size];
@@ -596,30 +596,30 @@ impl<'a> SlidingEngine<'a> {
                 }
             }
 
-            if self.compute[38] {
+            if self.compute.contains(Compute::ABS_MAX) {
                 state.abs_max = state.abs_max.max(chunk.abs().reduce_max());
             }
 
-            if self.compute.any([15, 17, 18, 19, 20, 31]) {
+            if self.compute.intersects(Compute::ZERO_CROSS | Compute::AUTOCORR_LAG1 | Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUC) {
                 let shifted = f32x4::from_array([state.prev_last, i[0], i[1], i[2]]);
                 let diff = chunk - shifted;
                 if !is_incremental {
-                    if self.compute[18] {
+                    if self.compute.contains(Compute::MAC) {
                         state.mac_sum += diff.abs().reduce_sum();
                     }
-                    if self.compute[19] {
+                    if self.compute.contains(Compute::MC) {
                         state.mc_sum += diff.reduce_sum();
                     }
-                    if self.compute[20] {
+                    if self.compute.contains(Compute::CID_CE) {
                         state.sum_sq_diff += (diff * diff).reduce_sum();
                     }
-                    if self.compute[17] {
+                    if self.compute.contains(Compute::AUTOCORR_LAG1) {
                         state.sum_prod += (chunk * shifted).reduce_sum();
                     }
-                    if self.compute[31] {
+                    if self.compute.contains(Compute::AUC) {
                         state.auc_sum += (chunk + shifted).reduce_sum() * 0.5;
                     }
-                    if self.compute[15] {
+                    if self.compute.contains(Compute::ZERO_CROSS) {
                         let signs = chunk.simd_lt(f32x4::splat(0.0));
                         let prev_signs = shifted.simd_lt(f32x4::splat(0.0));
                         let mask = (signs ^ prev_signs).to_bitmask();
@@ -627,7 +627,7 @@ impl<'a> SlidingEngine<'a> {
                     }
                 }
                 // These still need to be computed for non-incremental or if needed by zc_indices
-                if self.compute[36] && self.compute[15] {
+                if self.compute.contains(Compute::ZC_INDICES) && self.compute.contains(Compute::ZERO_CROSS) {
                     let signs = chunk.simd_lt(f32x4::splat(0.0));
                     let prev_signs = shifted.simd_lt(f32x4::splat(0.0));
                     let mask = (signs ^ prev_signs).to_bitmask();
@@ -640,12 +640,12 @@ impl<'a> SlidingEngine<'a> {
                 state.prev_last = i[LANES - 1];
             }
 
-            if self.compute[21] && !is_incremental {
+            if self.compute.contains(Compute::SLOPE) && !is_incremental {
                 let indices = f32x4::from_array([offset, offset + 1.0, offset + 2.0, offset + 3.0]);
                 state.sum_ix += (indices * chunk).reduce_sum();
             }
 
-            if self.compute[23] {
+            if self.compute.contains(Compute::PAA) {
                 for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
                     let b = &self.paa_boundaries[t_idx];
                     let seg_idx = &mut state.current_paa_segs[t_idx];
@@ -665,7 +665,7 @@ impl<'a> SlidingEngine<'a> {
                 }
             }
 
-            if self.compute[30] {
+            if self.compute.contains(Compute::C3) {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
                     if global_idx >= 2 * l {
@@ -698,7 +698,7 @@ impl<'a> SlidingEngine<'a> {
         is_incremental: bool,
     ) {
         let window_size = values.len();
-        if !is_incremental && self.compute.any([4, 5, 10, 11]) {
+        if !is_incremental && self.compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
             if state.min_queue.is_empty() {
                 state.min_queue = vec![(0, 0.0); window_size];
                 state.max_queue = vec![(0, 0.0); window_size];
@@ -708,27 +708,27 @@ impl<'a> SlidingEngine<'a> {
         for i in rem_start..values.len() {
             let val = values[i];
             if !is_incremental {
-                if self.compute[0] {
+                if self.compute.contains(Compute::SUM) {
                     state.total_sum += val;
                 }
-                if self.compute[4] {
+                if self.compute.contains(Compute::MIN) {
                     state.min_value = state.min_value.min(val);
                 }
-                if self.compute[5] {
+                if self.compute.contains(Compute::MAX) {
                     state.max_value = state.max_value.max(val);
                 }
-                if self.compute[12] {
+                if self.compute.contains(Compute::ENERGY) {
                     let sq = val * val;
                     state.energy += sq;
-                    if self.compute[7] {
+                    if self.compute.contains(Compute::SKEW) {
                         state.sum_cubes += sq * val;
                     }
-                    if self.compute[8] {
+                    if self.compute.contains(Compute::KURTOSIS) {
                         state.sum_quads += sq * sq;
                     }
                 }
 
-                if self.compute.any([4, 5, 10, 11]) {
+                if self.compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
                     // Fill queues for initial window
                     // Min Queue
                     while state.min_q_len > 0 {
@@ -767,40 +767,40 @@ impl<'a> SlidingEngine<'a> {
                     state.max_q_len += 1;
                 }
             }
-            if self.compute[38] {
+            if self.compute.contains(Compute::ABS_MAX) {
                 state.abs_max = state.abs_max.max(val.abs());
             }
             if i > 0 {
                 let prev = values[i - 1];
                 let diff = val - prev;
                 if !is_incremental {
-                    if self.compute[18] {
+                    if self.compute.contains(Compute::MAC) {
                         state.mac_sum += diff.abs();
                     }
-                    if self.compute[19] {
+                    if self.compute.contains(Compute::MC) {
                         state.mc_sum += diff;
                     }
-                    if self.compute[20] {
+                    if self.compute.contains(Compute::CID_CE) {
                         state.sum_sq_diff += diff * diff;
                     }
-                    if self.compute[17] {
+                    if self.compute.contains(Compute::AUTOCORR_LAG1) {
                         state.sum_prod += val * prev;
                     }
-                    if self.compute[31] {
+                    if self.compute.contains(Compute::AUC) {
                         state.auc_sum += (val + prev) * 0.5;
                     }
-                    if self.compute[15] && (val < 0.0) != (prev < 0.0) {
+                    if self.compute.contains(Compute::ZERO_CROSS) && (val < 0.0) != (prev < 0.0) {
                         state.zcr_count += 1;
                     }
                 }
-                if self.compute[36] && self.compute[15] && (val < 0.0) != (prev < 0.0) {
+                if self.compute.contains(Compute::ZC_INDICES) && self.compute.contains(Compute::ZERO_CROSS) && (val < 0.0) != (prev < 0.0) {
                     state.zc_indices.push(i as f32);
                 }
             }
-            if self.compute[21] && !is_incremental {
+            if self.compute.contains(Compute::SLOPE) && !is_incremental {
                 state.sum_ix += (i as f32) * val;
             }
-            if self.compute[23] {
+            if self.compute.contains(Compute::PAA) {
                 for (t_idx, _total) in self.unique_paa_totals.iter().enumerate() {
                     let b = &self.paa_boundaries[t_idx];
                     let seg_idx = &mut state.current_paa_segs[t_idx];
@@ -810,7 +810,7 @@ impl<'a> SlidingEngine<'a> {
                     state.paa_sums[t_idx][*seg_idx] += val;
                 }
             }
-            if self.compute[30] {
+            if self.compute.contains(Compute::C3) {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
                     if i >= 2 * l {
@@ -858,7 +858,7 @@ impl<'a> SlidingEngine<'a> {
         let mut spectrum = Vec::new();
         let mut fft_complex = Vec::new();
 
-        if self.compute.any_fft() {
+        if self.compute.intersects(Compute::ANY_FFT) {
             if state.sliding_dft.is_none()
                 && let Some(r2c) = &self.r2c
             {
@@ -881,7 +881,7 @@ impl<'a> SlidingEngine<'a> {
         let mut spectral_slope = 0.0;
 
         let mut fft_autocorr = Vec::new();
-        if self.compute.any([43, 44]) && n > 1.0 {
+        if self.compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) && n > 1.0 {
             let n2 = values.len() * 2;
             let fft_size_ac = crate::common::next_good_fft_size(n2);
             let mut planner = realfft::RealFftPlanner::<f32>::new();
@@ -957,8 +957,8 @@ impl<'a> SlidingEngine<'a> {
             }
         }
 
-        if self.compute[37] {
-            if self.compute.any([39, 40, 41, 42]) {
+        if self.compute.contains(Compute::NEEDS_SORT) {
+            if self.compute.intersects(Compute::FIRST_LOC_MAX | Compute::LAST_LOC_MAX | Compute::FIRST_LOC_MIN | Compute::LAST_LOC_MIN) {
                 let mut found_max = false;
                 let mut found_min = false;
                 for (i, &v) in values.iter().enumerate() {
@@ -978,13 +978,13 @@ impl<'a> SlidingEngine<'a> {
                     }
                 }
             }
-            if self.compute.any([6, 10, 11]) {
+            if self.compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::ENTROPY) {
                 // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
                 let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
                 copy.clear();
                 copy.extend_from_slice(values);
                 let _n_size = copy.len();
-                if self.compute[6] {
+                if self.compute.contains(Compute::MEDIAN) {
                     let n_len = copy.len();
                     if n_len % 2 == 1 {
                         median = *copy
@@ -1008,7 +1008,7 @@ impl<'a> SlidingEngine<'a> {
                         median = (m1 + m2) / 2.0;
                     }
                 }
-                if self.compute[10] {
+                if self.compute.contains(Compute::IQR) {
                     copy.sort_unstable_by(|a, b| {
                         a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                     });
@@ -1025,7 +1025,7 @@ impl<'a> SlidingEngine<'a> {
                     };
                     iqr = get_q(0.75, &copy) - get_q(0.25, &copy);
                 }
-                if self.compute[11] {
+                if self.compute.contains(Compute::ENTROPY) {
                     let range = state.max_value - state.min_value;
                     if range > 1e-9 {
                         let bins = 10;
@@ -1046,27 +1046,27 @@ impl<'a> SlidingEngine<'a> {
                 state.sort_buffer = copy;
             }
 
-            if self.compute.any([9, 25, 26, 27, 28]) {
+            if self.compute.intersects(Compute::MAD | Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
                 let mean_f32 = mean as f32;
                 let mean_vec = f32x4::splat(mean_f32);
                 let mut mad_sum_val = 0.0;
 
                 for chunk in values.chunks_exact(LANES) {
                     let c = f32x4::from_slice(chunk);
-                    if self.compute[9] {
+                    if self.compute.contains(Compute::MAD) {
                         mad_sum_val += (c - mean_vec).abs().reduce_sum();
                     }
                 }
 
                 let rem_start = (values.len() / LANES) * LANES;
                 for &val in &values[rem_start..] {
-                    if self.compute[9] {
+                    if self.compute.contains(Compute::MAD) {
                         mad_sum_val += (val - mean_f32).abs();
                     }
                 }
                 mad_sum = mad_sum_val / n;
 
-                if self.compute.any([25, 26, 27, 28]) {
+                if self.compute.intersects(Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
                     for &val in values {
                         if val > mean_f32 {
                             count_a += 1;
@@ -1086,9 +1086,9 @@ impl<'a> SlidingEngine<'a> {
                 }
             }
 
-            if self.compute[34] && !state.zc_indices.is_empty() {
+            if self.compute.contains(Compute::ZC_STATS) && !state.zc_indices.is_empty() {
                 zc_mean = state.zc_indices.iter().sum::<f32>() / state.zc_indices.len() as f32;
-                if self.compute[35] {
+                if self.compute.contains(Compute::ZC_STD) {
                     let zc_m2 = state
                         .zc_indices
                         .iter()

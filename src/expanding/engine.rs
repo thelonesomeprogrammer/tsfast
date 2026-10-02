@@ -1,6 +1,6 @@
 use crate::common::ColumnState;
 use crate::common::LANES;
-use crate::types::{FastBitArray, Feature};
+use crate::types::{Compute, Feature};
 use realfft::{RealToComplex, num_complex};
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 const ENTROPY_BINS: usize = 10;
 
 pub(crate) struct ExpandingEngine<'a> {
-    pub(crate) compute: FastBitArray,
+    pub(crate) compute: Compute,
     pub(crate) features: &'a [Feature],
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
@@ -121,7 +121,7 @@ impl<'a> ExpandingEngine<'a> {
                 }
             }
 
-            if self.compute[38] {
+            if self.compute.contains(Compute::ABS_MAX) {
                 state.abs_max = state.abs_max.max(chunk.abs().reduce_max());
             }
             let sq = chunk * chunk;
@@ -151,7 +151,7 @@ impl<'a> ExpandingEngine<'a> {
         for (i, &val) in values[..rem_start].iter().enumerate() {
             let global_idx = global_start_idx + i;
 
-            if self.compute[16] {
+            if self.compute.contains(Compute::PEAKS) {
                 if state.prev_val > state.prev_prev_val && state.prev_val > val {
                     state.peaks += 1;
                 }
@@ -159,7 +159,7 @@ impl<'a> ExpandingEngine<'a> {
                 state.prev_val = val;
             }
 
-            if self.compute[30] {
+            if self.compute.contains(Compute::C3) {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
                     if global_idx >= 2 * l {
@@ -178,7 +178,7 @@ impl<'a> ExpandingEngine<'a> {
                 }
             }
 
-            if self.compute[43] || self.compute[44] {
+            if self.compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) {
                 for (l_idx, &lag) in self.unique_autocorr_lags.iter().enumerate() {
                     let l = lag as usize;
                     if global_idx >= l {
@@ -207,10 +207,10 @@ impl<'a> ExpandingEngine<'a> {
         for i in rem_start..values.len() {
             let val = values[i];
             let global_idx = global_start_idx + i;
-            if self.compute[0] {
+            if self.compute.contains(Compute::SUM) {
                 state.total_sum += val;
             }
-            if self.compute[4] {
+            if self.compute.contains(Compute::MIN) {
                 if val < state.min_value {
                     state.min_value = val;
                     state.first_min_idx = global_idx;
@@ -219,7 +219,7 @@ impl<'a> ExpandingEngine<'a> {
                     state.last_min_idx = global_idx;
                 }
             }
-            if self.compute[5] {
+            if self.compute.contains(Compute::MAX) {
                 if val > state.max_value {
                     state.max_value = val;
                     state.first_max_idx = global_idx;
@@ -228,16 +228,16 @@ impl<'a> ExpandingEngine<'a> {
                     state.last_max_idx = global_idx;
                 }
             }
-            if self.compute[38] {
+            if self.compute.contains(Compute::ABS_MAX) {
                 state.abs_max = state.abs_max.max(val.abs());
             }
-            if self.compute[12] {
+            if self.compute.contains(Compute::ENERGY) {
                 let sq = val * val;
                 state.energy += sq;
-                if self.compute[7] {
+                if self.compute.contains(Compute::SKEW) {
                     state.sum_cubes += sq * val;
                 }
-                if self.compute[8] {
+                if self.compute.contains(Compute::KURTOSIS) {
                     state.sum_quads += sq * sq;
                 }
             }
@@ -248,30 +248,30 @@ impl<'a> ExpandingEngine<'a> {
                     state.prev_last
                 };
                 let diff = val - prev;
-                if self.compute[18] {
+                if self.compute.contains(Compute::MAC) {
                     state.mac_sum_vec += f32x4::from_array([diff.abs(), 0.0, 0.0, 0.0]);
                 }
-                if self.compute[19] {
+                if self.compute.contains(Compute::MC) {
                     state.mc_sum_vec += f32x4::from_array([diff, 0.0, 0.0, 0.0]);
                 }
-                if self.compute[20] {
+                if self.compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff += diff * diff;
                 }
-                if self.compute[17] {
+                if self.compute.contains(Compute::AUTOCORR_LAG1) {
                     state.sum_prod += val * prev;
                 }
-                if self.compute[31] {
+                if self.compute.contains(Compute::AUC) {
                     state.auc_sum += (val + prev) * 0.5;
                 }
-                if self.compute[15] && (val < 0.0) != (prev < 0.0) {
+                if self.compute.contains(Compute::ZERO_CROSS) && (val < 0.0) != (prev < 0.0) {
                     state.zcr_count += 1;
-                    if self.compute[36] {
+                    if self.compute.contains(Compute::ZC_INDICES) {
                         state.zc_indices.push(global_idx as f32);
                     }
                 }
             }
 
-            if self.compute[16] {
+            if self.compute.contains(Compute::PEAKS) {
                 if state.prev_val > state.prev_prev_val && state.prev_val > val {
                     state.peaks += 1;
                 }
@@ -279,7 +279,7 @@ impl<'a> ExpandingEngine<'a> {
                 state.prev_val = val;
             }
 
-            if self.compute[30] {
+            if self.compute.contains(Compute::C3) {
                 for (l_idx, &lag) in self.unique_c3_lags.iter().enumerate() {
                     let l = lag as usize;
                     if global_idx >= 2 * l {
@@ -298,7 +298,7 @@ impl<'a> ExpandingEngine<'a> {
                 }
             }
 
-            if self.compute[43] || self.compute[44] {
+            if self.compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) {
                 for (l_idx, &lag) in self.unique_autocorr_lags.iter().enumerate() {
                     let l = lag as usize;
                     if global_idx >= l {
@@ -312,7 +312,7 @@ impl<'a> ExpandingEngine<'a> {
                 }
             }
 
-            if self.compute[21] {
+            if self.compute.contains(Compute::SLOPE) {
                 state.sum_ix += (global_idx as f32) * val;
             }
             state.prev_last = val;
@@ -351,7 +351,7 @@ impl<'a> ExpandingEngine<'a> {
         let mut zc_std = 0.0;
 
         // 1. Median/IQR Optimization: Merge instead of Sort
-        if self.compute.any([6, 10, 49, 63]) {
+        if self.compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::QUANTILE | Compute::MEAN_N_ABS_MAX) {
             if running_sorted.len() < full_series.len() {
                 let mut new_elements: Vec<f32> = full_series[running_sorted.len()..].to_vec();
                 new_elements
@@ -379,7 +379,7 @@ impl<'a> ExpandingEngine<'a> {
             }
             let n_size = running_sorted.len();
             if n_size > 0 {
-                if self.compute[6] {
+                if self.compute.contains(Compute::MEDIAN) {
                     if n_size % 2 == 1 {
                         median = running_sorted[n_size / 2];
                     } else {
@@ -387,7 +387,7 @@ impl<'a> ExpandingEngine<'a> {
                         median = (running_sorted[mid] + running_sorted[mid - 1]) / 2.0;
                     }
                 }
-                if self.compute[10] {
+                if self.compute.contains(Compute::IQR) {
                     let n_f = n_size as f32;
                     let get_q = |q: f32, data: &[f32]| -> f32 {
                         if data.is_empty() {
@@ -413,7 +413,7 @@ impl<'a> ExpandingEngine<'a> {
         let mut spectral_decrease = 0.0;
         let mut spectral_slope = 0.0;
 
-        if self.compute.any_fft() {
+        if self.compute.intersects(Compute::ANY_FFT) {
             let n_total = full_series.len();
             let should_update =
                 state.last_fft_n == 0 || (n_total - state.last_fft_n) >= self.fft_update_period;
@@ -441,7 +441,7 @@ impl<'a> ExpandingEngine<'a> {
                         .map(|c| c.norm())
                         .collect();
                     fft_complex = state.fft_out_buffer[..complex_len].to_vec();
-                } else if self.compute.any([54, 55, 56, 57, 60, 64]) {
+                } else if self.compute.intersects(Compute::SPEC_CENTROID | Compute::SPEC_DISTANCE | Compute::SPEC_DECREASE | Compute::SPEC_SLOPE | Compute::SPECTROGRAM | Compute::HUMAN_RANGE_E) {
                     use realfft::RealFftPlanner;
                     let mut planner = RealFftPlanner::<f32>::new();
                     let r2c = planner.plan_fft_forward(n_total);
@@ -515,7 +515,7 @@ impl<'a> ExpandingEngine<'a> {
         }
 
         // 2. Single Pass for mean-dependent and range-dependent features
-        if self.compute.any([9, 11, 25, 26, 27, 28]) {
+        if self.compute.intersects(Compute::MAD | Compute::ENTROPY | Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
             let range = state.max_value - state.min_value;
             let bins = ENTROPY_BINS;
             let mut counts: [usize; ENTROPY_BINS] = [0; ENTROPY_BINS];
@@ -525,24 +525,24 @@ impl<'a> ExpandingEngine<'a> {
 
             for chunk in full_series.chunks_exact(LANES) {
                 let c = f32x4::from_slice(chunk);
-                if self.compute[9] {
+                if self.compute.contains(Compute::MAD) {
                     mad_sum_vec += (c - mean_vec).abs();
                 }
 
-                if self.compute[25] {
+                if self.compute.contains(Compute::CNT_ABOVE_MEAN) {
                     count_a += c.simd_gt(mean_vec).to_bitmask().count_ones() as usize;
                 }
-                if self.compute[26] {
+                if self.compute.contains(Compute::CNT_BELOW_MEAN) {
                     count_b += c.simd_lt(mean_vec).to_bitmask().count_ones() as usize;
                 }
 
                 for &v in chunk {
-                    if self.compute[11] && range > 1e-9 {
+                    if self.compute.contains(Compute::ENTROPY) && range > 1e-9 {
                         let b = (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
                         counts[b.min(bins - 1)] += 1;
                     }
 
-                    if self.compute.any([27, 28]) {
+                    if self.compute.intersects(Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
                         if v > mean {
                             current_strike_a += 1;
                             max_strike_a = max_strike_a.max(current_strike_a);
@@ -562,20 +562,20 @@ impl<'a> ExpandingEngine<'a> {
 
             let rem_start = (full_series.len() / LANES) * LANES;
             for &v in &full_series[rem_start..] {
-                if self.compute[9] {
+                if self.compute.contains(Compute::MAD) {
                     mad_sum += (v - mean).abs();
                 }
-                if self.compute[11] && range > 1e-9 {
+                if self.compute.contains(Compute::ENTROPY) && range > 1e-9 {
                     let b = (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
                     counts[b.min(bins - 1)] += 1;
                 }
-                if self.compute[25] && v > mean {
+                if self.compute.contains(Compute::CNT_ABOVE_MEAN) && v > mean {
                     count_a += 1;
                 }
-                if self.compute[26] && v < mean {
+                if self.compute.contains(Compute::CNT_BELOW_MEAN) && v < mean {
                     count_b += 1;
                 }
-                if self.compute.any([27, 28]) {
+                if self.compute.intersects(Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
                     if v > mean {
                         current_strike_a += 1;
                         max_strike_a = max_strike_a.max(current_strike_a);
@@ -591,7 +591,7 @@ impl<'a> ExpandingEngine<'a> {
                 }
             }
 
-            if self.compute[11] && range > 1e-9 {
+            if self.compute.contains(Compute::ENTROPY) && range > 1e-9 {
                 for &c in &counts {
                     if c > 0 {
                         let p = c as f32 / n;
@@ -601,9 +601,9 @@ impl<'a> ExpandingEngine<'a> {
             }
         }
 
-        if self.compute[34] && !state.zc_indices.is_empty() {
+        if self.compute.contains(Compute::ZC_STATS) && !state.zc_indices.is_empty() {
             zc_mean = state.zc_indices.iter().sum::<f32>() / state.zc_indices.len() as f32;
-            if self.compute[35] {
+            if self.compute.contains(Compute::ZC_STD) {
                 let zc_m2 = state
                     .zc_indices
                     .iter()
