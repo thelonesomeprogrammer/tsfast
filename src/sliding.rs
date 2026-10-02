@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 pub mod engine;
 pub mod features;
+pub mod processors;
 use engine::SlidingEngine;
 
 #[pyclass(skip_from_py_object)]
@@ -247,3 +248,4 @@ impl SlidingExtractor {
         Ok(PyArrowType(return_batch))
     }
 }
+pub mod context;

@@ -4,3 +4,7 @@ pub mod spectral;
 pub mod autocorr;
 pub mod strikes;
 pub mod extrema;
+pub mod eval_basic;
+pub mod eval_statistics;
+pub mod eval_time_series;
+pub mod eval_fft;

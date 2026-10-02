@@ -1,0 +1,104 @@
+use crate::common::ColumnState;
+
+pub struct FeatureContext<'a> {
+    pub values: &'a [f32],
+    pub state: &'a mut ColumnState,
+    pub n: f32,
+    
+    // BaseMetrics
+    pub mean: f32,
+    pub m2: f32,
+    pub m3: f32,
+    pub m4: f32,
+    pub var: f32,
+    pub std_dev: f32,
+    pub mac_sum: f32,
+    pub mc_sum: f32,
+
+    // SortMetrics
+    pub first_max_idx: usize,
+    pub last_max_idx: usize,
+    pub first_min_idx: usize,
+    pub last_min_idx: usize,
+    pub median: f32,
+    pub iqr: f32,
+    pub entropy: f32,
+
+    // MeanMetrics
+    pub mad_sum: f32,
+    pub count_a: usize,
+    pub count_b: usize,
+    pub max_strike_a: usize,
+    pub max_strike_b: usize,
+
+    // ZcMetrics
+    pub zc_mean: f32,
+    pub zc_std: f32,
+
+    // FftResult
+    pub freq_centroid: f32,
+    pub spectral_decrease: f32,
+    pub spectral_slope: f32,
+    pub fft_autocorr: &'a [f32],
+    pub fft_complex: &'a [realfft::num_complex::Complex<f32>],
+    pub spectrum: &'a [f32],
+
+    // Complexity Arrays (from engine)
+    pub unique_c3_lags: &'a [u16],
+    pub unique_paa_totals: &'a [u16],
+    pub paa_boundaries: &'a [Vec<usize>],
+}
+
+impl<'a> FeatureContext<'a> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        values: &'a [f32],
+        state: &'a mut ColumnState,
+        n: f32,
+        base: crate::sliding::processors::stats_processor::BaseMetrics,
+        sort: crate::sliding::processors::sort_processor::SortMetrics,
+        mean: crate::sliding::processors::mean_processor::MeanMetrics,
+        zc: crate::sliding::processors::diff_processor::ZcMetrics,
+        fft: &'a crate::sliding::processors::fft_processor::FftResult,
+        unique_c3_lags: &'a [u16],
+        unique_paa_totals: &'a [u16],
+        paa_boundaries: &'a [Vec<usize>],
+    ) -> Self {
+        Self {
+            values,
+            n,
+            mean: base.mean,
+            m2: base.m2,
+            m3: base.m3,
+            m4: base.m4,
+            var: base.var,
+            std_dev: base.std_dev,
+            mac_sum: state.mac_sum,
+            mc_sum: state.mc_sum,
+            first_max_idx: sort.first_max_idx,
+            last_max_idx: sort.last_max_idx,
+            first_min_idx: sort.first_min_idx,
+            last_min_idx: sort.last_min_idx,
+            median: sort.median,
+            iqr: sort.iqr,
+            entropy: sort.entropy,
+            mad_sum: mean.mad_sum,
+            count_a: mean.count_a,
+            count_b: mean.count_b,
+            max_strike_a: mean.max_strike_a,
+            max_strike_b: mean.max_strike_b,
+            zc_mean: zc.zc_mean,
+            zc_std: zc.zc_std,
+            freq_centroid: fft.freq_centroid,
+            spectral_decrease: fft.spectral_decrease,
+            spectral_slope: fft.spectral_slope,
+            fft_autocorr: &fft.fft_autocorr,
+            fft_complex: &fft.fft_complex,
+            spectrum: &fft.spectrum,
+            unique_c3_lags,
+            unique_paa_totals,
+            paa_boundaries,
+            state,
+        }
+    }
+}

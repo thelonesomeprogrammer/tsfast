@@ -10,11 +10,12 @@ use rayon::prelude::*;
 use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
-pub mod extractor;
+pub mod engine;
 pub mod features;
+pub mod processors;
 
 use crate::common::{map_features_to_indices, next_good_fft_size};
-use extractor::StaticEngine;
+use engine::StaticEngine;
 
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]

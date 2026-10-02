@@ -1,44 +1,45 @@
-use crate::types::{Feature, AggAttr, AggFunc, FftAttr};
-use crate::common::ColumnState;
+use crate::types::Feature;
 
 #[inline(always)]
 pub fn eval_changes(
     feat: &Feature,
-    values: &[f32],
-    state: &mut ColumnState,
-    n: f32,
-    mean: f32,
-    m2: f32,
-    m3: f32,
-    m4: f32,
-    mad_sum: f32,
-    iqr: f32,
-    entropy: f32,
-    count_a: usize,
-    count_b: usize,
-    max_strike_a: usize,
-    max_strike_b: usize,
-    zc_mean: f32,
-    zc_std: f32,
-    freq_centroid: f32,
-    spectral_decrease: f32,
-    spectral_slope: f32,
-    first_max_idx: usize,
-    last_max_idx: usize,
-    first_min_idx: usize,
-    last_min_idx: usize,
-    fft_autocorr: &[f32],
-    fft_complex: &[realfft::num_complex::Complex<f32>],
-    spectrum: &[f32],
-    unique_c3_lags: &[u16],
-    unique_paa_totals: &[u16],
-    paa_boundaries: &[Vec<usize>],
-    var: f32,
-    std_dev: f32,
-    mac_sum: f32,
-    mc_sum: f32,
-    median: f32,
+    context: &mut crate::sliding::context::FeatureContext,
 ) -> Option<f32> {
+    let values = context.values;
+    let state = &mut *context.state;
+    let n = context.n;
+    let mean = context.mean;
+    let _m2 = context.m2;
+    let _m3 = context.m3;
+    let _m4 = context.m4;
+    let _var = context.var;
+    let _std_dev = context.std_dev;
+    let mac_sum = context.mac_sum;
+    let mc_sum = context.mc_sum;
+    let _first_max_idx = context.first_max_idx;
+    let _last_max_idx = context.last_max_idx;
+    let _first_min_idx = context.first_min_idx;
+    let _last_min_idx = context.last_min_idx;
+    let _median = context.median;
+    let _iqr = context.iqr;
+    let _entropy = context.entropy;
+    let _mad_sum = context.mad_sum;
+    let _count_a = context.count_a;
+    let _count_b = context.count_b;
+    let _max_strike_a = context.max_strike_a;
+    let _max_strike_b = context.max_strike_b;
+    let _zc_mean = context.zc_mean;
+    let _zc_std = context.zc_std;
+    let _freq_centroid = context.freq_centroid;
+    let _spectral_decrease = context.spectral_decrease;
+    let _spectral_slope = context.spectral_slope;
+    let _fft_autocorr = context.fft_autocorr;
+    let _fft_complex = context.fft_complex;
+    let _spectrum = context.spectrum;
+    let _unique_c3_lags = context.unique_c3_lags;
+    let _unique_paa_totals = context.unique_paa_totals;
+    let _paa_boundaries = context.paa_boundaries;
+    
     let res = match feat {
                 Feature::MeanAbsChange => (mac_sum / n) as f32,
                 Feature::MeanChange => (mc_sum / n) as f32,

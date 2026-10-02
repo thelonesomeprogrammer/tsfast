@@ -13,6 +13,7 @@ pub mod statistics;
 pub mod time_series;
 pub mod fft;
 pub mod engine;
+pub mod processors;
 use engine::ExpandingEngine;
 
 #[pyclass(skip_from_py_object)]

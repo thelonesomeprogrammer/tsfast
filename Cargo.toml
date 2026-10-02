@@ -8,7 +8,6 @@ name = "tsfast"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-numpy = "0.28"
 pyo3 = { version = "0.28.3" }
 ndarray = { version = "0.16", features = ["rayon"] }
 num-traits = "0.2"
