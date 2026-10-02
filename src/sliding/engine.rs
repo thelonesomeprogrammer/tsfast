@@ -1104,485 +1104,132 @@ impl<'a> SlidingEngine<'a> {
 
         let mut feats = Vec::with_capacity(self.features.len());
         for feat in self.features {
-            let val = match feat {
-                Feature::TotalSum => state.total_sum as f32,
-                Feature::Mean => mean as f32,
-                Feature::Variance => var as f32,
-                Feature::Std => std_dev as f32,
-                Feature::Min => state.min_value,
-                Feature::Max => state.max_value,
-                Feature::Median => median,
-                Feature::Skew if var > 1e-9 => {
-                    let mu2 = m2 / n;
-                    (m3 / n) / mu2.powf(1.5)
-                }
-                Feature::UnbiasedFisherKurtosis if var > 1e-9 && n > 3.0 => {
-                    let mu2 = m2 / n;
-                    let g2 = (m4 / n) / (mu2 * mu2) - 3.0;
-                    ((n - 1.0) / ((n - 2.0) * (n - 3.0))) * ((n + 1.0) * g2 + 6.0)
-                }
-                Feature::BiasedFisherKurtosis if var > 1e-9 => {
-                    let mu2 = m2 / n;
-                    (m4 / n) / (mu2 * mu2) - 3.0
-                }
-                Feature::Mad => mad_sum as f32,
-                Feature::Iqr => iqr,
-                Feature::Entropy => entropy,
-                Feature::Energy => state.energy as f32,
-                Feature::Rms | Feature::RootMeanSquare => (state.energy / n).sqrt(),
-                Feature::ZeroCrossingRate => state.zcr_count as f32 / n,
-                Feature::PeakCount => state.peaks as f32,
-                Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
-                    let x0 = values[0];
-                    let xn = values[values.len() - 1];
-                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn)
-                        + (n - 1.0) * mean * mean;
-                    (cov / m2) as f32
-                }
-                Feature::AutocorrFirst1e => {
-                    if !fft_autocorr.is_empty() {
-                        let threshold = 0.36787944;
-                        let mut found = false;
-                        let mut first_lag = 0.0;
-                        for (l, &val) in fft_autocorr.iter().enumerate().skip(1) {
-                            if val < threshold {
-                                first_lag = l as f32;
-                                found = true;
-                                break;
-                            }
-                        }
-                        if found { first_lag } else { 0.0 }
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::MeanAbsChange => (mac_sum / n) as f32,
-                Feature::MeanChange => (mc_sum / n) as f32,
-                Feature::CidCe => state.sum_sq_diff.sqrt() as f32,
-                Feature::Slope => {
-                    let mean_i = (n - 1.0) * 0.5;
-                    let s_xx = (n * (n * n - 1.0)) / 12.0;
-                    let s_xy = state.sum_ix - n * mean_i * mean;
-                    if s_xx.abs() > 1e-9 {
-                        (s_xy / s_xx) as f32
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::Intercept => {
-                    let mean_i = (n - 1.0) * 0.5;
-                    let s_xx = (n * (n * n - 1.0)) / 12.0;
-                    let s_xy = state.sum_ix - n * mean_i * mean;
-                    let slope = if s_xx.abs() > 1e-9 { s_xy / s_xx } else { 0.0 };
-                    (mean - slope * mean_i) as f32
-                }
-                Feature::AbsSumChange => mac_sum as f32,
-                Feature::CountAboveMean => count_a as f32,
-                Feature::CountBelowMean => count_b as f32,
-                Feature::LongestStrikeAboveMean => max_strike_a as f32,
-                Feature::LongestStrikeBelowMean => max_strike_b as f32,
-                Feature::VariationCoefficient if mean.abs() > 1e-9 => (std_dev / mean) as f32,
-                Feature::Auc => state.auc_sum as f32,
-                Feature::ZeroCrossingMean => zc_mean,
-                Feature::ZeroCrossingStd => zc_std,
-                Feature::C3(lag) => {
-                    let l_idx = self.unique_c3_lags.iter().position(|&l| l == *lag).unwrap();
-                    let l = *lag as usize;
-                    if values.len() > 2 * l {
-                        state.c3_sums[l_idx] / (values.len() - 2 * l) as f32
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::Paa(total, index) => {
-                    let t_idx = self
-                        .unique_paa_totals
-                        .iter()
-                        .position(|&t| t == *total)
-                        .unwrap();
-                    let b = &self.paa_boundaries[t_idx];
-                    let start = b[*index as usize];
-                    let end = b[*index as usize + 1];
-                    if start < end {
-                        state.paa_sums[t_idx][*index as usize] / (end - start) as f32
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::AbsMax => state.abs_max,
-                Feature::FirstLocMax => first_max_idx as f32 / n,
-                Feature::LastLocMax => (last_max_idx + 1) as f32 / n,
-                Feature::FirstLocMin => first_min_idx as f32 / n,
-                Feature::LastLocMin => (last_min_idx + 1) as f32 / n,
-                Feature::Quantile(q_bits) => {
-                    let q = f32::from_bits(*q_bits);
-                    // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
-                    let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
-                    copy.clear();
-                    copy.extend_from_slice(values);
-                    let res = if copy.is_empty() {
-                        0.0
-                    } else if copy.len() == 1 {
-                        copy[0]
-                    } else {
-                        let n_len = copy.len();
-                        let idx = q * (n_len as f32 - 1.0);
-                        let i = idx.floor() as usize;
-                        let f = idx - i as f32;
-                        copy.sort_unstable_by(|a: &f32, b: &f32| {
-                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                        });
-                        if i >= n_len - 1 {
-                            copy[n_len - 1]
-                        } else {
-                            (1.0 - f) * copy[i] + f * copy[i + 1]
-                        }
-                    };
-                    state.sort_buffer = copy;
-                    res
-                }
-                Feature::BenfordCorrelation => {
-                    let mut counts = [0.0; 9];
-                    for &v in values {
-                        let mut abs_v = v.abs();
-                        if abs_v > 0.0 {
-                            while abs_v < 1.0 {
-                                abs_v *= 10.0;
-                            }
-                            while abs_v >= 10.0 {
-                                abs_v /= 10.0;
-                            }
-                            let first_digit = abs_v.floor() as usize;
-                            if (1..=9).contains(&first_digit) {
-                                counts[first_digit - 1] += 1.0;
-                            }
-                        }
-                    }
-                    let total: f32 = counts.iter().sum();
-                    if total > 0.0 {
-                        let p: Vec<f32> = counts.iter().map(|&c| c / total).collect();
-                        let b: Vec<f32> = (1..10).map(|i| (1.0 + 1.0 / i as f32).log10()).collect();
-                        let mu_p = p.iter().sum::<f32>() / 9.0;
-                        let mu_b = b.iter().sum::<f32>() / 9.0;
-                        let mut num = 0.0;
-                        let mut den_p = 0.0;
-                        let mut den_b = 0.0;
-                        for i in 0..9 {
-                            num += (p[i] - mu_p) * (b[i] - mu_b);
-                            den_p += (p[i] - mu_p).powi(2);
-                            den_b += (b[i] - mu_b).powi(2);
-                        }
-                        if den_p > 0.0 && den_b > 0.0 {
-                            num / (den_p * den_b).sqrt()
-                        } else {
-                            0.0
-                        }
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::Autocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
-                    let l = *lag as usize;
-                    if !fft_autocorr.is_empty() && l < fft_autocorr.len() {
-                        fft_autocorr[l]
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::TimeReversalAsymmetry(lag) if values.len() > 2 * *lag as usize => {
-                    let l = *lag as usize;
-                    let mut sum = 0.0;
-                    for i in 0..values.len() - 2 * l {
-                        sum += values[i + 2 * l].powi(2) * values[i + l]
-                            - values[i + l] * values[i].powi(2);
-                    }
-                    sum / (values.len() - 2 * l) as f32
-                }
-                Feature::FftCoefficient(coeff, attr) => {
-                    let k = *coeff as usize;
-                    let (re, im) = if !fft_complex.is_empty() && k < fft_complex.len() {
-                        (fft_complex[k].re, fft_complex[k].im)
-                    } else {
-                        (0.0, 0.0) // Fallback if no FFT computed
-                    };
-                    match attr {
-                        crate::types::FftAttr::Real => re,
-                        crate::types::FftAttr::Imag => im,
-                        crate::types::FftAttr::Abs => (re * re + im * im).sqrt(),
-                        crate::types::FftAttr::Angle => im.atan2(re).to_degrees(),
-                    }
-                }
-                Feature::PartialAutocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
-                    let l = *lag as usize;
-                    if fft_autocorr.is_empty() || fft_autocorr.len() <= l {
-                        0.0
-                    } else {
-                        let r = &fft_autocorr;
-                        let mut phi = vec![vec![0.0; l + 1]; l + 1];
-                        let mut error = r[0] as f64;
-                        if error.abs() < 1e-9 {
-                            0.0
-                        } else {
-                            phi[1][1] = r[1] / r[0];
-                            error *= 1.0 - (phi[1][1] * phi[1][1]) as f64;
-                            for k in 1..l {
-                                let mut sum = 0.0;
-                                for i in 1..=k {
-                                    sum += phi[k][i] * r[k + 1 - i];
-                                }
-                                phi[k + 1][k + 1] = (r[k + 1] - sum) / error as f32;
-                                for i in 1..=k {
-                                    phi[k + 1][i] =
-                                        phi[k][i] - phi[k + 1][k + 1] * phi[k][k + 1 - i];
-                                }
-                                error *= 1.0 - (phi[k + 1][k + 1] * phi[k + 1][k + 1]) as f64;
-                                if error.abs() < 1e-9 {
-                                    break;
-                                }
-                            }
-                            phi[l][l]
-                        }
-                    }
-                }
-                Feature::AggLinearTrend(attr, chunk_len, func)
-                    if values.len() >= *chunk_len as usize =>
-                {
-                    let cl = *chunk_len as usize;
-                    let mut agg_series = std::mem::take(&mut state.agg_linear_trend_buffer);
-                    agg_series.clear();
-                    for chunk in values.chunks_exact(cl) {
-                        let val = match func {
-                            crate::types::AggFunc::Max => {
-                                chunk.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b))
-                            }
-                            crate::types::AggFunc::Min => {
-                                chunk.iter().fold(f32::INFINITY, |a, &b| a.min(b))
-                            }
-                            crate::types::AggFunc::Mean => chunk.iter().sum::<f32>() / cl as f32,
-                            crate::types::AggFunc::Var => {
-                                let m = chunk.iter().sum::<f32>() / cl as f32;
-                                chunk.iter().map(|&v| (v - m).powi(2)).sum::<f32>() / cl as f32
-                            }
-                        };
-                        agg_series.push(val);
-                    }
-                    let m_n = agg_series.len() as f32;
-                    if m_n < 2.0 {
-                        0.0
-                    } else {
-                        let m_sum_x: f32 = (0..agg_series.len()).map(|i| i as f32).sum();
-                        let m_sum_y: f32 = agg_series.iter().sum();
-                        let m_sum_xx: f32 = (0..agg_series.len()).map(|i| (i as f32).powi(2)).sum();
-                        let m_sum_xy: f32 = agg_series
-                            .iter()
-                            .enumerate()
-                            .map(|(i, &v)| i as f32 * v)
-                            .sum();
-                        let s_xx = m_sum_xx - (m_sum_x * m_sum_x) / m_n;
-                        let s_xy = m_sum_xy - (m_sum_x * m_sum_y) / m_n;
-                        let slope = if s_xx.abs() > 1e-9 { s_xy / s_xx } else { 0.0 };
-                        let intercept = (m_sum_y - slope * m_sum_x) / m_n;
-                        let res = match attr {
-                            crate::types::AggAttr::Slope => slope,
-                            crate::types::AggAttr::Intercept => intercept,
-                            crate::types::AggAttr::Stderr | crate::types::AggAttr::RValue => {
-                                let mut ss_res = 0.0;
-                                let mut ss_tot = 0.0;
-                                let m_y = m_sum_y / m_n;
-                                for (i, &y) in agg_series.iter().enumerate() {
-                                    let y_hat = intercept + slope * i as f32;
-                                    ss_res += (y - y_hat).powi(2);
-                                    ss_tot += (y - m_y).powi(2);
-                                }
-                                if matches!(attr, crate::types::AggAttr::Stderr) {
-                                    if m_n > 2.0 && s_xx.abs() > 1e-9 {
-                                        (ss_res / (m_n - 2.0) / s_xx).sqrt()
-                                    } else {
-                                        0.0
-                                    }
-                                } else {
-                                    if ss_tot > 1e-9 {
-                                        (1.0 - ss_res / ss_tot).sqrt() * slope.signum()
-                                    } else {
-                                        0.0
-                                    }
-                                }
-                            }
-                            _ => 0.0,
-                        };
-                        state.agg_linear_trend_buffer = agg_series;
-                        res
-                    }
-                }
-                Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
-                    let m_val = *m as usize;
-                    let r = f32::from_bits(*r_bits);
-                    let mut buffer = std::mem::take(&mut state.approx_entropy_buffer);
+            let val = {
 
-                    let res = crate::common::approx_entropy_phi(m_val, r, values, &mut buffer)
-                        - crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer);
-                    state.approx_entropy_buffer = buffer;
-                    res
-                }
-                Feature::SumOfReoccurringValues => {
-                    let mut counts = std::collections::HashMap::new();
-                    for &v in values {
-                        let bits = v.to_bits();
-                        *counts.entry(bits).or_insert(0) += 1;
-                    }
-                    counts
-                        .iter()
-                        .filter(|&(_, &count)| count > 1)
-                        .map(|(&bits, _)| f32::from_bits(bits))
-                        .sum()
-                }
-                Feature::Length => n as f32,
-                Feature::VarianceLargerThanStandardDeviation => {
-                    if var > 1.0 {
-                        1.0
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::SumOfReoccurringDataPoints => {
-                    let mut counts = std::collections::HashMap::new();
-                    for &v in values {
-                        let bits = v.to_bits();
-                        *counts.entry(bits).or_insert(0) += 1;
-                    }
-                    counts
-                        .iter()
-                        .filter(|&(_, &count)| count > 1)
-                        .map(|(&bits, &count)| f32::from_bits(bits) * count as f32)
-                        .sum()
-                }
-                Feature::MeanNAbsoluteMax(n_max) => {
-                    let mut abs_vals: Vec<f32> = values.iter().map(|v| v.abs()).collect();
-                    abs_vals.sort_unstable_by(|a, b| {
-                        b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
-                    });
-                    let count = (*n_max as usize).min(abs_vals.len());
-                    if count > 0 {
-                        abs_vals.iter().take(count).sum::<f32>() / count as f32
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::HumanRangeEnergy(fs_bits) => {
-                    if !spectrum.is_empty() {
-                        let fs = f32::from_bits(*fs_bits);
-                        let n_fft = (spectrum.len() - 1) * 2;
-                        let freq_step = fs / n_fft as f32;
-                        let start_idx = (0.6 / freq_step).ceil() as usize;
-                        let end_idx = (2.5 / freq_step).floor() as usize;
-
-                        let total_energy: f32 = spectrum.iter().map(|&s| s * s).sum();
-                        if total_energy > 0.0 {
-                            let range_energy: f32 = spectrum
-                                .iter()
-                                .enumerate()
-                                .filter(|(i, _)| *i >= start_idx && *i <= end_idx)
-                                .map(|(_, &s)| s * s)
-                                .sum();
-                            range_energy / total_energy
-                        } else {
-                            0.0
-                        }
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::SpectralCentroid => freq_centroid,
-                Feature::SpectralDistance => {
-                    if !spectrum.is_empty() {
-                        let m = spectrum.iter().sum::<f32>() / spectrum.len() as f32;
-                        spectrum
-                            .iter()
-                            .map(|&s| (s - m).powi(2))
-                            .sum::<f32>()
-                            .sqrt()
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::SpectralDecrease => spectral_decrease,
-                Feature::SpectralSlope => spectral_slope,
-                Feature::SpectrogramCoefficients(_, f_bits) => {
-                    if !spectrum.is_empty() {
-                        let target_freq = f32::from_bits(*f_bits);
-                        let fs = 100.0;
-                        let n_fft = (spectrum.len() - 1) * 2;
-                        let freq_step = fs / n_fft as f32;
-                        let idx = (target_freq / freq_step).round() as usize;
-                        let idx = idx.min(spectrum.len() - 1);
-                        spectrum[idx]
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::SignalDistance => {
-                    let mut dist = 0.0;
-                    for i in 1..values.len() {
-                        dist += ((values[i] - values[i - 1]).powi(2) + 1.0).sqrt();
-                    }
-                    dist
-                }
-                Feature::HasDuplicateMax => {
-                    let mut count = 0;
-                    for &v in values {
-                        if v == state.max_value {
-                            count += 1;
-                            if count > 1 {
-                                break;
-                            }
-                        }
-                    }
-                    if count > 1 { 1.0 } else { 0.0 }
-                }
-                Feature::HasDuplicateMin => {
-                    let mut count = 0;
-                    for &v in values {
-                        if v == state.min_value {
-                            count += 1;
-                            if count > 1 {
-                                break;
-                            }
-                        }
-                    }
-                    if count > 1 { 1.0 } else { 0.0 }
-                }
-                Feature::HasDuplicate => {
-                    let mut unique = rustc_hash::FxHashSet::default();
-                    let mut has_dup = false;
-                    for &v in values {
-                        if !unique.insert(v.to_bits()) {
-                            has_dup = true;
-                            break;
-                        }
-                    }
-                    if has_dup { 1.0 } else { 0.0 }
-                }
-                Feature::WaveletFeatures(_w_bits, f_type) => {
-                    if values.len() >= 2 {
-                        let mut sum = 0.0;
-                        for i in (0..values.len() - 1).step_by(2) {
-                            if *f_type == 0 {
-                                sum += (values[i] - values[i + 1]).abs();
-                            } else {
-                                sum += (values[i] - values[i + 1]).powi(2);
-                            }
-                        }
-                        if *f_type == 0 {
-                            sum / (values.len() / 2) as f32
-                        } else {
-                            (sum / (values.len() / 2) as f32).sqrt()
-                        }
-                    } else {
-                        0.0
-                    }
-                }
-                _ => 0.0,
-            };
+        if let Some(v) = crate::sliding::features::moments::eval_moments(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::min_max::eval_min_max(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::distribution::eval_distribution(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::energy::eval_energy(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::crossings_peaks::eval_crossings_peaks(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::autocorrelation::eval_autocorrelation(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::changes::eval_changes(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::runs::eval_runs(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::transform::eval_transform(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::complexity::eval_complexity(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else
+        if let Some(v) = crate::sliding::features::misc::eval_misc(
+            feat, values, state, n, mean, m2, m3, m4, mad_sum, iqr, entropy,
+            count_a, count_b, max_strike_a, max_strike_b, zc_mean, zc_std,
+            freq_centroid, spectral_decrease, spectral_slope,
+            first_max_idx, last_max_idx, first_min_idx, last_min_idx,
+            &fft_autocorr, &fft_complex, &spectrum,
+            &self.unique_c3_lags, &self.unique_paa_totals, &self.paa_boundaries,
+            var, std_dev, mac_sum, mc_sum, median
+        ) {
+            v
+        } else {
+            0.0
+        }
+    };
             feats.push(val);
         }
         Ok(feats)
