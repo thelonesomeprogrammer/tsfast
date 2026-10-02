@@ -1,91 +1,74 @@
 import os
+import argparse
 import time
 import numpy as np
 import pandas as pd
-import tsfast
 import pyarrow as pa
+import tsfast
 import warnings
 
-# Suppress warnings
 warnings.filterwarnings("ignore")
 
-DATA_DIR = "prev-data/Dataset/Intrinsic data"
-CATEGORIES = ["N", "NS", "OT", "UT"]
+DEFAULT_CATEGORIES = ["N", "NS", "OT", "UT"]
 SIGNAL_COL = [2, 3]
 COLNAMES = ["Time (ms)", "Nset (1/min)", "Torque (Nm)", "Current (V)", "Angle (deg)", "Depth (mm)"]
 
-def load_data():
+FEATURES = [
+    "total_sum", "mean", "variance", "std_dev", "min_value", "max_value",
+    "energy", "rms", "zero_crossing_rate", "peak_count",
+    "mean_abs_change", "mean_change", "cid_ce", "auc"
+]
+
+def load_data(data_dir: str):
     dfs = []
-    print(f"Loading FULL dataset from {DATA_DIR}...")
-    for cat in CATEGORIES:
-        cat_dir = os.path.join(DATA_DIR, cat)
-        if not os.path.exists(cat_dir):
-            continue
-        files = [f for f in os.listdir(cat_dir) if f.endswith(".csv")]
-        print(f"  {cat}: loading {len(files)} files")
-        for f in files:
-            df = pd.read_csv(os.path.join(cat_dir, f))
-            # (length, 2) -> (2, length)
-            df = df.iloc[:, SIGNAL_COL].values.astype(np.float32).T
-            dfs.append(df)
+    if os.path.exists(data_dir):
+        print(f"Loading dataset from {data_dir}...")
+        for cat in DEFAULT_CATEGORIES:
+            cat_dir = os.path.join(data_dir, cat)
+            if not os.path.exists(cat_dir):
+                continue
+            files = [f for f in os.listdir(cat_dir) if f.endswith(".csv")]
+            print(f"  {cat}: loading {len(files)} files")
+            for f in files:
+                try:
+                    df = pd.read_csv(os.path.join(cat_dir, f))
+                    df = df.iloc[:, SIGNAL_COL].values.astype(np.float32).T
+                    dfs.append(df)
+                except Exception:
+                    continue
+    if not dfs:
+        print("Real dataset path not found or empty. Generating synthetic tightening/industrial data...")
+        np.random.seed(42)
+        n_synthetic = 100
+        length = 1500
+        for _ in range(n_synthetic):
+            torque = np.cumsum(np.random.normal(0.01, 0.1, length)).astype(np.float32)
+            current = np.abs(np.random.normal(2.0, 0.5, length)).astype(np.float32)
+            dfs.append(np.vstack([torque, current]))
     return dfs
 
-def benchmark():
-    X = load_data()
+def run_batched_benchmark(X, initial_size=500, expansion_size=100):
     total_samples = len(X)
-    print(f"Total samples: {total_samples}")
-
-    features = [
-        "total_sum", "mean", "variance", "std", "min", "max",
-        "energy", "rms", "zero_crossing_rate", "peak_count",
-        "mean_abs_change", "mean_change", "cid_ce", "auc"
-    ]
-    
-    # We'll benchmark a subset of samples to avoid taking too long if needed,
-    # but the user said "full dataset".
-    
-    initial_size = 500
-    expansion_size = 100
-    
-    # Expand to see the maximum length
     max_len = max(x.shape[1] for x in X)
-    print(f"Max series length: {max_len}")
-    
-    # Static benchmarking
+    n_total_cols = total_samples * len(SIGNAL_COL)
+    print(f"\n--- Running Batched Benchmark (Total series: {total_samples}, Total signals: {n_total_cols}) ---")
+
     static_times = []
-    static_ext = tsfast.Extractor(features)
-    
-    # Expanding benchmarking
     expanding_times = []
-    # We need one ExpandingExtractor per series if we process them in parallel,
-    # or we can reset/re-create. But ExpandingExtractor is stateful.
-    # To benchmark "update" performance, we'll process all series together in batches if possible,
-    # but the current ExpandingExtractor state is per-column.
-    
-    # Actually, ExpandingExtractor.update(batch) processes 'batch' and updates its internal state.
-    # If we have 1000 series, we can think of them as 2000 columns (if 2 signals per series).
-    # But wait, update() returns features for the WHOLE series seen so far.
-    
-    print("\nStarting Benchmark...")
-    
-    # Step 0: Initial 500 points
+
+    static_ext = tsfast.Extractor(FEATURES)
+    exp_ext = tsfast.ExpandingExtractor(FEATURES, n_total_cols)
+
+    # Initial 500 points
     # Static
-    start = time.time()
+    t0 = time.perf_counter()
     for x in X:
         if x.shape[1] < initial_size: continue
         batch = pa.RecordBatch.from_arrays([pa.array(x[i, :initial_size]) for i in range(x.shape[0])], names=[COLNAMES[i] for i in SIGNAL_COL])
         static_ext.process_2d_floats(batch)
-    static_times.append(time.time() - start)
-    
+    static_times.append(time.perf_counter() - t0)
+
     # Expanding
-    start = time.time()
-    # We'll use one extractor that handles all columns of all series? 
-    # That would be a lot of columns. 
-    # Let's say we have N series, each with 2 signals. That's 2*N columns.
-    n_total_cols = total_samples * len(SIGNAL_COL)
-    exp_ext = tsfast.ExpandingExtractor(features, n_total_cols)
-    
-    # Flatten all series into one big batch for the first 500 points
     arrays = []
     names = []
     for s_idx, x in enumerate(X):
@@ -93,23 +76,21 @@ def benchmark():
         for i in range(x.shape[0]):
             arrays.append(pa.array(x[i, :initial_size]))
             names.append(f"s{s_idx}_c{i}")
-    
     batch = pa.RecordBatch.from_arrays(arrays, names=names)
+    t0 = time.perf_counter()
     exp_ext.update(batch)
-    expanding_times.append(time.time() - start)
-    
+    expanding_times.append(time.perf_counter() - t0)
+
     print(f"Step 0 (size {initial_size}): Static={static_times[-1]:.4f}s, Expanding={expanding_times[-1]:.4f}s")
 
-    # Subsequent steps: +100 points
+    # Subsequent increments
     step = 1
     current_size = initial_size
-    while True:
+    while current_size + expansion_size <= max_len:
         current_size += expansion_size
-        if current_size > max_len:
-            break
-            
-        # Static: re-process full prefix
-        start = time.time()
+        
+        # Static: re-extract full prefix
+        t0 = time.perf_counter()
         count = 0
         for x in X:
             if x.shape[1] < current_size: continue
@@ -117,10 +98,9 @@ def benchmark():
             static_ext.process_2d_floats(batch)
             count += 1
         if count == 0: break
-        static_times.append(time.time() - start)
-        
-        # Expanding: process only the new 100 points
-        start = time.time()
+        static_times.append(time.perf_counter() - t0)
+
+        # Expanding: process only new points
         arrays = []
         names = []
         for s_idx, x in enumerate(X):
@@ -129,24 +109,81 @@ def benchmark():
                 arrays.append(pa.array(x[i, current_size-expansion_size:current_size]))
                 names.append(f"s{s_idx}_c{i}")
         batch = pa.RecordBatch.from_arrays(arrays, names=names)
+        t0 = time.perf_counter()
         exp_ext.update(batch)
-        expanding_times.append(time.time() - start)
-        
-        print(f"Step {step} (size {current_size}): Static={static_times[-1]:.4f}s, Expanding={expanding_times[-1]:.4f}s, Samples={count}")
-        step += 1
-        
-        # Stop early if it takes too long or we reached a reasonable limit
-        # The user said "0, 1..10..rest"
-        # If I do first 10 steps, then maybe every 10? 
-        # Let's just do all of them for now if it's fast.
+        expanding_times.append(time.perf_counter() - t0)
 
-    print("\nFinal Results:")
-    print("Step | Size | Static (s) | Expanding (s) | Speedup")
-    print("-" * 50)
+        print(f"Step {step} (size {current_size}): Static={static_times[-1]:.4f}s, Expanding={expanding_times[-1]:.4f}s (Speedup: {static_times[-1]/expanding_times[-1]:.2f}x)")
+        step += 1
+
+    print("\nSummary Results:")
+    print(f"{'Step':>4} | {'Size':>5} | {'Static (s)':>12} | {'Expanding (s)':>15} | {'Speedup':>8}")
+    print("-" * 55)
     for i in range(len(static_times)):
-        size = initial_size + i * expansion_size
-        speedup = static_times[i] / expanding_times[i]
-        print(f"{i:4d} | {size:4d} | {static_times[i]:10.4f} | {expanding_times[i]:13.4f} | {speedup:7.2f}x")
+        sz = initial_size + i * expansion_size
+        sp = static_times[i] / expanding_times[i] if expanding_times[i] > 0 else 0
+        print(f"{i:4d} | {sz:5d} | {static_times[i]:12.4f} | {expanding_times[i]:15.4f} | {sp:7.2f}x")
+
+def run_per_series_benchmark(X, initial_size=500, expansion_size=100):
+    total_samples = len(X)
+    print(f"\n--- Running Per-Series Individual Benchmark ({total_samples} series) ---")
+    static_step_timings = {}
+    expanding_step_timings = {}
+    static_ext = tsfast.Extractor(FEATURES)
+    names = [COLNAMES[i] for i in SIGNAL_COL]
+
+    for s_idx, x in enumerate(X):
+        if x.shape[1] < initial_size: continue
+        exp_ext = tsfast.ExpandingExtractor(FEATURES, len(SIGNAL_COL))
+
+        # Initial
+        batch_static = pa.RecordBatch.from_arrays([pa.array(x[i, :initial_size]) for i in range(x.shape[0])], names=names)
+        t0 = time.perf_counter()
+        static_ext.process_2d_floats(batch_static)
+        static_step_timings.setdefault(0, []).append(time.perf_counter() - t0)
+
+        batch_exp = pa.RecordBatch.from_arrays([pa.array(x[i, :initial_size]) for i in range(x.shape[0])], names=names)
+        t0 = time.perf_counter()
+        exp_ext.update(batch_exp)
+        expanding_step_timings.setdefault(0, []).append(time.perf_counter() - t0)
+
+        step = 1
+        current_size = initial_size
+        while current_size + expansion_size <= x.shape[1]:
+            current_size += expansion_size
+            # Static
+            b_s = pa.RecordBatch.from_arrays([pa.array(x[i, :current_size]) for i in range(x.shape[0])], names=names)
+            t0 = time.perf_counter()
+            static_ext.process_2d_floats(b_s)
+            static_step_timings.setdefault(step, []).append(time.perf_counter() - t0)
+
+            # Expanding
+            b_e = pa.RecordBatch.from_arrays([pa.array(x[i, current_size-expansion_size:current_size]) for i in range(x.shape[0])], names=names)
+            t0 = time.perf_counter()
+            exp_ext.update(b_e)
+            expanding_step_timings.setdefault(step, []).append(time.perf_counter() - t0)
+            step += 1
+
+    print("\nAveraged Results Per-Series:")
+    print(f"{'Step':>4} | {'Size':>5} | {'Static (ms)':>12} | {'Expanding (ms)':>15} | {'Speedup':>8} | {'Samples':>8}")
+    print("-" * 65)
+    for step in sorted(static_step_timings.keys()):
+        sz = initial_size + step * expansion_size
+        avg_s = np.mean(static_step_timings[step]) * 1000
+        avg_e = np.mean(expanding_step_timings[step]) * 1000
+        sp = avg_s / avg_e if avg_e > 0 else 0
+        print(f"{step:4d} | {sz:5d} | {avg_s:12.4f} | {avg_e:15.4f} | {sp:7.2f}x | {len(static_step_timings[step]):8d}")
 
 if __name__ == "__main__":
-    benchmark()
+    parser = argparse.ArgumentParser(description="TSFast Expanding Window Real/Synthetic Benchmark")
+    parser.add_argument("--data_dir", type=str, default="prev-data/Dataset/Intrinsic data", help="Path to real dataset")
+    parser.add_argument("--mode", type=str, choices=["batched", "per-series", "both"], default="batched")
+    args = parser.parse_args()
+
+    data = load_data(args.data_dir)
+    print(f"Loaded {len(data)} total series.")
+
+    if args.mode in ("batched", "both"):
+        run_batched_benchmark(data)
+    if args.mode in ("per-series", "both"):
+        run_per_series_benchmark(data)

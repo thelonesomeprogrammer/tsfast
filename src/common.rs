@@ -5,6 +5,7 @@ use std::simd::f32x4;
 
 pub const LANES: usize = 4;
 
+#[derive(Clone, Debug)]
 pub struct SlidingDFT {
     pub n: usize,
     pub bins: Vec<Complex<f32>>,
@@ -42,6 +43,8 @@ impl SlidingDFT {
         s
     }
 }
+
+#[derive(Clone)]
 pub struct ColumnState {
     pub total_sum: f32,
     pub min_value: f32,

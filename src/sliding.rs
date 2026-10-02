@@ -11,7 +11,8 @@ use realfft::RealFftPlanner;
 pub mod engine;
 use engine::SlidingEngine;
 
-#[pyclass]
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
 pub struct SlidingExtractor {
     pub features: Vec<Feature>,
     pub compute: FastBitArray,

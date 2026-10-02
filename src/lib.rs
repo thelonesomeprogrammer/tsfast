@@ -1,11 +1,15 @@
 #![feature(portable_simd)]
 use pyo3::prelude::*;
 
-mod common;
-mod expanding;
-mod sliding;
-mod static_ext;
-mod types;
+pub mod common;
+pub mod expanding;
+pub mod sliding;
+pub mod static_ext;
+pub mod types;
+
+pub use expanding::ExpandingExtractor;
+pub use sliding::SlidingExtractor;
+pub use static_ext::Extractor;
 
 #[pymodule]
 fn _tsfast(m: &Bound<'_, PyModule>) -> PyResult<()> {

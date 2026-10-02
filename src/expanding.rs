@@ -11,7 +11,8 @@ use realfft::RealFftPlanner;
 pub mod engine;
 use engine::ExpandingEngine;
 
-#[pyclass]
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
 pub struct ExpandingExtractor {
     pub features: Vec<Feature>,
     pub compute: FastBitArray,
