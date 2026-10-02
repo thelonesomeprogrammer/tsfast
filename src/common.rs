@@ -276,6 +276,9 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> FastBitArray {
             Feature::MeanSecondDerivativeCentral => bits.set_batch([65, 37]),
             Feature::LargeStandardDeviation(_) => bits.set_batch([0, 1, 2, 4, 5, 12, 37]),
             Feature::SymmetryLooking(_) => bits.set_batch([0, 1, 4, 5, 6, 37]),
+            Feature::HasDuplicateMax => bits.set_batch([5, 68, 37]),
+            Feature::HasDuplicateMin => bits.set_batch([4, 69, 37]),
+            Feature::HasDuplicate => bits.set_batch([67, 37]),
         }
     }
     bits

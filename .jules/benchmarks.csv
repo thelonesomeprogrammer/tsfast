@@ -1,7 +1,20 @@
 Date,CommitHash,Benchmark_Name,Metric_Value,Unit,Delta_From_Last
-2026-10-02 11:23:43,63fbb8e,tsfast_ms_per_window,4.31970989002901,ms,0.0
-2026-10-02 11:23:43,63fbb8e,tsfresh_ms_per_window,183.94430945901308,ms,0.0
-2026-10-02 11:23:43,63fbb8e,tsfel_ms_per_window,237.853162428912,ms,0.0
-2026-10-02 11:23:43,63fbb8e,tsfast_compatible_features,46,count,0.0
-2026-10-02 11:23:43,63fbb8e,tsfresh_compatible_features,40,count,0.0
-2026-10-02 11:23:43,63fbb8e,tsfel_compatible_features,17,count,0.0
+2026-10-02 14:43:55,dc89d37,tsfast_sliding_first_window,1.5869140625,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfast_sliding_avg_next_50,0.43440818786621094,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfast_expanding_first_window,0.3333091735839844,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfast_expanding_avg_next_50,1.8407249450683594,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfast_static_sliding_first_window,0.3285408020019531,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfast_static_sliding_avg_next_50,0.44281959533691406,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfast_static_expanding_first_window,0.39768218994140625,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfast_static_expanding_avg_next_50,2.060365676879883,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfresh_sliding_first_window,62.51692771911621,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfresh_sliding_avg_next_50,56.30635738372803,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfresh_expanding_first_window,55.4194450378418,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfresh_expanding_avg_next_50,274.54931259155273,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfel_sliding_first_window,84.65290069580078,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfel_sliding_avg_next_50,82.12599754333496,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfel_expanding_first_window,81.97855949401855,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfel_expanding_avg_next_50,95.0517225265503,ms,0.0
+2026-10-02 14:43:55,dc89d37,tsfast_compatible_features,46,count,0.0
+2026-10-02 14:43:55,dc89d37,tsfresh_compatible_features,40,count,0.0
+2026-10-02 14:43:55,dc89d37,tsfel_compatible_features,17,count,0.0

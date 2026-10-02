@@ -1080,6 +1080,41 @@ impl<'a> ExpandingEngine<'a> {
                         0.0
                     }
                 }
+                Feature::HasDuplicateMax => {
+                    let mut count = 0;
+                    for &v in full_series {
+                        if v == state.max_value {
+                            count += 1;
+                            if count > 1 {
+                                break;
+                            }
+                        }
+                    }
+                    if count > 1 { 1.0 } else { 0.0 }
+                }
+                Feature::HasDuplicateMin => {
+                    let mut count = 0;
+                    for &v in full_series {
+                        if v == state.min_value {
+                            count += 1;
+                            if count > 1 {
+                                break;
+                            }
+                        }
+                    }
+                    if count > 1 { 1.0 } else { 0.0 }
+                }
+                Feature::HasDuplicate => {
+                    let mut unique = rustc_hash::FxHashSet::default();
+                    let mut has_dup = false;
+                    for &v in full_series {
+                        if !unique.insert(v.to_bits()) {
+                            has_dup = true;
+                            break;
+                        }
+                    }
+                    if has_dup { 1.0 } else { 0.0 }
+                }
                 Feature::SpectrogramCoefficients(_t, f_bits) => {
                     if !spectrum.is_empty() {
                         let target_freq = f32::from_bits(*f_bits);

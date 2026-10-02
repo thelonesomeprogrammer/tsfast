@@ -130,3 +130,33 @@ if __name__ == "__main__":
     test_paa()
     test_advanced_features()
     test_2d_extraction()
+
+def test_duplicate_features():
+    from tsfresh.feature_extraction.feature_calculators import has_duplicate, has_duplicate_max, has_duplicate_min
+    import pandas as pd
+
+    # Test case 1
+    x1 = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
+    # Test case 2
+    x2 = np.array([1.0, 5.0, 3.0, 4.0, 5.0], dtype=np.float32)
+    # Test case 3
+    x3 = np.array([1.0, 2.0, 3.0, 1.0, 5.0], dtype=np.float32)
+    # Test case 4
+    x4 = np.array([3.0, 3.0, 3.0], dtype=np.float32)
+
+    features = ["has_duplicate", "has_duplicate_max", "has_duplicate_min"]
+    extractor = tsfast.Extractor(features)
+
+    for x in [x1, x2, x3, x4]:
+        batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+        result_batch = extractor.process_2d_floats(batch)
+        results = result_batch.to_pandas().iloc[0].values
+
+        series = pd.Series(x)
+        expected_has_duplicate = 1.0 if has_duplicate(series) else 0.0
+        expected_has_duplicate_max = 1.0 if has_duplicate_max(series) else 0.0
+        expected_has_duplicate_min = 1.0 if has_duplicate_min(series) else 0.0
+
+        assert results[0] == expected_has_duplicate
+        assert results[1] == expected_has_duplicate_max
+        assert results[2] == expected_has_duplicate_min
