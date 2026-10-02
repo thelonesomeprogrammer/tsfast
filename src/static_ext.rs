@@ -15,7 +15,8 @@ pub mod extractor;
 use crate::common::{map_features_to_indices, next_good_fft_size};
 use extractor::StaticEngine;
 
-#[pyclass]
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
 pub struct Extractor {
     pub features: Vec<Feature>,
     pub compute: FastBitArray,

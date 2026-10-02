@@ -1,9 +1,12 @@
 /target
 /testdata
 /venv
+/.venv
 /python
 /cache
 __pycache__/
+.benchmarks/
 
-prev-data/
-_tsfast.cpython-*.so
+prev-data
+*.so
+tsfast/*.so

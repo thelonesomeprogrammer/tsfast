@@ -11,6 +11,7 @@ dependencies = [
     "pandas>=2.0.3",
     "pyarrow>=17.0.0",
     "pytest>=8.3.5",
+    "pytest-benchmark>=4.0.0",
     "scipy>=1.10.0",
     "tsfel>=0.2.0",
     "tsfresh>=0.20.3",
@@ -21,3 +22,10 @@ dynamic = ["version"]
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "tsfast._tsfast"
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "benchmarks"]
+markers = [
+    "benchmark: mark test as a benchmark"
+]
+

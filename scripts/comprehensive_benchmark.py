@@ -90,32 +90,39 @@ def get_tsfel_cfg(features):
 
 def benchmark_static(data, features):
     n_samples, n_points = data.shape
-    start = time.time()
     extractor = tsfast.Extractor(features)
-    tsfast_res = []
-    for i in range(n_samples):
-        batch = pa.RecordBatch.from_arrays([pa.array(data[i])], names=["v"])
-        res = extractor.process_2d_floats(batch)
-        tsfast_res.append([res.column(f)[0].as_py() for f in features])
-    tsfast_time = time.time() - start
-    tsfast_res = np.array(tsfast_res)
+    
+    # Pre-build RecordBatch with 1 column per series
+    batch = pa.RecordBatch.from_arrays(
+        [pa.array(data[i]) for i in range(n_samples)],
+        names=[f"s_{i}" for i in range(n_samples)]
+    )
+    
+    # Warmup
+    _ = extractor.process_2d_floats(batch)
+
+    start = time.perf_counter()
+    res = extractor.process_2d_floats(batch)
+    tsfast_time = time.perf_counter() - start
+    
+    tsfast_res = np.column_stack([res.column(f).to_numpy() for f in features])
 
     tsfresh_features = [f for f in features if FEATURE_MAPPING[f]["tsfresh"]]
     tsfresh_params = get_tsfresh_params(tsfresh_features)
     df_list = [pd.DataFrame({"id": i, "v": data[i]}) for i in range(n_samples)]
     full_df = pd.concat(df_list)
-    start = time.time()
+    start = time.perf_counter()
     tsfresh_df = extract_features(full_df, column_id="id", default_fc_parameters=tsfresh_params, n_jobs=1, disable_progressbar=True)
-    tsfresh_time = time.time() - start
+    tsfresh_time = time.perf_counter() - start
     
     tsfel_features = [f for f in features if FEATURE_MAPPING[f]["tsfel"]]
     tsfel_cfg = get_tsfel_cfg(tsfel_features)
-    start = time.time()
+    start = time.perf_counter()
     tsfel_res_list = []
     for i in range(n_samples):
         res = tsfel.time_series_features_extractor(tsfel_cfg, data[i], fs=100, verbose=0)
         tsfel_res_list.append(res)
-    tsfel_time = time.time() - start
+    tsfel_time = time.perf_counter() - start
     tsfel_res_df = pd.concat(tsfel_res_list, ignore_index=True)
 
     return {

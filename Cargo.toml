@@ -5,7 +5,7 @@ edition = "2024"
 
 [lib]
 name = "tsfast"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 numpy = "0.28"
@@ -20,8 +20,11 @@ rustc-hash = "2.1.3"
 
 [features]
 extension-module = ["pyo3/extension-module"]
-default = ["extension-module"]
+default = []
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = { version = "0.5", features = ["html_reports"] }
 
+[[bench]]
+name = "feature_benchmarks"
+harness = false
