@@ -105,3 +105,50 @@ def test_stride_behavior():
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+def test_sliding_invalid_feature():
+    with pytest.raises(ValueError):
+        SlidingExtractor(["invalid_feature"], 1, 3, 1)
+
+def test_sliding_paa():
+    features = ["paa-2-0", "paa-2-1"]
+    n_cols = 1
+    window_size = 4
+    stride = 1
+    extractor = SlidingExtractor(features, n_cols, window_size, stride)
+
+    x = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
+    res = extractor.update(data).to_pandas()
+
+    # window 1: [1, 2, 3, 4] -> paa-2-0 is mean(1,2)=1.5, paa-2-1 is mean(3,4)=3.5
+    # window 2: [2, 3, 4, 5] -> paa-2-0 is mean(2,3)=2.5, paa-2-1 is mean(4,5)=4.5
+    assert len(res) == 3
+    assert np.allclose(res.iloc[0]['paa-2-0'], 1.5)
+    assert np.allclose(res.iloc[0]['paa-2-1'], 3.5)
+    assert np.allclose(res.iloc[1]['paa-2-0'], 2.5)
+    assert np.allclose(res.iloc[1]['paa-2-1'], 4.5)
+
+def test_sliding_higher_moments():
+    features = ["mean", "std_dev", "skewness", "kurtosis"]
+    extractor = SlidingExtractor(features, 1, 5, 1)
+
+    x = np.array([1, 2, 3, 4, 5, 6, 7], dtype=np.float32)
+    data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
+    res = extractor.update(data).to_pandas()
+
+    assert len(res) == 3
+    # window 1: [1, 2, 3, 4, 5]
+    w1 = x[:5]
+    assert np.allclose(res.iloc[0]['mean'], np.mean(w1))
+    assert np.allclose(res.iloc[0]['std_dev'], np.std(w1, ddof=1))
+
+    from scipy.stats import kurtosis
+    v = np.var(w1, ddof=1)
+    m = np.mean(w1)
+    m3 = np.mean((w1 - m)**3)
+    expected_skew = m3 / (v**1.5)
+    expected_kurt = kurtosis(w1, fisher=True, bias=False)
+
+    assert np.allclose(res.iloc[0]['skewness'], expected_skew, atol=1e-5)
+    assert np.allclose(res.iloc[0]['kurtosis'], expected_kurt, atol=1e-5)
