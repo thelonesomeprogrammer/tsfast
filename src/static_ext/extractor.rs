@@ -300,7 +300,10 @@ impl<'a> StaticEngine<'a> {
 
         let mut sorted_copy: Option<Vec<f32>> = None;
         if self.compute.any([6, 10, 11, 49]) {
-            let mut copy = values.to_vec();
+            // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
+            let mut copy = std::mem::take(&mut state.sort_buffer);
+            copy.clear();
+            copy.extend_from_slice(values);
             copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
             if self.compute[6] {
@@ -347,9 +350,7 @@ impl<'a> StaticEngine<'a> {
                     }
                 }
             }
-            if self.compute[49] {
-                sorted_copy = Some(copy);
-            }
+            sorted_copy = Some(copy);
         }
 
         let mut benford_corr = 0.0;
@@ -882,9 +883,12 @@ impl<'a> StaticEngine<'a> {
                     let mut copy = if let Some(c) = sorted_copy.take() {
                         c
                     } else {
-                        values.to_vec()
+                        let mut c = std::mem::take(&mut state.sort_buffer);
+                        c.clear();
+                        c.extend_from_slice(values);
+                        c
                     };
-                    if copy.is_empty() {
+                    let res = if copy.is_empty() {
                         0.0
                     } else if copy.len() == 1 {
                         copy[0]
@@ -894,10 +898,6 @@ impl<'a> StaticEngine<'a> {
                         let i = idx.floor() as usize;
                         let f = idx - i as f32;
 
-                        // We need i and i+1 to be valid.
-                        // select_nth_unstable only gives us one.
-                        // For linear interpolation, we need to sort or at least find two.
-                        // Since we already might have a sorted copy, let's just sort if not.
                         copy.sort_unstable_by(|a, b| {
                             a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                         });
@@ -907,7 +907,9 @@ impl<'a> StaticEngine<'a> {
                         } else {
                             (1.0 - f) * copy[i] + f * copy[i + 1]
                         }
-                    }
+                    };
+                    state.sort_buffer = copy;
+                    res
                 }
                 Feature::IndexMassQuantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
