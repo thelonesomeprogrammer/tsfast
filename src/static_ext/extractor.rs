@@ -270,7 +270,7 @@ impl<'a> StaticEngine<'a> {
     }
 
     #[inline(always)]
-    fn finalize_results(&self, values: &[f32], n: f32, state: ColumnState) -> Vec<f32> {
+    fn finalize_results(&self, values: &[f32], n: f32, mut state: ColumnState) -> Vec<f32> {
         let mean = state.total_sum / n;
         let mac_sum = state.mac_sum_vec.reduce_sum();
         let mc_sum = state.mc_sum_vec.reduce_sum();
@@ -740,7 +740,8 @@ impl<'a> StaticEngine<'a> {
                 }
                 Feature::PartialAutocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
                     let l = *lag as usize;
-                    let mut r = Vec::with_capacity(l + 1);
+                    let mut r = std::mem::take(&mut state.pacf_buffer);
+                    r.clear();
                     let m2 = var * (n - 1.0);
                     for k in 0..=l {
                         let mut sum = 0.0;
@@ -770,13 +771,16 @@ impl<'a> StaticEngine<'a> {
                             break;
                         }
                     }
-                    phi[l][l]
+                    let res = phi[l][l];
+                    state.pacf_buffer = r;
+                    res
                 }
                 Feature::AggLinearTrend(attr, chunk_len, func)
                     if values.len() >= *chunk_len as usize =>
                 {
                     let cl = *chunk_len as usize;
-                    let mut agg_series = Vec::new();
+                    let mut agg_series = std::mem::take(&mut state.agg_linear_trend_buffer);
+                    agg_series.clear();
                     for chunk in values.chunks_exact(cl) {
                         let val = match func {
                             crate::types::AggFunc::Max => {
@@ -809,7 +813,7 @@ impl<'a> StaticEngine<'a> {
                     let s_xy = m_sum_xy - (m_sum_x * m_sum_y) / m_n;
                     let slope = if s_xx.abs() > 1e-9 { s_xy / s_xx } else { 0.0 };
                     let intercept = (m_sum_y - slope * m_sum_x) / m_n;
-                    match attr {
+                    let res = match attr {
                         crate::types::AggAttr::Slope => slope,
                         crate::types::AggAttr::Intercept => intercept,
                         crate::types::AggAttr::Stderr | crate::types::AggAttr::RValue => {
@@ -836,14 +840,18 @@ impl<'a> StaticEngine<'a> {
                             }
                         }
                         _ => 0.0,
-                    }
+                    };
+                    state.agg_linear_trend_buffer = agg_series;
+                    res
                 }
                 Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
                     let m_val = *m as usize;
                     let r = f32::from_bits(*r_bits);
-                    let mut buffer = Vec::new();
-                    crate::common::approx_entropy_phi(m_val, r, values, &mut buffer)
-                        - crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer)
+                    let mut buffer = std::mem::take(&mut state.approx_entropy_buffer);
+                    let res = crate::common::approx_entropy_phi(m_val, r, values, &mut buffer)
+                        - crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer);
+                    state.approx_entropy_buffer = buffer;
+                    res
                 }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
