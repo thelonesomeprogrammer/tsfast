@@ -1,0 +1,3 @@
+## 2023-10-27 - Feature Enum f32 Float Bit Encoding Fix
+**Learning:** Downcasting 32-bit floats via `.to_bits()` into `u16` causes catastrophic precision loss. Storing 32-bit float encodings inside enums requires sizing the internal fields as `u32` natively.
+**Action:** Upgraded bit storage formats in the core enum parser (e.g. `WaveletFeatures` and `SpectrogramCoefficients`) from `u16` to `u32` for complete data integrity without affecting memory alignment sizing boundaries. Fixed `static_ext.rs` compilation test issues simultaneously by explicitly checking expected `Extractor` instantiation unwraps.

@@ -142,8 +142,8 @@ pub enum Feature {
     SpectralDecrease,
     SpectralSlope,
     SignalDistance,
-    WaveletFeatures(u16, u16), // mother wavelet, feature type
-    SpectrogramCoefficients(u16, u16), // time, freq
+    WaveletFeatures(u32, u16), // mother wavelet, feature type
+    SpectrogramCoefficients(u16, u32), // time, freq
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -378,7 +378,7 @@ impl std::str::FromStr for Feature {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2 {
                         if let (Ok(w), Ok(f)) =
-                            (params[0].parse::<u16>(), params[1].parse::<u16>())
+                            (params[0].parse::<u32>(), params[1].parse::<u16>())
                         {
                             return Ok(Feature::WaveletFeatures(w, f));
                         }
@@ -392,12 +392,12 @@ impl std::str::FromStr for Feature {
                             e[pos+1..end].parse::<f32>().unwrap_or(0.0)
                         } else { 0.0 }
                     } else { 0.0 };
-                    return Ok(Feature::WaveletFeatures(freq.to_bits() as u16, f_type)); // Hacky storage
+                    return Ok(Feature::WaveletFeatures(freq.to_bits(), f_type));
                 } else if let Some(arg) = e.strip_prefix("spectrogram-") {
                     let params: Vec<&str> = arg.split('-').collect();
                     if params.len() == 2 {
                         if let (Ok(t), Ok(f)) =
-                            (params[0].parse::<u16>(), params[1].parse::<u16>())
+                            (params[0].parse::<u16>(), params[1].parse::<u32>())
                         {
                             return Ok(Feature::SpectrogramCoefficients(t, f));
                         }
@@ -407,7 +407,7 @@ impl std::str::FromStr for Feature {
                     if let Some(pos) = e.rfind('_') {
                         if let Some(end) = e.find("Hz") {
                             let freq = e[pos+1..end].parse::<f32>().unwrap_or(0.0);
-                            return Ok(Feature::SpectrogramCoefficients(0, freq.to_bits() as u16)); // Hacky
+                            return Ok(Feature::SpectrogramCoefficients(0, freq.to_bits()));
                         }
                     }
                 }

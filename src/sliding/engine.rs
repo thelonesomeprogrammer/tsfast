@@ -1358,7 +1358,7 @@ impl<'a> SlidingEngine<'a> {
                 Feature::SpectralSlope => spectral_slope,
                 Feature::SpectrogramCoefficients(_, f_bits) => {
                     if !spectrum.is_empty() {
-                        let target_freq = f32::from_bits(*f_bits as u32);
+                        let target_freq = f32::from_bits(*f_bits);
                         let fs = 100.0;
                         let n_fft = (spectrum.len() - 1) * 2;
                         let freq_step = fs / n_fft as f32;

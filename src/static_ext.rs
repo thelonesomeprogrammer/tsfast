@@ -210,7 +210,7 @@ mod tests {
             "paa-2-0".to_string(),
             "paa-2-1".to_string(),
         ];
-        let extractor = Extractor::new(features, None);
+        let extractor = Extractor::new(features, None).unwrap();
         let batch = create_test_batch(data.clone());
         let result = extractor.process_2d_floats(batch).unwrap().0;
 
@@ -246,7 +246,7 @@ mod tests {
             "rms".to_string(),
             "mad".to_string(),
         ];
-        let extractor = Extractor::new(features, None);
+        let extractor = Extractor::new(features, None).unwrap();
         let batch = create_test_batch(data.clone());
         let result = extractor.process_2d_floats(batch).unwrap().0;
 
