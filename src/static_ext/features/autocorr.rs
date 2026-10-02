@@ -1,13 +1,13 @@
 #[inline(always)]
 pub fn compute_fft_autocorr(
-    compute: &crate::types::FastBitArray,
+    compute: &crate::types::Compute,
     values: &[f32],
     n: f32,
     mean: f32,
     m2: f32,
 ) -> Vec<f32> {
     let mut fft_autocorr = Vec::new();
-    if compute.any([43, 44]) && n > 1.0 {
+    if compute.intersects(crate::types::Compute::FULL_AUTOCORR | crate::types::Compute::PACF) && n > 1.0 {
         let n2 = values.len() * 2;
         let fft_size_ac = crate::common::next_good_fft_size(n2);
         let mut planner = realfft::RealFftPlanner::<f32>::new();

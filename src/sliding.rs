@@ -1,5 +1,5 @@
 use crate::common::{ColumnState, map_features_to_indices, next_good_fft_size};
-use crate::types::{FastBitArray, Feature};
+use crate::types::{Compute, Feature};
 use arrow::array::{ArrayRef, Float32Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::pyarrow::PyArrowType;
@@ -9,13 +9,14 @@ use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
 pub mod engine;
+pub mod features;
 use engine::SlidingEngine;
 
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct SlidingExtractor {
     pub features: Vec<Feature>,
-    pub compute: FastBitArray,
+    pub compute: Compute,
     pub unique_paa_totals: Vec<u16>,
     pub unique_c3_lags: Vec<u16>,
     pub unique_autocorr_lags: Vec<u16>,
@@ -72,7 +73,7 @@ impl SlidingExtractor {
         let planner = RealFftPlanner::<f32>::new();
         let planner_arc = Arc::new(Mutex::new(planner));
 
-        if compute.any_fft() {
+        if compute.intersects(Compute::ANY_FFT) {
             let mut p = planner_arc.lock().unwrap_or_else(|e| e.into_inner());
             p.plan_fft_forward(next_good_fft_size(window_size));
         }
@@ -138,7 +139,7 @@ impl SlidingExtractor {
             .collect();
 
         let fft_size = next_good_fft_size(self.window_size);
-        let r2c = if self.compute.any_fft() {
+        let r2c = if self.compute.intersects(Compute::ANY_FFT) {
             let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
             Some(p.plan_fft_forward(fft_size))
         } else {

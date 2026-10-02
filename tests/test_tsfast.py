@@ -160,3 +160,31 @@ def test_duplicate_features():
         assert results[0] == expected_has_duplicate
         assert results[1] == expected_has_duplicate_max
         assert results[2] == expected_has_duplicate_min
+
+def test_extract_invalid_type():
+    # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
+    x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
+    features = ["mean", "std"]
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    with pytest.raises(TypeError, match="Failed to downcast column to Float32Array"):
+        extractor.process_2d_floats(batch)
+
+def test_extract_empty_batch():
+    # Verify the Rust engine handles zero-length batches without panicking
+    features = ["mean", "std"]
+    extractor = tsfast.Extractor(features)
+
+    empty_data = pa.RecordBatch.from_arrays([pa.array([], type=pa.float32())], names=['c1'])
+    result = extractor.process_2d_floats(empty_data)
+
+    df = result.to_pandas()
+    assert len(df) == 1
+    # For empty batches, the rust engine defaults to returning 0.0 values across all requested features
+    assert df.iloc[0]['mean'] == 0.0
+
+def test_extract_invalid_feature():
+    # Verify unsupported features immediately error during initialization
+    features = ["invalid_feature"]
+    with pytest.raises(ValueError, match="Unknown feature"):
+        extractor = tsfast.Extractor(features)

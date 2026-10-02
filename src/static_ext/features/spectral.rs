@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 #[inline(always)]
 pub fn compute_spectral_features(
-    compute: &crate::types::FastBitArray,
+    compute: &crate::types::Compute,
     values: &[f32],
     state: &mut ColumnState,
     fft_size: usize,
@@ -15,7 +15,7 @@ pub fn compute_spectral_features(
     spectral_decrease: &mut f32,
     spectral_slope: &mut f32,
 ) {
-    if compute.any_fft() {
+    if compute.intersects(crate::types::Compute::ANY_FFT) {
         let mut indata = std::mem::take(&mut state.fft_in_buffer);
         let mut outdata = std::mem::take(&mut state.fft_out_buffer);
 
@@ -34,7 +34,7 @@ pub fn compute_spectral_features(
             r2c.process(&mut indata, &mut outdata[..out_len]).unwrap();
             let s = outdata[..out_len].iter().map(|c| c.norm()).collect();
             (outdata[..out_len].to_vec(), s)
-        } else if compute.any([54, 55, 56, 57, 60]) {
+        } else if compute.intersects(crate::types::Compute::SPEC_CENTROID | crate::types::Compute::SPEC_DISTANCE | crate::types::Compute::SPEC_DECREASE | crate::types::Compute::SPEC_SLOPE | crate::types::Compute::SPECTROGRAM) {
             let mut planner = RealFftPlanner::<f32>::new();
             let r2c = planner.plan_fft_forward(values.len());
 

@@ -2,7 +2,7 @@ use crate::common::ColumnState;
 
 #[inline(always)]
 pub fn compute_distribution_features(
-    compute: &crate::types::FastBitArray,
+    compute: &crate::types::Compute,
     values: &[f32],
     state: &mut ColumnState,
     n: f32,
@@ -12,14 +12,14 @@ pub fn compute_distribution_features(
 ) -> Option<Vec<f32>> {
     let mut sorted_copy: Option<Vec<f32>> = None;
 
-    if compute.any([6, 10, 11, 49]) {
+    if compute.intersects(crate::types::Compute::MEDIAN | crate::types::Compute::IQR | crate::types::Compute::ENTROPY | crate::types::Compute::QUANTILE) {
         // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
         let mut copy = std::mem::take(&mut state.sort_buffer);
         copy.clear();
         copy.extend_from_slice(values);
         copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
-        if compute[6] {
+        if compute.contains(crate::types::Compute::MEDIAN) {
             let n_len = copy.len();
             if n_len > 0 {
                 if n_len % 2 == 1 {
@@ -29,7 +29,7 @@ pub fn compute_distribution_features(
                 }
             }
         }
-        if compute[10] {
+        if compute.contains(crate::types::Compute::IQR) {
             let n_f = n;
             let get_q = |q: f32, data: &[f32]| -> f32 {
                 if data.is_empty() {
@@ -46,7 +46,7 @@ pub fn compute_distribution_features(
             };
             *iqr = get_q(0.75, &copy) - get_q(0.25, &copy);
         }
-        if compute[11] {
+        if compute.contains(crate::types::Compute::ENTROPY) {
             let range = state.max_value - state.min_value;
             if range > 1e-9 {
                 let bins = 10;

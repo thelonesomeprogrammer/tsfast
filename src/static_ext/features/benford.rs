@@ -1,10 +1,10 @@
 #[inline(always)]
 pub fn compute_benford_correlation(
-    compute: &crate::types::FastBitArray,
+    compute: &crate::types::Compute,
     values: &[f32],
 ) -> f32 {
     let mut benford_corr = 0.0;
-    if compute[51] {
+    if compute.contains(crate::types::Compute::BENFORD) {
         let mut counts = [0.0; 9];
         for &v in values {
             let abs_v = v.abs();
