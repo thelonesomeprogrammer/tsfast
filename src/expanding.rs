@@ -163,7 +163,7 @@ impl ExpandingExtractor {
 
         use rayon::prelude::*;
 
-        let column_results: Vec<Vec<f32>> = self.states[..n_cols]
+        let column_results: Result<Vec<Vec<f32>>, String> = self.states[..n_cols]
             .par_iter_mut()
             .zip(self.histories[..n_cols].par_iter_mut())
             .zip(self.sorted_histories[..n_cols].par_iter_mut())
@@ -172,7 +172,7 @@ impl ExpandingExtractor {
                 let array = column
                     .as_any()
                     .downcast_ref::<Float32Array>()
-                    .expect("Expected Float32Array");
+                    .ok_or_else(|| "Expected Float32Array".to_string())?;
 
                 let values = array.values();
 
@@ -197,9 +197,11 @@ impl ExpandingExtractor {
                     fft_update_period: self.fft_update_period,
                 };
 
-                engine.process_expanding(values, history.len(), state, history, sorted_history)
+                Ok(engine.process_expanding(values, history.len(), state, history, sorted_history))
             })
             .collect();
+
+        let column_results = column_results.map_err(|e| PyTypeError::new_err(e))?;
 
         let mut fields = Vec::with_capacity(self.features.len());
         for feat in &self.features {

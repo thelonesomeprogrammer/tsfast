@@ -159,7 +159,7 @@ impl SlidingExtractor {
                     let array = column
                         .as_any()
                         .downcast_ref::<Float32Array>()
-                        .expect("Expected Float32Array");
+                        .ok_or_else(|| "Expected Float32Array".to_string())?;
 
                     let values = array.values();
                     let engine = SlidingEngine {

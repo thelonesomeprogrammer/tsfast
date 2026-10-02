@@ -111,14 +111,14 @@ impl Extractor {
             None
         };
 
-        let column_results: Vec<Vec<f32>> = record_batch
+        let column_results: Result<Vec<Vec<f32>>, String> = record_batch
             .columns()
             .par_iter()
             .map(|col| {
                 let float_array = col
                     .as_any()
                     .downcast_ref::<Float32Array>()
-                    .expect("Failed to downcast column to Float32Array");
+                    .ok_or_else(|| "Failed to downcast column to Float32Array".to_string())?;
 
                 let processor = StaticEngine {
                     compute,
@@ -129,9 +129,11 @@ impl Extractor {
                     r2c: r2c.as_ref().cloned(),
                     fft_size,
                 };
-                processor.process_column(float_array.values())
+                Ok(processor.process_column(float_array.values()))
             })
             .collect();
+
+        let column_results = column_results.map_err(|e| PyTypeError::new_err(e))?;
 
         let mut fields = Vec::with_capacity(features.len());
         let results: Vec<ArrayRef> = (0..features.len())
