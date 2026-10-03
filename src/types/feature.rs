@@ -70,6 +70,9 @@ pub enum Feature {
     SpectralDistance,
     SpectralDecrease,
     SpectralSlope,
+    SpectralSpread,
+    SpectralSkewness,
+    SpectralKurtosis,
     SignalDistance,
     WaveletFeatures(u32, u16), // mother wavelet (freq stored as f32 bits), feature type
     SpectrogramCoefficients(u16, u32), // time, freq stored as f32 bits
@@ -209,6 +212,9 @@ impl Feature {
             Self::SpectralDistance => C::SPEC_DISTANCE | C::NEEDS_SORT,
             Self::SpectralDecrease => C::SPEC_DECREASE | C::NEEDS_SORT,
             Self::SpectralSlope => C::SPEC_SLOPE | C::NEEDS_SORT,
+            Self::SpectralSpread => C::SPEC_SPREAD | C::NEEDS_SORT,
+            Self::SpectralSkewness => C::SPEC_SKEWNESS | C::NEEDS_SORT,
+            Self::SpectralKurtosis => C::SPEC_KURTOSIS | C::NEEDS_SORT,
             Self::SignalDistance => C::SIG_DISTANCE | C::NEEDS_SORT,
             Self::WaveletFeatures(_, _) => C::WAVELET | C::NEEDS_SORT,
             Self::SpectrogramCoefficients(_, _) => C::SPECTROGRAM | C::NEEDS_SORT,
