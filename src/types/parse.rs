@@ -203,6 +203,10 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("ratio_beyond_r_sigma-") {
+        let r: f32 = arg.parse().ok()?;
+        return Some(Feature::RatioBeyondRSigma(r.to_bits()));
+    }
     None
 }
 
@@ -312,6 +316,11 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("symmetry_looking__r_") {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
+    }
+    if s.contains("value__ratio_beyond_r_sigma__r_") {
+        let pos = s.find("r_")?;
+        let r: f32 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::RatioBeyondRSigma(r.to_bits()));
     }
     None
 }
@@ -465,6 +474,9 @@ impl Feature {
             }
             Feature::SymmetryLooking(r_bits) => {
                 format!("symmetry_looking-{}", f32::from_bits(*r_bits))
+            }
+            Feature::RatioBeyondRSigma(r_bits) => {
+                format!("ratio_beyond_r_sigma-{}", f32::from_bits(*r_bits))
             }
             Feature::HasDuplicateMax => "has_duplicate_max".to_string(),
             Feature::HasDuplicateMin => "has_duplicate_min".to_string(),

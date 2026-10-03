@@ -90,6 +90,7 @@ bitflags! {
         const SPEC_SPREAD    = 1 << 71;
         const SPEC_SKEWNESS  = 1 << 72;
         const SPEC_KURTOSIS  = 1 << 73;
+        const RATIO_BEYOND_R_SIGMA = 1 << 74;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()

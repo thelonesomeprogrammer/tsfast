@@ -82,6 +82,7 @@ pub enum Feature {
     MeanSecondDerivativeCentral,
     LargeStandardDeviation(u32),
     SymmetryLooking(u32),
+    RatioBeyondRSigma(u32), // r encoded as u32 bits
     HasDuplicateMax,
     HasDuplicateMin,
     HasDuplicate,
@@ -224,6 +225,9 @@ impl Feature {
             }
             Self::SymmetryLooking(_) => {
                 C::SUM | C::MEAN | C::MIN | C::MAX | C::MEDIAN | C::NEEDS_SORT
+            }
+            Self::RatioBeyondRSigma(_) => {
+                C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::NEEDS_SORT | C::RATIO_BEYOND_R_SIGMA
             }
             Self::HasDuplicateMax => C::MAX | C::HAS_DUP_MAX | C::NEEDS_SORT,
             Self::HasDuplicateMin => C::MIN | C::HAS_DUP_MIN | C::NEEDS_SORT,

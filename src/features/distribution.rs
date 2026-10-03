@@ -13,7 +13,7 @@ pub fn eval_distribution(
     let _m3 = context.m3;
     let _m4 = context.m4;
     let _var = context.var;
-    let _std_dev = context.std_dev;
+    let std_dev = context.std_dev;
     let _mac_sum = context.mac_sum;
     let _mc_sum = context.mc_sum;
     let _first_max_idx = context.first_max_idx;
@@ -43,6 +43,84 @@ pub fn eval_distribution(
     let res = match feat {
                 Feature::Median => median,
                 Feature::Entropy => entropy,
+                Feature::RatioBeyondRSigma(r_bits) => {
+                    let r = f32::from_bits(*r_bits);
+                    let boundary = r * std_dev;
+                    let mean = context.mean;
+                    let mut count = 0;
+                    // We can use vectorized logic to speed up processing
+                    use std::simd::{f32x4, num::SimdFloat, cmp::SimdPartialOrd};
+
+                    let chunks = values.chunks_exact(4);
+                    let rem = chunks.remainder();
+                    let boundary_simd = f32x4::splat(boundary);
+                    let mean_simd = f32x4::splat(mean);
+
+                    for chunk in chunks {
+                        let v = f32x4::from_slice(chunk);
+                        let diff = (v - mean_simd).abs();
+                        let mask = diff.simd_gt(boundary_simd);
+                        count += mask.to_bitmask().count_ones();
+                    }
+
+                    for &v in rem {
+                        if (v - mean).abs() > boundary {
+                            count += 1;
+                        }
+                    }
+
+                    if values.is_empty() {
+                        0.0
+                    } else {
+                        count as f32 / values.len() as f32
+                    }
+                }
+                Feature::IndexMassQuantile(q_bits) => {
+                    let q = f32::from_bits(*q_bits) as f64;
+                    let target_mass = q * state.abs_sum as f64;
+
+                    if target_mass <= 0.0 || values.is_empty() {
+                        0.0
+                    } else {
+                        // Check if we can resume (only if the array hasn't shrunk, e.g. expanding)
+                        if state.mass_pointer < values.len() && state.mass_cum_sum < target_mass {
+                            let mut cum_sum = state.mass_cum_sum;
+                            let mut pointer = state.mass_pointer;
+                            while pointer < values.len() {
+                                cum_sum += values[pointer].abs() as f64;
+                                if cum_sum >= target_mass {
+                                    state.mass_cum_sum = cum_sum;
+                                    state.mass_pointer = pointer;
+                                    break;
+                                }
+                                pointer += 1;
+                            }
+                            if pointer >= values.len() {
+                                pointer = values.len() - 1;
+                                state.mass_cum_sum = cum_sum;
+                                state.mass_pointer = pointer;
+                            }
+                            (state.mass_pointer + 1) as f32 / values.len() as f32
+                        } else {
+                            // Sliding window or mass center shifted left
+                            let mut cum_sum = 0.0;
+                            let mut pointer = 0;
+                            while pointer < values.len() {
+                                cum_sum += values[pointer].abs() as f64;
+                                if cum_sum >= target_mass {
+                                    break;
+                                }
+                                pointer += 1;
+                            }
+                            if pointer >= values.len() {
+                                pointer = values.len() - 1;
+                            }
+                            state.mass_cum_sum = cum_sum;
+                            state.mass_pointer = pointer;
+                            (pointer + 1) as f32 / values.len() as f32
+                        }
+                    }
+                }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
 
