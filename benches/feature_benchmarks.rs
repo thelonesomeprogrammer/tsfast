@@ -64,6 +64,7 @@ const FEATURES: &[&str] = &[
     "approx_entropy-2-0.7",
     "agg_linear_trend-slope-50-mean",
     "quantile-0.5",
+    "change_quantiles-0.2-0.8-True-mean",
     "index_mass_quantile-0.5",
     "mean_n_absolute_max-5",
 ];
