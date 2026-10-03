@@ -151,7 +151,7 @@ impl SlidingExtractor {
         let window_size = self.window_size;
         let stride = self.stride;
 
-        let column_results: Result<Vec<Vec<Vec<f32>>>, String> = self.states[..n_cols]
+        let column_results = self.states[..n_cols]
             .par_iter_mut()
             .zip(self.histories[..n_cols].par_iter_mut())
             .zip(record_batch.columns().par_iter())
@@ -215,9 +215,10 @@ impl SlidingExtractor {
                     Ok(batch_res)
                 },
             )
-            .collect();
+            .collect::<Result<Vec<Vec<Vec<f32>>>, String>>()
+            .map_err(|e| pyo3::exceptions::PyTypeError::new_err(e))?;
 
-        let column_results = column_results.map_err(PyTypeError::new_err)?;
+        let column_results = column_results;
         let n_results = column_results[0].len();
         let mut fields = Vec::with_capacity(self.features.len());
         for feat in &self.features {

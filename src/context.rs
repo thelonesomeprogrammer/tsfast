@@ -5,7 +5,7 @@ pub struct FeatureContext<'a> {
     pub running_sorted: Option<&'a [f32]>,
     pub state: &'a mut ColumnState,
     pub n: f32,
-    
+
     // BaseMetrics
     pub mean: f32,
     pub m2: f32,

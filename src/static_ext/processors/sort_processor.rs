@@ -21,7 +21,12 @@ impl SortProcessor {
         let mut entropy = 0.0;
 
         if compute.contains(Compute::NEEDS_SORT) {
-            if compute.intersects(Compute::FIRST_LOC_MAX | Compute::LAST_LOC_MAX | Compute::FIRST_LOC_MIN | Compute::LAST_LOC_MIN) {
+            if compute.intersects(
+                Compute::FIRST_LOC_MAX
+                    | Compute::LAST_LOC_MAX
+                    | Compute::FIRST_LOC_MIN
+                    | Compute::LAST_LOC_MIN,
+            ) {
                 let mut found_max = false;
                 let mut found_min = false;
                 for (i, &v) in values.iter().enumerate() {
@@ -45,7 +50,7 @@ impl SortProcessor {
                 let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
                 copy.clear();
                 copy.extend_from_slice(values);
-                
+
                 if compute.contains(Compute::MEDIAN) {
                     let n_len = copy.len();
                     if n_len % 2 == 1 {
@@ -74,33 +79,46 @@ impl SortProcessor {
                     let n_len = copy.len() as f32;
                     let q25_idx = 0.25 * (n_len - 1.0);
                     let q75_idx = 0.75 * (n_len - 1.0);
-                    
+
                     let get_percentile = |q_idx: f32, data: &mut [f32]| -> f32 {
                         let i = q_idx.floor() as usize;
                         let f = q_idx - i as f32;
-                        
+
                         let n = data.len();
-                        if n == 0 { return 0.0; }
-                        if n == 1 { return data[0]; }
-                        
+                        if n == 0 {
+                            return 0.0;
+                        }
+                        if n == 1 {
+                            return data[0];
+                        }
+
                         let (val_i, val_i_plus_1) = if i >= n - 1 {
-                            let (_, &mut val, _) = data.select_nth_unstable_by(n - 1, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                            let (_, &mut val, _) = data.select_nth_unstable_by(n - 1, |a, b| {
+                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                            });
                             (val, val)
                         } else {
-                            let (_, &mut val1, _) = data.select_nth_unstable_by(i + 1, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                            let val0 = *data[..=i].iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
+                            let (_, &mut val1, _) = data.select_nth_unstable_by(i + 1, |a, b| {
+                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                            });
+                            let val0 = *data[..=i]
+                                .iter()
+                                .max_by(|a, b| {
+                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                                .unwrap();
                             (val0, val1)
                         };
-                        
+
                         if i >= n - 1 {
                             val_i
                         } else {
                             (1.0 - f) * val_i + f * val_i_plus_1
                         }
                     };
-                    
+
                     // We need to compute both. They will mutate `copy`.
-                    // To be safe and correct with interpolations, we can compute them independently 
+                    // To be safe and correct with interpolations, we can compute them independently
                     // since we are just doing O(N) partitioning. But partitioning the array mutates it.
                     // Doing get_percentile twice is O(N) + O(N) = O(N) which is fine.
                     let q25 = get_percentile(q25_idx, &mut copy);

@@ -188,3 +188,31 @@ def test_extract_invalid_feature():
     features = ["invalid_feature"]
     with pytest.raises(ValueError, match="Unknown feature"):
         extractor = tsfast.Extractor(features)
+
+def test_reoccurring_ratios():
+    import pyarrow as pa
+    import tsfast
+    import numpy as np
+
+    x = np.array([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0], dtype=np.float32)
+    # len = 7
+    # values: 1, 2, 3, 4 (4 unique values)
+    # 2 occurs twice (reoccurring) -> reoccurring_datapoints = 2
+    # 3 occurs three times (reoccurring) -> reoccurring_datapoints = 3
+    # reoccurring_values = 2 (the values 2 and 3)
+    # Total reoccurring datapoints = 5
+
+    features = [
+        "percentage_of_reoccurring_datapoints_to_all_datapoints",
+        "percentage_of_reoccurring_values_to_all_values",
+        "ratio_value_number_to_time_series_length"
+    ]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    assert np.allclose(results[0], 5.0 / 7.0)
+    assert np.allclose(results[1], 2.0 / 4.0)
+    assert np.allclose(results[2], 4.0 / 7.0)

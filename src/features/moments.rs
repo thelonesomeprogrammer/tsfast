@@ -1,10 +1,7 @@
 use crate::types::Feature;
 
 #[inline(always)]
-pub fn eval_moments(
-    feat: &Feature,
-    context: &mut crate::context::FeatureContext,
-) -> Option<f32> {
+pub fn eval_moments(feat: &Feature, context: &mut crate::context::FeatureContext) -> Option<f32> {
     let _values = context.values;
     let state = &mut *context.state;
     let n = context.n;
@@ -39,28 +36,28 @@ pub fn eval_moments(
     let _unique_c3_lags = context.unique_c3_lags;
     let _unique_paa_totals = context.unique_paa_totals;
     let _paa_boundaries = context.paa_boundaries;
-    
+
     let res = match feat {
-                Feature::TotalSum => state.total_sum as f32,
-                Feature::Mean => mean as f32,
-                Feature::Variance => var as f32,
-                Feature::Std => std_dev as f32,
-                Feature::Skew if var > 1e-9 => {
-                    let mu2 = m2 / n;
-                    (m3 / n) / mu2.powf(1.5)
-                }
-                Feature::UnbiasedFisherKurtosis if var > 1e-9 && n > 3.0 => {
-                    let mu2 = m2 / n;
-                    let g2 = (m4 / n) / (mu2 * mu2) - 3.0;
-                    ((n - 1.0) / ((n - 2.0) * (n - 3.0))) * ((n + 1.0) * g2 + 6.0)
-                }
-                Feature::BiasedFisherKurtosis if var > 1e-9 => {
-                    let mu2 = m2 / n;
-                    (m4 / n) / (mu2 * mu2) - 3.0
-                }
-                Feature::Mad => mad_sum as f32,
-                Feature::Iqr => iqr,
-                Feature::VariationCoefficient if mean.abs() > 1e-9 => (std_dev / mean) as f32,
+        Feature::TotalSum => state.total_sum,
+        Feature::Mean => mean,
+        Feature::Variance => var,
+        Feature::Std => std_dev,
+        Feature::Skew if var > 1e-9 => {
+            let mu2 = m2 / n;
+            (m3 / n) / mu2.powf(1.5)
+        }
+        Feature::UnbiasedFisherKurtosis if var > 1e-9 && n > 3.0 => {
+            let mu2 = m2 / n;
+            let g2 = (m4 / n) / (mu2 * mu2) - 3.0;
+            ((n - 1.0) / ((n - 2.0) * (n - 3.0))) * ((n + 1.0) * g2 + 6.0)
+        }
+        Feature::BiasedFisherKurtosis if var > 1e-9 => {
+            let mu2 = m2 / n;
+            (m4 / n) / (mu2 * mu2) - 3.0
+        }
+        Feature::Mad => mad_sum,
+        Feature::Iqr => iqr,
+        Feature::VariationCoefficient if mean.abs() > 1e-9 => std_dev / mean,
         _ => return None,
     };
     Some(res)

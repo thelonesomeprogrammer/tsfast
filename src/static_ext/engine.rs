@@ -4,12 +4,12 @@ use realfft::RealToComplex;
 use std::simd::f32x4;
 use std::sync::Arc;
 
-use super::processors::stats_processor::StatsProcessor;
 use super::processors::diff_processor::DiffProcessor;
-use super::processors::trend_processor::TrendProcessor;
-use super::processors::sort_processor::SortProcessor;
-use super::processors::mean_processor::MeanProcessor;
 use super::processors::fft_processor::FftProcessor;
+use super::processors::mean_processor::MeanProcessor;
+use super::processors::sort_processor::SortProcessor;
+use super::processors::stats_processor::StatsProcessor;
+use super::processors::trend_processor::TrendProcessor;
 
 pub(crate) struct StaticEngine<'a> {
     pub(crate) compute: Compute,
@@ -34,15 +34,32 @@ impl<'a> StaticEngine<'a> {
 
         let rem_start = self.process_simd_chunks(values, &mut state);
         self.process_remainder(values, rem_start, &mut state);
+
+        if self
+            .compute
+            .intersects(crate::types::Compute::REOCCUR_RATIOS)
+        {
+            for &val in values {
+                let bits = val.to_bits();
+                let count = state.value_counts.entry(bits).or_insert(0);
+                *count += 1;
+                if *count == 2 {
+                    state.reoccurring_values += 1;
+                    state.reoccurring_datapoints += 2;
+                } else if *count > 2 {
+                    state.reoccurring_datapoints += 1;
+                }
+            }
+        }
         self.finalize_results(values, n, state)
     }
 
     #[inline(always)]
     fn process_simd_chunks(&self, values: &[f32], state: &mut ColumnState) -> usize {
-        let chunks = values.chunks_exact(LANES);
+        let chunks = values.as_chunks::<LANES>().0;
         let rem_start = (values.len() / LANES) * LANES;
 
-        for (chunk_idx, i) in chunks.enumerate() {
+        for (chunk_idx, i) in chunks.iter().enumerate() {
             let chunk = f32x4::from_slice(i);
             let global_idx = chunk_idx * LANES;
             let offset = global_idx as f32;
@@ -74,7 +91,7 @@ impl<'a> StaticEngine<'a> {
             let val = values[i];
 
             StatsProcessor::process_remainder(self.compute, val, state);
-            
+
             if i > 0 {
                 let prev = values[i - 1];
                 DiffProcessor::process_remainder(self.compute, val, prev, i, state);
@@ -98,7 +115,7 @@ impl<'a> StaticEngine<'a> {
         StatsProcessor::finalize_simd(self.compute, &mut state);
         DiffProcessor::finalize_simd(self.compute, &mut state);
         TrendProcessor::finalize_simd(self.compute, &mut state);
-        
+
         let base_metrics = StatsProcessor::finalize_base_metrics(&mut state, n);
 
         let sort_metrics = SortProcessor::finalize(self.compute, values, n, &mut state);
@@ -112,7 +129,8 @@ impl<'a> StaticEngine<'a> {
             self.fft_size,
             &self.r2c,
             &mut state,
-        ).unwrap_or(crate::metrics::FftResult {
+        )
+        .unwrap_or(crate::metrics::FftResult {
             spectrum: Vec::new(),
             fft_complex: Vec::new(),
             freq_centroid: 0.0,
@@ -120,7 +138,7 @@ impl<'a> StaticEngine<'a> {
             spectral_slope: 0.0,
             fft_autocorr: Vec::new(),
         });
-        
+
         let zc_metrics = DiffProcessor::finalize(self.compute, &state);
 
         let mut context = crate::context::FeatureContext::new(
@@ -133,26 +151,47 @@ impl<'a> StaticEngine<'a> {
             mean_metrics,
             zc_metrics,
             &fft_res,
-            &self.unique_c3_lags,
-            &self.unique_paa_totals,
-            &self.paa_boundaries,
+            self.unique_c3_lags,
+            self.unique_paa_totals,
+            self.paa_boundaries,
         );
 
         let mut feats = Vec::with_capacity(self.features.len());
         for feat in self.features {
             let val = {
-                if let Some(v) = crate::features::moments::eval_moments(feat, &mut context) { v }
-                else if let Some(v) = crate::features::min_max::eval_min_max(feat, &mut context) { v }
-                else if let Some(v) = crate::features::distribution::eval_distribution(feat, &mut context) { v }
-                else if let Some(v) = crate::features::energy::eval_energy(feat, &mut context) { v }
-                else if let Some(v) = crate::features::crossings_peaks::eval_crossings_peaks(feat, &mut context) { v }
-                else if let Some(v) = crate::features::autocorrelation::eval_autocorrelation(feat, &mut context) { v }
-                else if let Some(v) = crate::features::changes::eval_changes(feat, &mut context) { v }
-                else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) { v }
-                else if let Some(v) = crate::features::transform::eval_transform(feat, &mut context) { v }
-                else if let Some(v) = crate::features::complexity::eval_complexity(feat, &mut context) { v }
-                else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) { v }
-                else { 0.0 }
+                if let Some(v) = crate::features::moments::eval_moments(feat, &mut context) {
+                    v
+                } else if let Some(v) = crate::features::min_max::eval_min_max(feat, &mut context) {
+                    v
+                } else if let Some(v) =
+                    crate::features::distribution::eval_distribution(feat, &mut context)
+                {
+                    v
+                } else if let Some(v) = crate::features::energy::eval_energy(feat, &mut context) {
+                    v
+                } else if let Some(v) =
+                    crate::features::crossings_peaks::eval_crossings_peaks(feat, &mut context)
+                {
+                    v
+                } else if let Some(v) =
+                    crate::features::autocorrelation::eval_autocorrelation(feat, &mut context)
+                {
+                    v
+                } else if let Some(v) = crate::features::changes::eval_changes(feat, &mut context) {
+                    v
+                } else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) {
+                    v
+                } else if let Some(v) =
+                    crate::features::transform::eval_transform(feat, &mut context)
+                {
+                    v
+                } else if let Some(v) =
+                    crate::features::complexity::eval_complexity(feat, &mut context)
+                {
+                    v
+                } else {
+                    crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0)
+                }
             };
             feats.push(val);
         }

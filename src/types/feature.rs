@@ -59,6 +59,9 @@ pub enum Feature {
     MaxLangevinFixedPoint(u8, u32), // m, r as bits
     SumOfReoccurringValues,
     SumOfReoccurringDataPoints,
+    PercentageOfReoccurringDatapointsToAllDatapoints,
+    PercentageOfReoccurringValuesToAllValues,
+    RatioValueNumberToTimeSeriesLength,
     MeanNAbsoluteMax(u16),
     Length,
     VarianceLargerThanStandardDeviation,
@@ -123,9 +126,7 @@ impl Feature {
             }
             Self::Mad => C::SUM | C::MEAN | C::MAD | C::NEEDS_SORT,
             Self::Iqr => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::NEEDS_SORT,
-            Self::Entropy => {
-                C::MIN | C::MAX | C::MEDIAN | C::IQR | C::ENTROPY | C::NEEDS_SORT
-            }
+            Self::Entropy => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::ENTROPY | C::NEEDS_SORT,
             Self::Energy => C::ENERGY,
             Self::Rms => C::ENERGY | C::RMS,
             Self::RootMeanSquare => C::ENERGY | C::ROOT_MEAN_SQ,
@@ -144,12 +145,8 @@ impl Feature {
             Self::AbsSumChange => C::ABS_SUM_CHG,
             Self::CountAboveMean => C::SUM | C::MEAN | C::CNT_ABOVE_MEAN | C::NEEDS_SORT,
             Self::CountBelowMean => C::SUM | C::MEAN | C::CNT_BELOW_MEAN | C::NEEDS_SORT,
-            Self::LongestStrikeAboveMean => {
-                C::SUM | C::MEAN | C::STRIKE_ABOVE | C::NEEDS_SORT
-            }
-            Self::LongestStrikeBelowMean => {
-                C::SUM | C::MEAN | C::STRIKE_BELOW | C::NEEDS_SORT
-            }
+            Self::LongestStrikeAboveMean => C::SUM | C::MEAN | C::STRIKE_ABOVE | C::NEEDS_SORT,
+            Self::LongestStrikeBelowMean => C::SUM | C::MEAN | C::STRIKE_BELOW | C::NEEDS_SORT,
             Self::VariationCoefficient => {
                 C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::VAR_COEFF | C::NEEDS_SORT
             }
@@ -194,6 +191,11 @@ impl Feature {
             Self::MaxLangevinFixedPoint(_, _) => C::LANGEVIN | C::NEEDS_SORT,
             Self::SumOfReoccurringValues => C::REOCCUR_VAL | C::NEEDS_SORT,
             Self::SumOfReoccurringDataPoints => C::REOCCUR_DP | C::NEEDS_SORT,
+            Self::PercentageOfReoccurringDatapointsToAllDatapoints => {
+                C::REOCCUR_RATIOS | C::NEEDS_SORT
+            }
+            Self::PercentageOfReoccurringValuesToAllValues => C::REOCCUR_RATIOS | C::NEEDS_SORT,
+            Self::RatioValueNumberToTimeSeriesLength => C::REOCCUR_RATIOS | C::NEEDS_SORT,
             Self::MeanNAbsoluteMax(_) => C::MEAN_N_ABS_MAX | C::NEEDS_SORT,
             Self::Length => C::LENGTH | C::NEEDS_SORT,
             Self::VarianceLargerThanStandardDeviation => {

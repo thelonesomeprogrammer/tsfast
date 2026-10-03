@@ -179,3 +179,27 @@ def test_expanding_duplicate_features():
     assert result2.iloc[0].iloc[0] == (1.0 if has_duplicate(series2) else 0.0)
     assert result2.iloc[0].iloc[1] == (1.0 if has_duplicate_max(series2) else 0.0)
     assert result2.iloc[0].iloc[2] == (1.0 if has_duplicate_min(series2) else 0.0)
+
+def test_reoccurring_ratios_expanding():
+    import pyarrow as pa
+    import tsfast
+    import numpy as np
+
+    x = np.array([1.0, 2.0, 2.0, 3.0, 3.0], dtype=np.float32)
+
+    features = [
+        "percentage_of_reoccurring_datapoints_to_all_datapoints",
+        "percentage_of_reoccurring_values_to_all_values",
+        "ratio_value_number_to_time_series_length"
+    ]
+
+    extractor = tsfast.ExpandingExtractor(features, 1)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.update(batch)
+    results = result_batch.to_pandas()
+
+    # window 0 (idx 2): [1, 2, 2]
+    # len=3, values={1,2} (2 unique), reoccur_dp=2 (two 2s), reoccur_val=1 (2)
+    # res: [2/3, 1/2, 2/3]
+    assert np.allclose(results.iloc[0].values, [4.0/5.0, 2.0/3.0, 3.0/5.0])
+
