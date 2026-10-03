@@ -1,4 +1,4 @@
-use crate::types::FastBitArray;
+use crate::types::Compute;
 use crate::types::Feature;
 use arrow::array::{ArrayRef, Float32Array, RecordBatch};
 use arrow::datatypes::DataType;
@@ -10,16 +10,18 @@ use rayon::prelude::*;
 use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
-pub mod extractor;
+pub mod engine;
+
+pub mod processors;
 
 use crate::common::{map_features_to_indices, next_good_fft_size};
-use extractor::StaticEngine;
+use engine::StaticEngine;
 
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Extractor {
     pub features: Vec<Feature>,
-    pub compute: FastBitArray,
+    pub compute: Compute,
     pub paa_args: Vec<(u16, u16)>,
     pub c3_args: Vec<u16>,
     pub unique_paa_totals: Vec<u16>,
@@ -58,7 +60,7 @@ impl Extractor {
         let planner_arc = Arc::new(Mutex::new(planner));
 
         if let Some(size) = planned_size {
-            if compute.any_fft() {
+            if compute.intersects(Compute::ANY_FFT) {
                 let mut p = planner_arc.lock().unwrap_or_else(|e| e.into_inner());
                 p.plan_fft_forward(size);
             }
@@ -104,21 +106,21 @@ impl Extractor {
             n_rows
         };
 
-        let r2c = if compute.any_fft() && fft_size > 0 {
+        let r2c = if compute.intersects(Compute::ANY_FFT) && fft_size > 0 {
             let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
             Some(p.plan_fft_forward(fft_size))
         } else {
             None
         };
 
-        let column_results: Vec<Vec<f32>> = record_batch
+        let column_results: Result<Vec<Vec<f32>>, String> = record_batch
             .columns()
             .par_iter()
             .map(|col| {
                 let float_array = col
                     .as_any()
                     .downcast_ref::<Float32Array>()
-                    .expect("Failed to downcast column to Float32Array");
+                    .ok_or_else(|| "Failed to downcast column to Float32Array".to_string())?;
 
                 let processor = StaticEngine {
                     compute,
@@ -129,9 +131,11 @@ impl Extractor {
                     r2c: r2c.as_ref().cloned(),
                     fft_size,
                 };
-                processor.process_column(float_array.values())
+                Ok(processor.process_column(float_array.values()))
             })
             .collect();
+
+        let column_results = column_results.map_err(|e| PyTypeError::new_err(e))?;
 
         let mut fields = Vec::with_capacity(features.len());
         let results: Vec<ArrayRef> = (0..features.len())

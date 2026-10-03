@@ -1,5 +1,5 @@
 use crate::common::{ColumnState, map_features_to_indices, next_good_fft_size};
-use crate::types::{FastBitArray, Feature};
+use crate::types::{Compute, Feature};
 use arrow::array::{ArrayRef, Float32Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::pyarrow::PyArrowType;
@@ -9,13 +9,14 @@ use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
 pub mod engine;
+pub mod processors;
 use engine::ExpandingEngine;
 
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct ExpandingExtractor {
     pub features: Vec<Feature>,
-    pub compute: FastBitArray,
+    pub compute: Compute,
     pub unique_paa_totals: Vec<u16>,
     pub unique_c3_lags: Vec<u16>,
     pub unique_autocorr_lags: Vec<u16>,
@@ -77,7 +78,7 @@ impl ExpandingExtractor {
         let planner_arc = Arc::new(Mutex::new(planner));
 
         if let Some(size) = planned_size {
-            if compute.any_fft() {
+            if compute.intersects(Compute::ANY_FFT) {
                 let mut p = planner_arc.lock().unwrap_or_else(|e| e.into_inner());
                 p.plan_fft_forward(size);
             }
@@ -154,7 +155,7 @@ impl ExpandingExtractor {
             total_n
         };
 
-        let r2c = if self.compute.any_fft() && fft_size > 0 {
+        let r2c = if self.compute.intersects(Compute::ANY_FFT) && fft_size > 0 {
             let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
             Some(p.plan_fft_forward(fft_size))
         } else {
@@ -163,7 +164,7 @@ impl ExpandingExtractor {
 
         use rayon::prelude::*;
 
-        let column_results: Vec<Vec<f32>> = self.states[..n_cols]
+        let column_results: Result<Vec<Vec<f32>>, String> = self.states[..n_cols]
             .par_iter_mut()
             .zip(self.histories[..n_cols].par_iter_mut())
             .zip(self.sorted_histories[..n_cols].par_iter_mut())
@@ -172,7 +173,7 @@ impl ExpandingExtractor {
                 let array = column
                     .as_any()
                     .downcast_ref::<Float32Array>()
-                    .expect("Expected Float32Array");
+                    .ok_or_else(|| "Expected Float32Array".to_string())?;
 
                 let values = array.values();
 
@@ -197,9 +198,11 @@ impl ExpandingExtractor {
                     fft_update_period: self.fft_update_period,
                 };
 
-                engine.process_expanding(values, history.len(), state, history, sorted_history)
+                Ok(engine.process_expanding(values, history.len(), state, history, sorted_history))
             })
             .collect();
+
+        let column_results = column_results.map_err(|e| PyTypeError::new_err(e))?;
 
         let mut fields = Vec::with_capacity(self.features.len());
         for feat in &self.features {

@@ -3,6 +3,27 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
+def test_tsfel_new_features():
+    import tsfel
+    data = [1.0, 3.0, 2.0, 4.0, 1.0, 0.1, 5.0, -1.0, -2.0, 2.0]
+    import pyarrow as pa
+    batch = pa.RecordBatch.from_arrays([pa.array(data, type=pa.float32())], names=['value'])
+    features = ["pk_pk_distance", "zero_cross", "max_power_spectrum"]
+    import tsfast
+    ext = tsfast.Extractor(features)
+    res = ext.process_2d_floats(batch)
+
+    import numpy as np
+    sig = np.array(data)
+    expected_pk_pk = tsfel.feature_extraction.features.pk_pk_distance(sig)
+    expected_zc = tsfel.feature_extraction.features.zero_cross(sig)
+
+    expected_mps = max(abs(np.fft.rfft(sig)) ** 2)
+
+    np.testing.assert_allclose(res.column('pk_pk_distance').to_pylist()[0], expected_pk_pk)
+    np.testing.assert_allclose(res.column('zero_cross').to_pylist()[0], expected_zc)
+    np.testing.assert_allclose(res.column('max_power_spectrum').to_pylist()[0], expected_mps, rtol=1e-5)
+
 def test_extract():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
     features = ["mean", "std", "energy", "min", "max", "autocorr_lag1", "length", "variance_larger_than_standard_deviation", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
@@ -160,3 +181,31 @@ def test_duplicate_features():
         assert results[0] == expected_has_duplicate
         assert results[1] == expected_has_duplicate_max
         assert results[2] == expected_has_duplicate_min
+
+def test_extract_invalid_type():
+    # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
+    x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
+    features = ["mean", "std"]
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    with pytest.raises(TypeError, match="Failed to downcast column to Float32Array"):
+        extractor.process_2d_floats(batch)
+
+def test_extract_empty_batch():
+    # Verify the Rust engine handles zero-length batches without panicking
+    features = ["mean", "std"]
+    extractor = tsfast.Extractor(features)
+
+    empty_data = pa.RecordBatch.from_arrays([pa.array([], type=pa.float32())], names=['c1'])
+    result = extractor.process_2d_floats(empty_data)
+
+    df = result.to_pandas()
+    assert len(df) == 1
+    # For empty batches, the rust engine defaults to returning 0.0 values across all requested features
+    assert df.iloc[0]['mean'] == 0.0
+
+def test_extract_invalid_feature():
+    # Verify unsupported features immediately error during initialization
+    features = ["invalid_feature"]
+    with pytest.raises(ValueError, match="Unknown feature"):
+        extractor = tsfast.Extractor(features)

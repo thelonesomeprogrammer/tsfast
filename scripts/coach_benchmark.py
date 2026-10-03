@@ -96,38 +96,36 @@ def get_git_hash():
         return 'unknown'
 
 def append_to_csv(filepath, new_rows):
-    header = "Date,CommitHash,Benchmark_Name,Metric_Value,Unit,Delta_From_Last"
+    import csv
+    header = ["Date", "CommitHash", "Benchmark_Name", "Metric_Value", "Unit", "Delta_From_Last"]
     # Ensure directory exists
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    if not os.path.exists(filepath):
-        with open(filepath, 'w') as f:
-            f.write(header + '\n')
+    file_exists = os.path.exists(filepath)
 
-    df = pd.read_csv(filepath)
+    if file_exists:
+        df = pd.read_csv(filepath)
+    else:
+        df = pd.DataFrame(columns=header)
+
     date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     commit_hash = get_git_hash()
 
-    for row in new_rows:
-        bench_name, metric_val, unit = row
-        # Calculate Delta_From_Last
-        past_runs = df[df['Benchmark_Name'] == bench_name]
-        delta = 0.0
-        if not past_runs.empty:
-            last_val = past_runs.iloc[-1]['Metric_Value']
-            if last_val != 0:
-                delta = ((metric_val - last_val) / last_val) * 100.0
+    with open(filepath, 'a', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        if not file_exists:
+            writer.writerow(header)
 
-        new_df = pd.DataFrame([{
-            'Date': date_str,
-            'CommitHash': commit_hash,
-            'Benchmark_Name': bench_name,
-            'Metric_Value': metric_val,
-            'Unit': unit,
-            'Delta_From_Last': round(delta, 2)
-        }])
-        df = pd.concat([df, new_df], ignore_index=True)
+        for row in new_rows:
+            bench_name, metric_val, unit = row
+            # Calculate Delta_From_Last
+            past_runs = df[df['Benchmark_Name'] == bench_name]
+            delta = 0.0
+            if not past_runs.empty:
+                last_val = past_runs.iloc[-1]['Metric_Value']
+                if last_val != 0:
+                    delta = ((metric_val - last_val) / last_val) * 100.0
 
-    df.to_csv(filepath, index=False)
+            writer.writerow([date_str, commit_hash, bench_name, metric_val, unit, round(delta, 2)])
 
 def make_batch(data_slice):
     n_samples = data_slice.shape[0]
@@ -203,8 +201,25 @@ def generate_chart():
 def update_readme():
     df = pd.read_csv('.jules/benchmarks.csv')
     latest_date = df['Date'].max()
-    latest_df = df[df['Date'] == latest_date]
-    md_table = latest_df.to_markdown(index=False)
+    latest_df = df[df['Date'] == latest_date].copy()
+
+    # Add emojis
+    def get_emoji(val, unit):
+        if unit == "count":
+            return "⚪"
+
+        # Check if lower is better (time, memory size)
+        lower_is_better = unit in ["ms", "ns/iter", "MB"]
+
+        if val > 5.0:
+            return "🔴" if lower_is_better else "🟢"
+        elif val < -5.0:
+            return "🟢" if lower_is_better else "🔴"
+        return "⚪"
+
+    latest_df['Direction'] = latest_df.apply(lambda row: get_emoji(row['Delta_From_Last'], row['Unit']), axis=1)
+
+    md_table = latest_df[['Date', 'CommitHash', 'Benchmark_Name', 'Metric_Value', 'Unit', 'Delta_From_Last', 'Direction']].to_markdown(index=False)
 
     try:
         with open('README.md', 'r') as f:
