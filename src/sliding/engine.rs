@@ -328,7 +328,7 @@ impl<'a> SlidingEngine<'a> {
         TrendProcessor::finalize_simd(self.compute, state);
         ComplexityProcessor::finalize_simd(self.compute, state);
         let base_metrics = StatsProcessor::finalize_base_metrics(state, n);
-        let fft_res = FftProcessor::finalize(
+        let mut fft_res = FftProcessor::finalize(
             self.compute,
             values,
             n,

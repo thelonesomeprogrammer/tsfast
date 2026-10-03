@@ -122,6 +122,7 @@ pub struct ColumnState {
     pub fft_in_buffer: Vec<f32>,
     pub fft_out_buffer: Vec<num_complex::Complex<f32>>,
     pub sliding_dft: Option<SlidingDFT>,
+    pub spectrum_buffer: Vec<f32>,
 }
 
 pub fn next_good_fft_size(n: usize) -> usize {
@@ -233,6 +234,7 @@ impl ColumnState {
             fft_in_buffer: Vec::new(),
             fft_out_buffer: Vec::new(),
             sliding_dft: None,
+            spectrum_buffer: Vec::new(),
         }
     }
 }
