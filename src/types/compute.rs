@@ -95,6 +95,8 @@ bitflags! {
         const BINNED_ENT           = 1 << 76;
         const SPEC_ROLLON          = 1 << 77;
         const SPEC_ROLLOFF         = 1 << 78;
+        const AR_COEFF             = 1 << 79;
+        const FRIEDRICH            = 1 << 80;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()

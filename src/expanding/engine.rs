@@ -252,6 +252,8 @@ impl<'a> ExpandingEngine<'a> {
                     crate::features::complexity::eval_complexity(feat, &mut context)
                 {
                     v
+                } else if let Some(v) = crate::features::dynamic::eval_dynamic(feat, &mut context) {
+                    v
                 } else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) {
                     v
                 } else {
