@@ -72,6 +72,9 @@ pub enum Feature {
     SpectralDistance,
     SpectralDecrease,
     SpectralSlope,
+    SpectralSpread,
+    SpectralSkewness,
+    SpectralKurtosis,
     SignalDistance,
     WaveletFeatures(u32, u16), // mother wavelet (freq stored as f32 bits), feature type
     SpectrogramCoefficients(u16, u32), // time, freq stored as f32 bits
@@ -81,6 +84,7 @@ pub enum Feature {
     MeanSecondDerivativeCentral,
     LargeStandardDeviation(u32),
     SymmetryLooking(u32),
+    RatioBeyondRSigma(u32), // r encoded as u32 bits
     HasDuplicateMax,
     HasDuplicateMin,
     HasDuplicate,
@@ -213,6 +217,9 @@ impl Feature {
             Self::SpectralDistance => C::SPEC_DISTANCE | C::NEEDS_SORT,
             Self::SpectralDecrease => C::SPEC_DECREASE | C::NEEDS_SORT,
             Self::SpectralSlope => C::SPEC_SLOPE | C::NEEDS_SORT,
+            Self::SpectralSpread => C::SPEC_SPREAD | C::NEEDS_SORT,
+            Self::SpectralSkewness => C::SPEC_SKEWNESS | C::NEEDS_SORT,
+            Self::SpectralKurtosis => C::SPEC_KURTOSIS | C::NEEDS_SORT,
             Self::SignalDistance => C::SIG_DISTANCE | C::NEEDS_SORT,
             Self::WaveletFeatures(_, _) => C::WAVELET | C::NEEDS_SORT,
             Self::SpectrogramCoefficients(_, _) => C::SPECTROGRAM | C::NEEDS_SORT,
@@ -222,6 +229,9 @@ impl Feature {
             }
             Self::SymmetryLooking(_) => {
                 C::SUM | C::MEAN | C::MIN | C::MAX | C::MEDIAN | C::NEEDS_SORT
+            }
+            Self::RatioBeyondRSigma(_) => {
+                C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::NEEDS_SORT | C::RATIO_BEYOND_R_SIGMA
             }
             Self::HasDuplicateMax => C::MAX | C::HAS_DUP_MAX | C::NEEDS_SORT,
             Self::HasDuplicateMin => C::MIN | C::HAS_DUP_MIN | C::NEEDS_SORT,

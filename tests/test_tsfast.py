@@ -5,7 +5,7 @@ import pytest
 
 def test_extract():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
-    features = ["mean", "std", "energy", "min", "max", "autocorr_lag1", "length", "variance_larger_than_standard_deviation", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
+    features = ["mean", "std", "energy", "min", "max", "autocorr_lag1", "length", "variance_larger_than_standard_deviation", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05', "ratio_beyond_r_sigma-1.0", "index_mass_quantile-0.5", "c3-1"]
     
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
@@ -27,6 +27,11 @@ def test_extract():
     assert results[6] == 5.0 # length
     # var of [1,2,3,4,5] is 2.5. 2.5 > 1.0, so 1.0
     assert results[7] == 1.0 # variance_larger_than_standard_deviation
+
+    assert np.allclose(results[11], 0.4)
+    assert np.allclose(results[12], 0.8)
+    assert np.allclose(results[13], 30.0)
+
     print("test_extract passed!")
 
 def test_new_features():

@@ -180,7 +180,7 @@ impl<'a> ExpandingEngine<'a> {
         let (median, iqr) =
             SortProcessor::process_running_sorted(self.compute, full_series, running_sorted);
 
-        let fft_res = FftProcessor::finalize(
+        let mut fft_res = FftProcessor::finalize(
             self.compute,
             full_series,
             &self.r2c,
@@ -260,6 +260,11 @@ impl<'a> ExpandingEngine<'a> {
             };
             feats.push(val);
         }
+
+        if self.compute.intersects(Compute::ANY_FFT) {
+            state.spectrum_buffer = std::mem::take(&mut fft_res.spectrum);
+        }
+
         feats
     }
 }

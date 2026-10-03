@@ -84,6 +84,8 @@ pub struct ColumnState {
     pub c3_sums_vec: Vec<f32x4>,
     pub autocorr_sums: Vec<f32>,
     pub prefix_sums: Vec<f32>,
+    pub mass_pointer: usize,
+    pub mass_cum_sum: f64,
     pub prev_last: f32,
     pub prev_val: f32,
     pub prev_prev_val: f32,
@@ -123,6 +125,7 @@ pub struct ColumnState {
     pub fft_in_buffer: Vec<f32>,
     pub fft_out_buffer: Vec<num_complex::Complex<f32>>,
     pub sliding_dft: Option<SlidingDFT>,
+    pub spectrum_buffer: Vec<f32>,
 }
 
 pub fn next_good_fft_size(n: usize) -> usize {
@@ -198,6 +201,8 @@ impl ColumnState {
             c3_sums_vec: vec![f32x4::splat(0.0); unique_c3_lags.len()],
             autocorr_sums: vec![0.0; unique_autocorr_lags.len()],
             prefix_sums: Vec::new(),
+            mass_pointer: 0,
+            mass_cum_sum: 0.0,
             prev_last: first_val,
             prev_val: first_val,
             prev_prev_val: first_val,
@@ -235,6 +240,7 @@ impl ColumnState {
             fft_in_buffer: Vec::new(),
             fft_out_buffer: Vec::new(),
             sliding_dft: None,
+            spectrum_buffer: Vec::new(),
         }
     }
 }
