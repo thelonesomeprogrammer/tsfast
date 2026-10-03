@@ -41,6 +41,8 @@ impl FftProcessor {
         let mut freq_centroid = 0.0;
         let mut spectral_decrease = 0.0;
         let mut spectral_slope = 0.0;
+        let mut spectral_spread = 0.0;
+        let mut spectral_entropy = 0.0;
 
         let mut fft_autocorr = Vec::new();
         if compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) && n > 1.0 {
@@ -116,6 +118,38 @@ impl FftProcessor {
                         spectral_slope = s_xy / s_xx;
                     }
                 }
+
+                if compute.intersects(Compute::SPEC_SPREAD) {
+                    let spread_sum: f32 = spectrum
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &mag)| (i as f32 - freq_centroid).powi(2) * mag)
+                        .sum();
+                    spectral_spread = (spread_sum / spec_sum).sqrt();
+                }
+
+                if compute.intersects(Compute::SPEC_ENTROPY) {
+                    let mut p_sum = 0.0;
+                    let mut power_vals = Vec::with_capacity(spectrum.len());
+                    for (i, &mag) in spectrum.iter().enumerate() {
+                        let power = if i == 0 { 0.0 } else { mag * mag };
+                        power_vals.push(power);
+                        p_sum += power;
+                    }
+
+                    if p_sum > 0.0 {
+                        let mut entropy_sum = 0.0;
+                        for &power in &power_vals {
+                            if power > 0.0 {
+                                let p = power / p_sum;
+                                entropy_sum += p * p.log2();
+                            }
+                        }
+                        if spectrum.len() > 1 {
+                            spectral_entropy = -entropy_sum / (spectrum.len() as f32).log2();
+                        }
+                    }
+                }
             }
         }
 
@@ -125,6 +159,8 @@ impl FftProcessor {
             freq_centroid,
             spectral_decrease,
             spectral_slope,
+            spectral_spread,
+            spectral_entropy,
             fft_autocorr,
         })
     }

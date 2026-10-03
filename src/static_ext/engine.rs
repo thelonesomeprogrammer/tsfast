@@ -136,6 +136,8 @@ impl<'a> StaticEngine<'a> {
             freq_centroid: 0.0,
             spectral_decrease: 0.0,
             spectral_slope: 0.0,
+            spectral_spread: 0.0,
+            spectral_entropy: 0.0,
             fft_autocorr: Vec::new(),
         });
 
