@@ -171,6 +171,21 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let q: f32 = arg.parse().ok()?;
         return Some(Feature::IndexMassQuantile(q.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("ar_coefficient-") {
+        let (k_s, p_s) = arg.split_once('-')?;
+        let k: u16 = k_s.parse().ok()?;
+        let p: u16 = p_s.parse().ok()?;
+        return Some(Feature::ArCoefficient(k, p));
+    }
+    if let Some(arg) = s.strip_prefix("friedrich_coefficients-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.len() == 3 {
+            let m: u8 = parts[0].parse().ok()?;
+            let r: f32 = parts[1].parse().ok()?;
+            let coeff: u16 = parts[2].parse().ok()?;
+            return Some(Feature::FriedrichCoefficients(m, r.to_bits(), coeff));
+        }
+    }
     if let Some(arg) = s.strip_prefix("max_langevin_fixed_point-") {
         let (m_s, r_s) = arg.split_once('-')?;
         let m: u8 = m_s.parse().ok()?;
@@ -466,6 +481,10 @@ impl Feature {
             Feature::PkPkDistance => "pk_pk_distance".to_string(),
             Feature::ZeroCross => "zero_cross".to_string(),
             Feature::MaxPowerSpectrum => "max_power_spectrum".to_string(),
+            Feature::ArCoefficient(k, p) => format!("ar_coefficient-{}-{}", k, p),
+            Feature::FriedrichCoefficients(m, r_bits, coeff) => {
+                format!("friedrich_coefficients-{}-{}-{}", m, f32::from_bits(*r_bits), coeff)
+            },
         }
     }
 }

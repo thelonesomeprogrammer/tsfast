@@ -87,6 +87,8 @@ bitflags! {
         const HAS_DUP_MAX    = 1 << 68;
         const HAS_DUP_MIN    = 1 << 69;
         const REOCCUR_RATIOS = 1 << 70;
+        const AR_COEFF = 1 << 71;
+        const FRIEDRICH = 1 << 72;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()

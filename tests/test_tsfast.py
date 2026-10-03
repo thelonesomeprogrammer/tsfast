@@ -216,3 +216,54 @@ def test_reoccurring_ratios():
     assert np.allclose(results[0], 5.0 / 7.0)
     assert np.allclose(results[1], 2.0 / 4.0)
     assert np.allclose(results[2], 4.0 / 7.0)
+
+def test_dynamic_features():
+    import tsfresh
+    from tsfresh.feature_extraction import feature_calculators as fc
+    np.random.seed(42)
+    # We need a large array so tsfresh's pd.qcut doesn't fail with duplicate bin edges
+    x = np.cumsum(np.random.randn(5000)).astype(np.float32)
+
+    features = [
+        "ar_coefficient-2-0",
+        "ar_coefficient-2-1",
+        "ar_coefficient-2-2",
+        "friedrich_coefficients-3-30-0",
+        "friedrich_coefficients-3-30-1",
+        "friedrich_coefficients-3-30-2",
+        "friedrich_coefficients-3-30-3",
+        "max_langevin_fixed_point-3-30"
+    ]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    ar_ref = dict(fc.ar_coefficient(x, [{"k": 2, "coeff": 0}, {"k": 2, "coeff": 1}, {"k": 2, "coeff": 2}]))
+
+    friedrich_ref = dict(fc.friedrich_coefficients(x, [
+        {"m": 3, "r": 30, "coeff": 0},
+        {"m": 3, "r": 30, "coeff": 1},
+        {"m": 3, "r": 30, "coeff": 2},
+        {"m": 3, "r": 30, "coeff": 3}
+    ]))
+
+    mlfp_ref = fc.max_langevin_fixed_point(x, m=3, r=30)
+
+    # Check AR
+    assert np.allclose(results[0], ar_ref["coeff_0__k_2"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[1], ar_ref["coeff_1__k_2"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[2], ar_ref["coeff_2__k_2"], equal_nan=True, rtol=1e-1, atol=1e-2)
+
+    # Check Friedrich (tsfresh polyfit outputs descending order [x^m, x^m-1, ...], we should match)
+    assert np.allclose(results[3], friedrich_ref["coeff_0__m_3__r_30"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[4], friedrich_ref["coeff_1__m_3__r_30"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[5], friedrich_ref["coeff_2__m_3__r_30"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[6], friedrich_ref["coeff_3__m_3__r_30"], equal_nan=True, rtol=1e-1, atol=1e-2)
+
+    # Check Max Langevin
+    assert np.allclose(results[7], mlfp_ref, equal_nan=True, rtol=1e-1, atol=1e-2)
+
+if __name__ == "__main__":
+    test_dynamic_features()

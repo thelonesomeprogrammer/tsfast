@@ -57,6 +57,8 @@ pub enum Feature {
     IndexMassQuantile(u32), // q encoded as u32 bits
     BenfordCorrelation,
     MaxLangevinFixedPoint(u8, u32), // m, r as bits
+    ArCoefficient(u16, u16),
+    FriedrichCoefficients(u8, u32, u16),
     SumOfReoccurringValues,
     SumOfReoccurringDataPoints,
     PercentageOfReoccurringDatapointsToAllDatapoints,
@@ -192,6 +194,8 @@ impl Feature {
             Self::IndexMassQuantile(_) => C::ABS_SUM | C::IDX_MASS_Q | C::NEEDS_SORT,
             Self::BenfordCorrelation => C::BENFORD | C::NEEDS_SORT,
             Self::MaxLangevinFixedPoint(_, _) => C::LANGEVIN | C::NEEDS_SORT,
+            Self::ArCoefficient(_, _) => C::AR_COEFF | C::NEEDS_SORT,
+            Self::FriedrichCoefficients(_, _, _) => C::FRIEDRICH | C::NEEDS_SORT,
             Self::SumOfReoccurringValues => C::REOCCUR_VAL | C::NEEDS_SORT,
             Self::SumOfReoccurringDataPoints => C::REOCCUR_DP | C::NEEDS_SORT,
             Self::PercentageOfReoccurringDatapointsToAllDatapoints => {

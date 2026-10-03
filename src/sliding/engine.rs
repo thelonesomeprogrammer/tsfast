@@ -392,7 +392,7 @@ impl<'a> SlidingEngine<'a> {
                 {
                     v
                 } else {
-                    crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0)
+                    crate::features::dynamic::eval_dynamic(feat, &mut context).unwrap_or_else(|| crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0))
                 }
             };
             feats.push(val);
