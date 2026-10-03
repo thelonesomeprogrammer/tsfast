@@ -93,6 +93,8 @@ bitflags! {
         const RATIO_BEYOND_R_SIGMA = 1 << 74;
         const SAMP_ENT             = 1 << 75;
         const BINNED_ENT           = 1 << 76;
+        const SPEC_ROLLON          = 1 << 77;
+        const SPEC_ROLLOFF         = 1 << 78;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()
@@ -101,6 +103,8 @@ bitflags! {
             | Self::SPEC_DISTANCE.bits()
             | Self::SPEC_DECREASE.bits()
             | Self::SPEC_SLOPE.bits()
+            | Self::SPEC_ROLLON.bits()
+            | Self::SPEC_ROLLOFF.bits()
             | Self::SPEC_SPREAD.bits()
             | Self::SPEC_SKEWNESS.bits()
             | Self::SPEC_KURTOSIS.bits()

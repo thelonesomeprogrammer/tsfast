@@ -72,6 +72,8 @@ pub enum Feature {
     SpectralDistance,
     SpectralDecrease,
     SpectralSlope,
+    SpectralRollOn,
+    SpectralRollOff,
     SpectralSpread,
     SpectralSkewness,
     SpectralKurtosis,
@@ -136,7 +138,9 @@ impl Feature {
             Self::Mad => C::SUM | C::MEAN | C::MAD | C::NEEDS_SORT,
             Self::Iqr => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::NEEDS_SORT,
             Self::Entropy => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::ENTROPY | C::NEEDS_SORT,
-            Self::SampleEntropy => C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::SAMP_ENT | C::NEEDS_SORT,
+            Self::SampleEntropy => {
+                C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::SAMP_ENT | C::NEEDS_SORT
+            }
             Self::BinnedEntropy(_) => C::MIN | C::MAX | C::BINNED_ENT,
             Self::Energy => C::ENERGY,
             Self::Rms => C::ENERGY | C::RMS,
@@ -217,6 +221,8 @@ impl Feature {
             Self::SpectralDistance => C::SPEC_DISTANCE | C::NEEDS_SORT,
             Self::SpectralDecrease => C::SPEC_DECREASE | C::NEEDS_SORT,
             Self::SpectralSlope => C::SPEC_SLOPE | C::NEEDS_SORT,
+            Self::SpectralRollOn => C::SPEC_ROLLON | C::NEEDS_SORT,
+            Self::SpectralRollOff => C::SPEC_ROLLOFF | C::NEEDS_SORT,
             Self::SpectralSpread => C::SPEC_SPREAD | C::NEEDS_SORT,
             Self::SpectralSkewness => C::SPEC_SKEWNESS | C::NEEDS_SORT,
             Self::SpectralKurtosis => C::SPEC_KURTOSIS | C::NEEDS_SORT,

@@ -34,6 +34,26 @@ def test_extract():
 
     print("test_extract passed!")
 
+def test_spectral_roll_on_off():
+    x = np.random.RandomState(42).randn(100).astype(np.float32)
+    features = ["spectral_roll_on", "spectral_roll_off", "spectral_slope"]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    import tsfel
+    fs = 100.0
+    ro = tsfel.feature_extraction.features.spectral_roll_on(x, fs)
+    rf = tsfel.feature_extraction.features.spectral_roll_off(x, fs)
+    ss = tsfel.feature_extraction.features.spectral_slope(x, fs)
+
+    assert np.allclose(results[0], ro)
+    assert np.allclose(results[1], rf)
+    assert np.allclose(results[2], ss)
+    print("test_spectral_roll_on_off passed!")
+
 def test_new_features():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)
     import tsfresh.feature_extraction.feature_calculators as fc
