@@ -22,6 +22,7 @@ def full_30_features():
         "skewness", "kurtosis", "mad", "iqr", "entropy",
         "energy", "rms", "zero_crossing_rate", "peak_count",
         "mean_abs_change", "mean_change", "cid_ce", "auc",
+        "pk_pk_distance", "zero_cross", "max_power_spectrum",
         "abs_sum_change", "count_above_mean", "count_below_mean",
         "longest_strike_above_mean", "longest_strike_below_mean",
         "abs_max", "first_loc_max", "last_loc_max", "first_loc_min", "last_loc_min",

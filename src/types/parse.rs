@@ -95,6 +95,9 @@ impl std::str::FromStr for Feature {
             "human_range_energy" | "torque_Human range energy" => {
                 return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
             }
+            "pk_pk_distance" => return Ok(Feature::PkPkDistance),
+            "zero_cross" | "torque_Zero_crossing_rate" => return Ok(Feature::ZeroCross),
+            "max_power_spectrum" => return Ok(Feature::MaxPowerSpectrum),
             "mean_second_derivative_central" => return Ok(Feature::MeanSecondDerivativeCentral),
             _ => {}
         }
@@ -460,6 +463,9 @@ impl Feature {
             Feature::HasDuplicateMax => "has_duplicate_max".to_string(),
             Feature::HasDuplicateMin => "has_duplicate_min".to_string(),
             Feature::HasDuplicate => "has_duplicate".to_string(),
+            Feature::PkPkDistance => "pk_pk_distance".to_string(),
+            Feature::ZeroCross => "zero_cross".to_string(),
+            Feature::MaxPowerSpectrum => "max_power_spectrum".to_string(),
         }
     }
 }

@@ -73,6 +73,9 @@ pub enum Feature {
     SignalDistance,
     WaveletFeatures(u32, u16), // mother wavelet (freq stored as f32 bits), feature type
     SpectrogramCoefficients(u16, u32), // time, freq stored as f32 bits
+    PkPkDistance,
+    ZeroCross,
+    MaxPowerSpectrum,
     MeanSecondDerivativeCentral,
     LargeStandardDeviation(u32),
     SymmetryLooking(u32),
@@ -219,6 +222,9 @@ impl Feature {
             Self::HasDuplicateMax => C::MAX | C::HAS_DUP_MAX | C::NEEDS_SORT,
             Self::HasDuplicateMin => C::MIN | C::HAS_DUP_MIN | C::NEEDS_SORT,
             Self::HasDuplicate => C::HAS_DUPLICATE | C::NEEDS_SORT,
+            Self::PkPkDistance => C::MIN | C::MAX,
+            Self::ZeroCross => C::ZERO_CROSS,
+            Self::MaxPowerSpectrum => C::ANY_FFT,
         }
     }
 }
