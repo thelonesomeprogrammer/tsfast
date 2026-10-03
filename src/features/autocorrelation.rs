@@ -3,7 +3,7 @@ use crate::types::Feature;
 #[inline(always)]
 pub fn eval_autocorrelation(
     feat: &Feature,
-    context: &mut crate::sliding::context::FeatureContext,
+    context: &mut crate::context::FeatureContext,
 ) -> Option<f32> {
     let values = context.values;
     let state = &mut *context.state;
@@ -88,29 +88,30 @@ pub fn eval_autocorrelation(
                         0.0
                     } else {
                         let r = &fft_autocorr;
-                        let mut phi = vec![vec![0.0; l + 1]; l + 1];
+                        let stride = l + 1;
+                        let mut phi = vec![0.0; stride * stride];
                         let mut error = r[0] as f64;
                         if error.abs() < 1e-9 {
                             0.0
                         } else {
-                            phi[1][1] = r[1] / r[0];
-                            error *= 1.0 - (phi[1][1] * phi[1][1]) as f64;
+                            phi[1 * stride + 1] = r[1] / r[0];
+                            error *= 1.0 - (phi[1 * stride + 1] * phi[1 * stride + 1]) as f64;
                             for k in 1..l {
                                 let mut sum = 0.0;
                                 for i in 1..=k {
-                                    sum += phi[k][i] * r[k + 1 - i];
+                                    sum += phi[k * stride + i] * r[k + 1 - i];
                                 }
-                                phi[k + 1][k + 1] = (r[k + 1] - sum) / error as f32;
+                                phi[(k + 1) * stride + (k + 1)] = (r[k + 1] - sum) / error as f32;
                                 for i in 1..=k {
-                                    phi[k + 1][i] =
-                                        phi[k][i] - phi[k + 1][k + 1] * phi[k][k + 1 - i];
+                                    phi[(k + 1) * stride + i] =
+                                        phi[k * stride + i] - phi[(k + 1) * stride + (k + 1)] * phi[k * stride + (k + 1 - i)];
                                 }
-                                error *= 1.0 - (phi[k + 1][k + 1] * phi[k + 1][k + 1]) as f64;
+                                error *= 1.0 - (phi[(k + 1) * stride + (k + 1)] * phi[(k + 1) * stride + (k + 1)]) as f64;
                                 if error.abs() < 1e-9 {
                                     break;
                                 }
                             }
-                            phi[l][l]
+                            phi[l * stride + l]
                         }
                     }
                 }

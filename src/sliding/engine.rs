@@ -81,6 +81,7 @@ impl<'a> SlidingEngine<'a> {
         StatsProcessor::reset_state(state, is_incremental);
         DiffProcessor::reset_state(state, values, is_incremental);
         ComplexityProcessor::reset_state(state);
+        QueueProcessor::reset_state(state, values.len());
 
         // SIMD Pass 1
         let rem_start = self.process_simd_chunks(values, state, is_incremental);
@@ -158,6 +159,10 @@ impl<'a> SlidingEngine<'a> {
         n: f32,
         state: &mut ColumnState,
     ) -> Result<Vec<f32>, String> {
+        StatsProcessor::finalize_simd(self.compute, state);
+        DiffProcessor::finalize_simd(self.compute, state);
+        TrendProcessor::finalize_simd(self.compute, state);
+        ComplexityProcessor::finalize_simd(self.compute, state);
         let base_metrics = StatsProcessor::finalize_base_metrics(state, n);
         let fft_res = FftProcessor::finalize(
             self.compute,
@@ -174,8 +179,9 @@ impl<'a> SlidingEngine<'a> {
         let mean_metrics = MeanProcessor::finalize(self.compute, values, n, base_metrics.mean);
         let zc_metrics = DiffProcessor::finalize(self.compute, state);
 
-        let mut context = crate::sliding::context::FeatureContext::new(
+        let mut context = crate::context::FeatureContext::new(
             values,
+            None,
             state,
             n,
             base_metrics,
@@ -191,17 +197,17 @@ impl<'a> SlidingEngine<'a> {
         let mut feats = Vec::with_capacity(self.features.len());
         for feat in self.features {
             let val = {
-                if let Some(v) = crate::sliding::features::moments::eval_moments(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::min_max::eval_min_max(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::distribution::eval_distribution(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::energy::eval_energy(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::crossings_peaks::eval_crossings_peaks(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::autocorrelation::eval_autocorrelation(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::changes::eval_changes(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::runs::eval_runs(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::transform::eval_transform(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::complexity::eval_complexity(feat, &mut context) { v }
-                else if let Some(v) = crate::sliding::features::misc::eval_misc(feat, &mut context) { v }
+                if let Some(v) = crate::features::moments::eval_moments(feat, &mut context) { v }
+                else if let Some(v) = crate::features::min_max::eval_min_max(feat, &mut context) { v }
+                else if let Some(v) = crate::features::distribution::eval_distribution(feat, &mut context) { v }
+                else if let Some(v) = crate::features::energy::eval_energy(feat, &mut context) { v }
+                else if let Some(v) = crate::features::crossings_peaks::eval_crossings_peaks(feat, &mut context) { v }
+                else if let Some(v) = crate::features::autocorrelation::eval_autocorrelation(feat, &mut context) { v }
+                else if let Some(v) = crate::features::changes::eval_changes(feat, &mut context) { v }
+                else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) { v }
+                else if let Some(v) = crate::features::transform::eval_transform(feat, &mut context) { v }
+                else if let Some(v) = crate::features::complexity::eval_complexity(feat, &mut context) { v }
+                else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) { v }
                 else { 0.0 }
             };
             feats.push(val);

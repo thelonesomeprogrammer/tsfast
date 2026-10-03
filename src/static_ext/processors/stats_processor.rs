@@ -1,6 +1,5 @@
 use crate::common::ColumnState;
 use crate::types::Compute;
-use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
 
@@ -10,29 +9,66 @@ impl StatsProcessor {
     #[inline(always)]
     pub fn process_simd(compute: Compute, chunk: f32x4, state: &mut ColumnState) {
         if compute.contains(Compute::SUM) {
-            state.total_sum += chunk.reduce_sum();
+            state.sum_vec += chunk;
         }
         if compute.contains(Compute::MIN) {
-            state.min_value = state.min_value.min(chunk.reduce_min());
+            state.min_vec = state.min_vec.simd_min(chunk);
         }
         if compute.contains(Compute::MAX) {
-            state.max_value = state.max_value.max(chunk.reduce_max());
+            state.max_vec = state.max_vec.simd_max(chunk);
         }
         if compute.contains(Compute::ENERGY) {
             let sq = chunk * chunk;
-            state.energy += sq.reduce_sum();
+            state.energy_vec += sq;
             if compute.contains(Compute::SKEW) {
-                state.sum_cubes += (sq * chunk).reduce_sum();
+                state.sum_cubes_vec += sq * chunk;
             }
             if compute.contains(Compute::KURTOSIS) {
-                state.sum_quads += (sq * sq).reduce_sum();
+                state.sum_quads_vec += sq * sq;
             }
         }
         if compute.contains(Compute::ABS_MAX) {
-            state.abs_max = state.abs_max.max(chunk.abs().reduce_max());
+            state.abs_max_vec = state.abs_max_vec.simd_max(chunk.abs());
         }
         if compute.contains(Compute::ABS_SUM) {
-            state.abs_sum += chunk.abs().reduce_sum();
+            state.abs_sum_vec += chunk.abs();
+        }
+    }
+
+    #[inline(always)]
+    pub fn finalize_simd(compute: Compute, state: &mut ColumnState) {
+        if compute.contains(Compute::SUM) {
+            state.total_sum += state.sum_vec.reduce_sum();
+            // Reset to prevent double counting if used iteratively
+            state.sum_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::MIN) {
+            state.min_value = state.min_value.min(state.min_vec.reduce_min());
+            state.min_vec = f32x4::splat(f32::INFINITY);
+        }
+        if compute.contains(Compute::MAX) {
+            state.max_value = state.max_value.max(state.max_vec.reduce_max());
+            state.max_vec = f32x4::splat(f32::NEG_INFINITY);
+        }
+        if compute.contains(Compute::ENERGY) {
+            state.energy += state.energy_vec.reduce_sum();
+            state.energy_vec = f32x4::splat(0.0);
+            if compute.contains(Compute::SKEW) {
+                state.sum_cubes += state.sum_cubes_vec.reduce_sum();
+                state.sum_cubes_vec = f32x4::splat(0.0);
+            }
+            if compute.contains(Compute::KURTOSIS) {
+                state.sum_quads += state.sum_quads_vec.reduce_sum();
+                state.sum_quads_vec = f32x4::splat(0.0);
+            }
+        }
+        if compute.contains(Compute::ABS_MAX) {
+            state.abs_max = state.abs_max.max(state.abs_max_vec.reduce_max());
+            state.abs_max_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::ABS_SUM) {
+            state.abs_sum += state.abs_sum_vec.reduce_sum();
+            state.abs_sum_vec = f32x4::splat(0.0);
         }
     }
 
@@ -62,6 +98,26 @@ impl StatsProcessor {
             if compute.contains(Compute::KURTOSIS) {
                 state.sum_quads += sq * sq;
             }
+        }
+    }
+
+    pub fn finalize_base_metrics(state: &mut ColumnState, n: f32) -> crate::metrics::BaseMetrics {
+        let mean = state.total_sum / n;
+        let m2 = state.energy - (state.total_sum * state.total_sum) / n;
+        let m3 = state.sum_cubes - 3.0 * mean * state.energy + 2.0 * mean * mean * state.total_sum;
+        let m4 = state.sum_quads - 4.0 * mean * state.sum_cubes + 6.0 * mean * mean * state.energy
+            - 3.0 * mean * mean * mean * state.total_sum;
+
+        let var = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
+        let std_dev = var.sqrt();
+
+        crate::metrics::BaseMetrics {
+            mean,
+            m2,
+            m3,
+            m4,
+            var,
+            std_dev,
         }
     }
 }

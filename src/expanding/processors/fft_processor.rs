@@ -3,13 +3,7 @@ use crate::types::Compute;
 use realfft::{RealToComplex, num_complex};
 use std::sync::Arc;
 
-pub struct FftResult {
-    pub spectrum: Vec<f32>,
-    pub fft_complex: Vec<num_complex::Complex<f32>>,
-    pub freq_centroid: f32,
-    pub spectral_decrease: f32,
-    pub spectral_slope: f32,
-}
+use crate::metrics::FftResult;
 
 pub struct FftProcessor;
 
@@ -111,9 +105,9 @@ impl FftProcessor {
                         }
 
                         let m_n = spectrum.len() as f32;
-                        let sum_x: f32 = (0..spectrum.len()).map(|i| i as f32).sum();
+                        let sum_x = m_n * (m_n - 1.0) / 2.0;
                         let sum_y: f32 = spectrum.iter().sum();
-                        let sum_xx: f32 = (0..spectrum.len()).map(|i| (i as f32).powi(2)).sum();
+                        let sum_xx = m_n * (m_n - 1.0) * (2.0 * m_n - 1.0) / 6.0;
                         let sum_xy: f32 = spectrum
                             .iter()
                             .enumerate()
@@ -135,6 +129,7 @@ impl FftProcessor {
             freq_centroid,
             spectral_decrease,
             spectral_slope,
+            fft_autocorr: Vec::new(),
         }
     }
 }

@@ -5,14 +5,7 @@ use std::simd::cmp::SimdPartialOrd;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
 
-pub struct MeanMetrics {
-    pub mad_sum: f32,
-    pub count_a: usize,
-    pub count_b: usize,
-    pub max_strike_a: usize,
-    pub max_strike_b: usize,
-    pub entropy: f32,
-}
+use crate::metrics::MeanMetrics;
 
 pub struct MeanProcessor;
 
@@ -23,7 +16,7 @@ impl MeanProcessor {
         n: f32,
         mean: f32,
         state: &ColumnState,
-    ) -> MeanMetrics {
+    ) -> (MeanMetrics, f32) {
         let mut mad_sum = 0.0;
         let mut count_a = 0;
         let mut count_b = 0;
@@ -108,6 +101,7 @@ impl MeanProcessor {
                     }
                 }
             }
+            mad_sum /= n;
 
             if compute.contains(Compute::ENTROPY) && range > 1e-9 {
                 for &c in &counts {
@@ -119,13 +113,12 @@ impl MeanProcessor {
             }
         }
 
-        MeanMetrics {
+        (MeanMetrics {
             mad_sum,
             count_a,
             count_b,
             max_strike_a,
             max_strike_b,
-            entropy,
-        }
+        }, entropy)
     }
 }

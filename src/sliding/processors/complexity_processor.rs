@@ -58,7 +58,7 @@ impl ComplexityProcessor {
                         f32x4::from_slice(&values[global_idx - l..global_idx - l + 4]);
                     let chunk_i2l =
                         f32x4::from_slice(&values[global_idx - 2 * l..global_idx - 2 * l + 4]);
-                    state.c3_sums[l_idx] += (chunk * chunk_il * chunk_i2l).reduce_sum();
+                    state.c3_sums_vec[l_idx] += chunk * chunk_il * chunk_i2l;
                 } else {
                     for j in 0..LANES {
                         let idx = global_idx + j;
@@ -68,6 +68,16 @@ impl ComplexityProcessor {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn finalize_simd(compute: Compute, state: &mut ColumnState) {
+        if compute.contains(Compute::C3) {
+            for l_idx in 0..state.c3_sums.len() {
+                state.c3_sums[l_idx] += state.c3_sums_vec[l_idx].reduce_sum();
+                state.c3_sums_vec[l_idx] = f32x4::splat(0.0);
             }
         }
     }

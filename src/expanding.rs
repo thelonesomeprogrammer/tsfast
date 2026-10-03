@@ -8,10 +8,6 @@ use pyo3::prelude::*;
 use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
-pub mod basic;
-pub mod statistics;
-pub mod time_series;
-pub mod fft;
 pub mod engine;
 pub mod processors;
 use engine::ExpandingEngine;

@@ -15,7 +15,15 @@ impl TrendProcessor {
     ) {
         if compute.contains(Compute::SLOPE) {
             let indices = f32x4::from_array([offset, offset + 1.0, offset + 2.0, offset + 3.0]);
-            state.sum_ix += (indices * chunk).reduce_sum();
+            state.sum_ix_vec += indices * chunk;
+        }
+    }
+
+    #[inline(always)]
+    pub fn finalize_simd(compute: Compute, state: &mut ColumnState) {
+        if compute.contains(Compute::SLOPE) {
+            state.sum_ix += state.sum_ix_vec.reduce_sum();
+            state.sum_ix_vec = f32x4::splat(0.0);
         }
     }
 
@@ -74,6 +82,32 @@ impl TrendProcessor {
 
         if compute.contains(Compute::SLOPE) {
             state.sum_ix += (global_idx as f32) * val;
+        }
+    }
+
+    #[inline(always)]
+    pub fn finalize_paa(
+        compute: Compute,
+        unique_paa_totals: &[u16],
+        paa_boundaries: &[Vec<usize>],
+        full_series: &[f32],
+        state: &mut ColumnState,
+    ) {
+        if compute.contains(Compute::PAA) {
+            for (t_idx, _total) in unique_paa_totals.iter().enumerate() {
+                let b = &paa_boundaries[t_idx];
+                for seg_idx in 0..state.paa_sums[t_idx].len() {
+                    let start = b[seg_idx];
+                    let end = b[seg_idx + 1];
+                    let mut sum = 0.0;
+                    if start < end {
+                        for v in &full_series[start..end] {
+                            sum += v;
+                        }
+                    }
+                    state.paa_sums[t_idx][seg_idx] = sum;
+                }
+            }
         }
     }
 }

@@ -1,14 +1,9 @@
 use crate::common::ColumnState;
 use crate::types::Compute;
 
-pub struct BaseMetrics {
-    pub mean: f32,
-    pub m2: f32,
-    pub m3: f32,
-    pub m4: f32,
-    pub var: f32,
-    pub std_dev: f32,
-}
+use crate::metrics::BaseMetrics;
+use std::simd::num::SimdFloat;
+use std::simd::f32x4;
 
 pub struct StatsProcessor;
 
@@ -156,32 +151,32 @@ impl StatsProcessor {
         use std::simd::num::SimdFloat;
         
         if compute.contains(Compute::SUM) {
-            state.total_sum += chunk.reduce_sum();
+            state.sum_vec += chunk;
         }
         if compute.contains(Compute::MIN) {
-            state.min_value = state.min_value.min(chunk.reduce_min());
+            state.min_vec = state.min_vec.simd_min(chunk);
         }
         if compute.contains(Compute::MAX) {
-            state.max_value = state.max_value.max(chunk.reduce_max());
+            state.max_vec = state.max_vec.simd_max(chunk);
         }
         if compute.contains(Compute::ENERGY) {
             let sq = chunk * chunk;
-            state.energy += sq.reduce_sum();
+            state.energy_vec += sq;
             if compute.contains(Compute::SKEW) {
-                state.sum_cubes += (sq * chunk).reduce_sum();
+                state.sum_cubes_vec += sq * chunk;
             }
             if compute.contains(Compute::KURTOSIS) {
-                state.sum_quads += (sq * sq).reduce_sum();
+                state.sum_quads_vec += sq * sq;
             }
         }
 
         if compute.intersects(Compute::ABS_SUM | Compute::ABS_MAX) {
             let abs = chunk.abs();
             if compute.contains(Compute::ABS_SUM) {
-                state.abs_sum += abs.reduce_sum();
+                state.abs_sum_vec += abs;
             }
             if compute.contains(Compute::ABS_MAX) {
-                state.abs_max = state.abs_max.max(abs.reduce_max());
+                state.abs_max_vec = state.abs_max_vec.simd_max(abs);
             }
         }
 
@@ -207,7 +202,7 @@ impl StatsProcessor {
                     }
                 }
                 state.min_queue[state.min_q_tail] = (idx, val);
-                state.min_q_tail = (state.min_q_tail + 1) % window_size;
+                state.min_q_tail += 1; if state.min_q_tail >= window_size { state.min_q_tail -= window_size; }
                 state.min_q_len += 1;
 
                 // Max Queue
@@ -225,7 +220,7 @@ impl StatsProcessor {
                     }
                 }
                 state.max_queue[state.max_q_tail] = (idx, val);
-                state.max_q_tail = (state.max_q_tail + 1) % window_size;
+                state.max_q_tail += 1; if state.max_q_tail >= window_size { state.max_q_tail -= window_size; }
                 state.max_q_len += 1;
             }
         }
@@ -266,7 +261,43 @@ impl StatsProcessor {
 
     }
 
-    pub fn finalize_base_metrics(state: &ColumnState, n: f32) -> BaseMetrics {
+    #[inline(always)]
+    pub fn finalize_simd(compute: Compute, state: &mut ColumnState) {
+        if compute.contains(Compute::SUM) {
+            state.total_sum += state.sum_vec.reduce_sum();
+            state.sum_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::MIN) {
+            state.min_value = state.min_value.min(state.min_vec.reduce_min());
+            state.min_vec = f32x4::splat(f32::INFINITY);
+        }
+        if compute.contains(Compute::MAX) {
+            state.max_value = state.max_value.max(state.max_vec.reduce_max());
+            state.max_vec = f32x4::splat(f32::NEG_INFINITY);
+        }
+        if compute.contains(Compute::ENERGY) {
+            state.energy += state.energy_vec.reduce_sum();
+            state.energy_vec = f32x4::splat(0.0);
+            if compute.contains(Compute::SKEW) {
+                state.sum_cubes += state.sum_cubes_vec.reduce_sum();
+                state.sum_cubes_vec = f32x4::splat(0.0);
+            }
+            if compute.contains(Compute::KURTOSIS) {
+                state.sum_quads += state.sum_quads_vec.reduce_sum();
+                state.sum_quads_vec = f32x4::splat(0.0);
+            }
+        }
+        if compute.contains(Compute::ABS_MAX) {
+            state.abs_max = state.abs_max.max(state.abs_max_vec.reduce_max());
+            state.abs_max_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::ABS_SUM) {
+            state.abs_sum += state.abs_sum_vec.reduce_sum();
+            state.abs_sum_vec = f32x4::splat(0.0);
+        }
+    }
+
+    pub fn finalize_base_metrics(state: &mut ColumnState, n: f32) -> BaseMetrics {
         let mean = state.total_sum / n;
         let m2 = state.energy - (state.total_sum * state.total_sum) / n;
         let m3 = state.sum_cubes - 3.0 * mean * state.energy + 2.0 * mean * mean * state.total_sum;

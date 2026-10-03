@@ -13,29 +13,8 @@ impl SortProcessor {
 
         if compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::QUANTILE | Compute::MEAN_N_ABS_MAX) {
             if running_sorted.len() < full_series.len() {
-                let mut new_elements: Vec<f32> = full_series[running_sorted.len()..].to_vec();
-                new_elements
-                    .sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-
-                if running_sorted.is_empty() {
-                    *running_sorted = new_elements;
-                } else {
-                    let mut merged = Vec::with_capacity(running_sorted.len() + new_elements.len());
-                    let mut i = 0;
-                    let mut j = 0;
-                    while i < running_sorted.len() && j < new_elements.len() {
-                        if running_sorted[i] <= new_elements[j] {
-                            merged.push(running_sorted[i]);
-                            i += 1;
-                        } else {
-                            merged.push(new_elements[j]);
-                            j += 1;
-                        }
-                    }
-                    merged.extend_from_slice(&running_sorted[i..]);
-                    merged.extend_from_slice(&new_elements[j..]);
-                    *running_sorted = merged;
-                }
+                running_sorted.extend_from_slice(&full_series[running_sorted.len()..]);
+                running_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
             }
             let n_size = running_sorted.len();
             if n_size > 0 {

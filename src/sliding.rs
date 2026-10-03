@@ -9,7 +9,6 @@ use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
 pub mod engine;
-pub mod features;
 pub mod processors;
 use engine::SlidingEngine;
 
@@ -248,4 +247,3 @@ impl SlidingExtractor {
         Ok(PyArrowType(return_batch))
     }
 }
-pub mod context;

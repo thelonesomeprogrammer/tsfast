@@ -5,6 +5,18 @@ pub struct QueueProcessor;
 
 impl QueueProcessor {
     #[inline(always)]
+    pub fn reset_state(state: &mut ColumnState, window_size: usize) {
+        state.min_queue = vec![(0, 0.0); window_size];
+        state.max_queue = vec![(0, 0.0); window_size];
+        state.min_q_head = 0;
+        state.min_q_tail = 0;
+        state.min_q_len = 0;
+        state.max_q_head = 0;
+        state.max_q_tail = 0;
+        state.max_q_len = 0;
+    }
+
+    #[inline(always)]
     pub fn update_batch(
         compute: Compute,
         new_slice: &[f32],
@@ -21,14 +33,14 @@ impl QueueProcessor {
                     && idx >= window_size
                     && state.min_queue[state.min_q_head].0 <= idx - window_size
                 {
-                    state.min_q_head = (state.min_q_head + 1) % window_size;
+                    state.min_q_head += 1; if state.min_q_head >= window_size { state.min_q_head -= window_size; }
                     state.min_q_len -= 1;
                 }
                 if state.max_q_len > 0
                     && idx >= window_size
                     && state.max_queue[state.max_q_head].0 <= idx - window_size
                 {
-                    state.max_q_head = (state.max_q_head + 1) % window_size;
+                    state.max_q_head += 1; if state.max_q_head >= window_size { state.max_q_head -= window_size; }
                     state.max_q_len -= 1;
                 }
 
@@ -47,7 +59,7 @@ impl QueueProcessor {
                     }
                 }
                 state.min_queue[state.min_q_tail] = (idx, val);
-                state.min_q_tail = (state.min_q_tail + 1) % window_size;
+                state.min_q_tail += 1; if state.min_q_tail >= window_size { state.min_q_tail -= window_size; }
                 state.min_q_len += 1;
 
                 // Max Queue
@@ -65,7 +77,7 @@ impl QueueProcessor {
                     }
                 }
                 state.max_queue[state.max_q_tail] = (idx, val);
-                state.max_q_tail = (state.max_q_tail + 1) % window_size;
+                state.max_q_tail += 1; if state.max_q_tail >= window_size { state.max_q_tail -= window_size; }
                 state.max_q_len += 1;
             }
             state.min_value = state.min_queue[state.min_q_head].1;
@@ -92,14 +104,14 @@ impl QueueProcessor {
                 && global_idx >= window_size
                 && state.min_queue[state.min_q_head].0 <= global_idx - window_size
             {
-                state.min_q_head = (state.min_q_head + 1) % window_size;
+                state.min_q_head += 1; if state.min_q_head >= window_size { state.min_q_head -= window_size; }
                 state.min_q_len -= 1;
             }
             if state.max_q_len > 0
                 && global_idx >= window_size
                 && state.max_queue[state.max_q_head].0 <= global_idx - window_size
             {
-                state.max_q_head = (state.max_q_head + 1) % window_size;
+                state.max_q_head += 1; if state.max_q_head >= window_size { state.max_q_head -= window_size; }
                 state.max_q_len -= 1;
             }
 
@@ -118,7 +130,7 @@ impl QueueProcessor {
                 }
             }
             state.min_queue[state.min_q_tail] = (global_idx, new_val);
-            state.min_q_tail = (state.min_q_tail + 1) % window_size;
+            state.min_q_tail += 1; if state.min_q_tail >= window_size { state.min_q_tail -= window_size; }
             state.min_q_len += 1;
 
             // Max Queue: remove smaller elements from tail
@@ -136,7 +148,7 @@ impl QueueProcessor {
                 }
             }
             state.max_queue[state.max_q_tail] = (global_idx, new_val);
-            state.max_q_tail = (state.max_q_tail + 1) % window_size;
+            state.max_q_tail += 1; if state.max_q_tail >= window_size { state.max_q_tail -= window_size; }
             state.max_q_len += 1;
 
             state.min_value = state.min_queue[state.min_q_head].1;
@@ -168,7 +180,7 @@ impl QueueProcessor {
                 }
             }
             state.min_queue[state.min_q_tail] = (idx, val);
-            state.min_q_tail = (state.min_q_tail + 1) % window_size;
+            state.min_q_tail += 1; if state.min_q_tail >= window_size { state.min_q_tail -= window_size; }
             state.min_q_len += 1;
 
             // Max Queue
@@ -186,7 +198,7 @@ impl QueueProcessor {
                 }
             }
             state.max_queue[state.max_q_tail] = (idx, val);
-            state.max_q_tail = (state.max_q_tail + 1) % window_size;
+            state.max_q_tail += 1; if state.max_q_tail >= window_size { state.max_q_tail -= window_size; }
             state.max_q_len += 1;
         }
     }

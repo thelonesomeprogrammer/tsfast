@@ -11,7 +11,7 @@ use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
 
 pub mod engine;
-pub mod features;
+
 pub mod processors;
 
 use crate::common::{map_features_to_indices, next_good_fft_size};

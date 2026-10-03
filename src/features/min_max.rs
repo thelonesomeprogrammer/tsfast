@@ -3,7 +3,7 @@ use crate::types::Feature;
 #[inline(always)]
 pub fn eval_min_max(
     feat: &Feature,
-    context: &mut crate::sliding::context::FeatureContext,
+    context: &mut crate::context::FeatureContext,
 ) -> Option<f32> {
     let values = context.values;
     let state = &mut *context.state;
@@ -50,11 +50,13 @@ pub fn eval_min_max(
                 Feature::LastLocMin => (last_min_idx + 1) as f32 / n,
                 Feature::MeanNAbsoluteMax(n_max) => {
                     let mut abs_vals: Vec<f32> = values.iter().map(|v| v.abs()).collect();
-                    abs_vals.sort_unstable_by(|a, b| {
-                        b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
-                    });
                     let count = (*n_max as usize).min(abs_vals.len());
                     if count > 0 {
+                        if count < abs_vals.len() {
+                            abs_vals.select_nth_unstable_by(count, |a, b| {
+                                b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
+                            });
+                        }
                         abs_vals.iter().take(count).sum::<f32>() / count as f32
                     } else {
                         0.0

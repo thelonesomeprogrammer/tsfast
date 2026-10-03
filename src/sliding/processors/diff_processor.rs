@@ -1,10 +1,9 @@
 use crate::common::ColumnState;
 use crate::types::Compute;
 
-pub struct ZcMetrics {
-    pub zc_mean: f32,
-    pub zc_std: f32,
-}
+use crate::metrics::ZcMetrics;
+use std::simd::num::SimdFloat;
+use std::simd::f32x4;
 
 pub struct DiffProcessor;
 
@@ -275,19 +274,19 @@ impl DiffProcessor {
                 let diff = chunk - shifted;
                 
                 if compute.contains(Compute::MAC) {
-                    state.mac_sum += diff.abs().reduce_sum();
+                    state.mac_sum_vec += diff.abs();
                 }
                 if compute.contains(Compute::MC) {
-                    state.mc_sum += diff.reduce_sum();
+                    state.mc_sum_vec += diff;
                 }
                 if compute.contains(Compute::CID_CE) {
-                    state.sum_sq_diff += (diff * diff).reduce_sum();
+                    state.sum_sq_diff_vec += diff * diff;
                 }
                 if compute.contains(Compute::AUTOCORR_LAG1) {
-                    state.sum_prod += (chunk * shifted).reduce_sum();
+                    state.sum_prod_vec += chunk * shifted;
                 }
                 if compute.contains(Compute::AUC) {
-                    state.auc_sum += (chunk + shifted).reduce_sum() * 0.5;
+                    state.auc_sum_vec += (chunk + shifted) * f32x4::splat(0.5);
                 }
                 if compute.contains(Compute::ZERO_CROSS) {
                     let signs = chunk.simd_lt(std::simd::f32x4::splat(0.0));
@@ -343,6 +342,30 @@ impl DiffProcessor {
         
         if compute.contains(Compute::ZC_INDICES) && compute.contains(Compute::ZERO_CROSS) && (val < 0.0) != (prev < 0.0) {
             state.zc_indices.push(offset);
+        }
+    }
+
+    #[inline(always)]
+    pub fn finalize_simd(compute: Compute, state: &mut ColumnState) {
+        if compute.contains(Compute::MAC) {
+            state.mac_sum += state.mac_sum_vec.reduce_sum();
+            state.mac_sum_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::MC) {
+            state.mc_sum += state.mc_sum_vec.reduce_sum();
+            state.mc_sum_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::CID_CE) {
+            state.sum_sq_diff += state.sum_sq_diff_vec.reduce_sum();
+            state.sum_sq_diff_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::AUTOCORR_LAG1) {
+            state.sum_prod += state.sum_prod_vec.reduce_sum();
+            state.sum_prod_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::AUC) {
+            state.auc_sum += state.auc_sum_vec.reduce_sum();
+            state.auc_sum_vec = f32x4::splat(0.0);
         }
     }
 

@@ -99,6 +99,10 @@ impl SortProcessor {
                         }
                     };
                     
+                    // We need to compute both. They will mutate `copy`.
+                    // To be safe and correct with interpolations, we can compute them independently 
+                    // since we are just doing O(N) partitioning. But partitioning the array mutates it.
+                    // Doing get_percentile twice is O(N) + O(N) = O(N) which is fine.
                     let q25 = get_percentile(q25_idx, &mut copy);
                     let q75 = get_percentile(q75_idx, &mut copy);
                     iqr = q75 - q25;

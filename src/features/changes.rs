@@ -3,7 +3,7 @@ use crate::types::Feature;
 #[inline(always)]
 pub fn eval_changes(
     feat: &Feature,
-    context: &mut crate::sliding::context::FeatureContext,
+    context: &mut crate::context::FeatureContext,
 ) -> Option<f32> {
     let values = context.values;
     let state = &mut *context.state;
@@ -41,8 +41,8 @@ pub fn eval_changes(
     let _paa_boundaries = context.paa_boundaries;
     
     let res = match feat {
-                Feature::MeanAbsChange => (mac_sum / n) as f32,
-                Feature::MeanChange => (mc_sum / n) as f32,
+                Feature::MeanAbsChange => if n > 1.0 { (mac_sum / (n - 1.0)) as f32 } else { 0.0 },
+                Feature::MeanChange => if n > 1.0 { (mc_sum / (n - 1.0)) as f32 } else { 0.0 },
                 Feature::CidCe => state.sum_sq_diff.sqrt() as f32,
                 Feature::Slope => {
                     let mean_i = (n - 1.0) * 0.5;

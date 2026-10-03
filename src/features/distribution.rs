@@ -3,7 +3,7 @@ use crate::types::Feature;
 #[inline(always)]
 pub fn eval_distribution(
     feat: &Feature,
-    context: &mut crate::sliding::context::FeatureContext,
+    context: &mut crate::context::FeatureContext,
 ) -> Option<f32> {
     let values = context.values;
     let state = &mut *context.state;
@@ -45,43 +45,64 @@ pub fn eval_distribution(
                 Feature::Entropy => entropy,
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
-                    // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
-                    let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
-                    copy.clear();
-                    copy.extend_from_slice(values);
-                    let res = if copy.is_empty() {
-                        0.0
-                    } else if copy.len() == 1 {
-                        copy[0]
-                    } else {
-                        let n_len = copy.len();
-                        let idx = q * (n_len as f32 - 1.0);
-                        let i = idx.floor() as usize;
-                        let f = idx - i as f32;
-                        copy.sort_unstable_by(|a: &f32, b: &f32| {
-                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                        });
-                        if i >= n_len - 1 {
-                            copy[n_len - 1]
+                    
+                    if let Some(sorted) = context.running_sorted {
+                        let res = if sorted.is_empty() {
+                            0.0
+                        } else if sorted.len() == 1 {
+                            sorted[0]
                         } else {
-                            (1.0 - f) * copy[i] + f * copy[i + 1]
-                        }
-                    };
-                    state.sort_buffer = copy;
-                    res
+                            let n_len = sorted.len();
+                            let idx = q * (n_len as f32 - 1.0);
+                            let i = idx.floor() as usize;
+                            let f = idx - i as f32;
+                            if i >= n_len - 1 {
+                                sorted[n_len - 1]
+                            } else {
+                                (1.0 - f) * sorted[i] + f * sorted[i + 1]
+                            }
+                        };
+                        res
+                    } else {
+                        // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
+                        let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
+                        copy.clear();
+                        copy.extend_from_slice(values);
+                        let res = if copy.is_empty() {
+                            0.0
+                        } else if copy.len() == 1 {
+                            copy[0]
+                        } else {
+                            let n_len = copy.len();
+                            let idx = q * (n_len as f32 - 1.0);
+                            let i = idx.floor() as usize;
+                            let f = idx - i as f32;
+                            
+                            let (val_i, val_i_plus_1) = if i >= n_len - 1 {
+                                let (_, &mut val, _) = copy.select_nth_unstable_by(n_len - 1, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                                (val, val)
+                            } else {
+                                let (_, &mut val1, _) = copy.select_nth_unstable_by(i + 1, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                                let val0 = *copy[..=i].iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
+                                (val0, val1)
+                            };
+                            
+                            if i >= n_len - 1 {
+                                val_i
+                            } else {
+                                (1.0 - f) * val_i + f * val_i_plus_1
+                            }
+                        };
+                        state.sort_buffer = copy;
+                        res
+                    }
                 }
                 Feature::BenfordCorrelation => {
                     let mut counts = [0.0; 9];
                     for &v in values {
                         let mut abs_v = v.abs();
                         if abs_v > 0.0 {
-                            while abs_v < 1.0 {
-                                abs_v *= 10.0;
-                            }
-                            while abs_v >= 10.0 {
-                                abs_v /= 10.0;
-                            }
-                            let first_digit = abs_v.floor() as usize;
+                            let first_digit = (abs_v / 10.0_f32.powf(abs_v.log10().floor())).floor() as usize;
                             if (1..=9).contains(&first_digit) {
                                 counts[first_digit - 1] += 1.0;
                             }
@@ -111,7 +132,7 @@ pub fn eval_distribution(
                     }
                 }
                 Feature::SumOfReoccurringValues => {
-                    let mut counts = std::collections::HashMap::new();
+                    let mut counts = rustc_hash::FxHashMap::default();
                     for &v in values {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;
@@ -123,7 +144,7 @@ pub fn eval_distribution(
                         .sum()
                 }
                 Feature::SumOfReoccurringDataPoints => {
-                    let mut counts = std::collections::HashMap::new();
+                    let mut counts = rustc_hash::FxHashMap::default();
                     for &v in values {
                         let bits = v.to_bits();
                         *counts.entry(bits).or_insert(0) += 1;

@@ -9,7 +9,7 @@ pub struct DiffProcessor;
 impl DiffProcessor {
     #[inline(always)]
     pub fn process_simd(
-        _compute: Compute,
+        compute: Compute,
         chunk: f32x4,
         shifted: f32x4,
         offset: f32,
@@ -19,21 +19,61 @@ impl DiffProcessor {
         let simd_zero = f32x4::splat(0.0);
 
         let diff = chunk - shifted;
-        state.mac_sum_vec += diff.abs();
-        state.mc_sum_vec += diff;
-        state.sum_sq_diff += (diff * diff).reduce_sum();
-        state.sum_prod += (chunk * shifted).reduce_sum();
-        state.auc_sum += (chunk + shifted).reduce_sum() * 0.5;
-
-        let signs = chunk.simd_lt(simd_zero);
-        let prev_signs = shifted.simd_lt(simd_zero);
-        let mask = (signs ^ prev_signs).to_bitmask();
-        state.zcr_count += mask.count_ones();
-        
-        for bit in 0..4 {
-            if (mask >> bit) & 1 == 1 {
-                state.zc_indices.push(offset + bit as f32);
+        if compute.intersects(Compute::ZERO_CROSS | Compute::AUTOCORR_LAG1 | Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUC) {
+            if compute.contains(Compute::MAC) {
+                state.mac_sum_vec += diff.abs();
             }
+            if compute.contains(Compute::MC) {
+                state.mc_sum_vec += diff;
+            }
+            if compute.contains(Compute::CID_CE) {
+                state.sum_sq_diff_vec += diff * diff;
+            }
+            if compute.contains(Compute::AUTOCORR_LAG1) {
+                state.sum_prod_vec += chunk * shifted;
+            }
+            if compute.contains(Compute::AUC) {
+                state.auc_sum_vec += (chunk + shifted) * f32x4::splat(0.5);
+            }
+        }
+
+        if compute.contains(Compute::ZERO_CROSS) {
+            let signs = chunk.simd_lt(simd_zero);
+            let prev_signs = shifted.simd_lt(simd_zero);
+            let mask = (signs ^ prev_signs).to_bitmask();
+            state.zcr_count += mask.count_ones();
+            
+            if compute.contains(Compute::ZC_INDICES) {
+                for bit in 0..4 {
+                    if (mask >> bit) & 1 == 1 {
+                        state.zc_indices.push(offset + bit as f32);
+                    }
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn finalize_simd(compute: Compute, state: &mut ColumnState) {
+        if compute.contains(Compute::MAC) {
+            state.mac_sum += state.mac_sum_vec.reduce_sum();
+            state.mac_sum_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::MC) {
+            state.mc_sum += state.mc_sum_vec.reduce_sum();
+            state.mc_sum_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::CID_CE) {
+            state.sum_sq_diff += state.sum_sq_diff_vec.reduce_sum();
+            state.sum_sq_diff_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::AUTOCORR_LAG1) {
+            state.sum_prod += state.sum_prod_vec.reduce_sum();
+            state.sum_prod_vec = f32x4::splat(0.0);
+        }
+        if compute.contains(Compute::AUC) {
+            state.auc_sum += state.auc_sum_vec.reduce_sum();
+            state.auc_sum_vec = f32x4::splat(0.0);
         }
     }
 
@@ -66,6 +106,31 @@ impl DiffProcessor {
             if compute.contains(Compute::ZC_INDICES) {
                 state.zc_indices.push(global_idx as f32);
             }
+        }
+    }
+
+    pub fn finalize(
+        compute: Compute,
+        state: &ColumnState,
+    ) -> crate::metrics::ZcMetrics {
+        let mut zc_mean = 0.0;
+        let mut zc_std = 0.0;
+
+        if compute.contains(Compute::ZC_STATS) && !state.zc_indices.is_empty() {
+            zc_mean = state.zc_indices.iter().sum::<f32>() / state.zc_indices.len() as f32;
+            if compute.contains(Compute::ZC_STD) {
+                let zc_m2 = state
+                    .zc_indices
+                    .iter()
+                    .map(|&idx| (idx - zc_mean).powi(2))
+                    .sum::<f32>();
+                zc_std = (zc_m2 / state.zc_indices.len() as f32).sqrt();
+            }
+        }
+
+        crate::metrics::ZcMetrics {
+            zc_mean,
+            zc_std,
         }
     }
 }

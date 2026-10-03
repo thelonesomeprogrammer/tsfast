@@ -3,7 +3,6 @@ use crate::common::LANES;
 use crate::types::{Compute, Feature};
 use realfft::RealToComplex;
 use std::simd::f32x4;
-use std::simd::num::SimdFloat;
 use std::sync::Arc;
 
 use super::processors::stats_processor::StatsProcessor;
@@ -134,14 +133,12 @@ impl<'a> ExpandingEngine<'a> {
         running_sorted: &mut Vec<f32>,
         full_series: &[f32],
     ) -> Vec<f32> {
-        let mean = state.total_sum / n;
-        let mac_sum = state.mac_sum_vec.reduce_sum();
-        let mc_sum = state.mc_sum_vec.reduce_sum();
+        StatsProcessor::finalize_simd(self.compute, state);
+        DiffProcessor::finalize_simd(self.compute, state);
+        TrendProcessor::finalize_simd(self.compute, state);
+        TrendProcessor::finalize_paa(self.compute, self.unique_paa_totals, self.paa_boundaries, full_series, state);
 
-        let m2 = state.energy - (state.total_sum * state.total_sum) / n;
-        let m3 = state.sum_cubes - 3.0 * mean * state.energy + 2.0 * mean * mean * state.total_sum;
-        let m4 = state.sum_quads - 4.0 * mean * state.sum_cubes + 6.0 * mean * mean * state.energy
-            - 3.0 * mean * mean * mean * state.total_sum;
+        let base_metrics = StatsProcessor::finalize_base_metrics(state, n);
 
         let (median, iqr) = SortProcessor::process_running_sorted(self.compute, full_series, running_sorted);
 
@@ -154,95 +151,59 @@ impl<'a> ExpandingEngine<'a> {
             state,
         );
 
-        let mean_res = MeanProcessor::finalize(
+        let (mean_metrics, entropy) = MeanProcessor::finalize(
             self.compute,
             full_series,
             n,
-            mean,
+            base_metrics.mean,
             state,
         );
 
-        let mut zc_mean = 0.0;
-        let mut zc_std = 0.0;
-        if self.compute.contains(Compute::ZC_STATS) && !state.zc_indices.is_empty() {
-            zc_mean = state.zc_indices.iter().sum::<f32>() / state.zc_indices.len() as f32;
-            if self.compute.contains(Compute::ZC_STD) {
-                let zc_m2 = state
-                    .zc_indices
-                    .iter()
-                    .map(|&idx| (idx - zc_mean).powi(2))
-                    .sum::<f32>();
-                zc_std = (zc_m2 / state.zc_indices.len() as f32).sqrt();
-            }
+        let zc_metrics = DiffProcessor::finalize(self.compute, state);
+
+        let sort_metrics = crate::metrics::SortMetrics {
+            first_max_idx: 0,
+            last_max_idx: 0,
+            first_min_idx: 0,
+            last_min_idx: 0,
+            median,
+            iqr,
+            entropy,
+        };
+
+        let mut context = crate::context::FeatureContext::new(
+            full_series,
+            Some(running_sorted),
+            state,
+            n,
+            base_metrics,
+            sort_metrics,
+            mean_metrics,
+            zc_metrics,
+            &fft_res,
+            &self.unique_c3_lags,
+            &self.unique_paa_totals,
+            &self.paa_boundaries,
+        );
+
+        let mut feats = Vec::with_capacity(self.features.len());
+        for feat in self.features {
+            let val = {
+                if let Some(v) = crate::features::moments::eval_moments(feat, &mut context) { v }
+                else if let Some(v) = crate::features::min_max::eval_min_max(feat, &mut context) { v }
+                else if let Some(v) = crate::features::distribution::eval_distribution(feat, &mut context) { v }
+                else if let Some(v) = crate::features::energy::eval_energy(feat, &mut context) { v }
+                else if let Some(v) = crate::features::crossings_peaks::eval_crossings_peaks(feat, &mut context) { v }
+                else if let Some(v) = crate::features::autocorrelation::eval_autocorrelation(feat, &mut context) { v }
+                else if let Some(v) = crate::features::changes::eval_changes(feat, &mut context) { v }
+                else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) { v }
+                else if let Some(v) = crate::features::transform::eval_transform(feat, &mut context) { v }
+                else if let Some(v) = crate::features::complexity::eval_complexity(feat, &mut context) { v }
+                else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) { v }
+                else { 0.0 }
+            };
+            feats.push(val);
         }
-
-        let var = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
-        let std_dev = var.sqrt();
-
-        self.features
-            .iter()
-            .map(|feat| {
-                if let Some(val) = crate::expanding::basic::eval_basic(
-                    feat, n, mean, var, std_dev, state,
-                ) {
-                    return val;
-                }
-                if let Some(val) = crate::expanding::statistics::eval_statistics(
-                    feat,
-                    n,
-                    mean,
-                    var,
-                    std_dev,
-                    m2,
-                    m3,
-                    m4,
-                    mean_res.mad_sum,
-                    median,
-                    iqr,
-                    mean_res.entropy,
-                    mean_res.count_a,
-                    mean_res.count_b,
-                    mean_res.max_strike_a,
-                    mean_res.max_strike_b,
-                    zc_mean,
-                    zc_std,
-                    state,
-                    running_sorted,
-                    full_series,
-                ) {
-                    return val;
-                }
-                if let Some(val) = crate::expanding::time_series::eval_time_series(
-                    feat,
-                    n,
-                    mean,
-                    var,
-                    m2,
-                    mac_sum,
-                    mc_sum,
-                    state,
-                    &self.unique_c3_lags,
-                    &self.unique_paa_totals,
-                    &self.paa_boundaries,
-                    &self.unique_autocorr_lags,
-                    full_series,
-                ) {
-                    return val;
-                }
-                if let Some(val) = crate::expanding::fft::eval_fft(
-                    feat,
-                    n,
-                    &fft_res.spectrum,
-                    &fft_res.fft_complex,
-                    fft_res.freq_centroid,
-                    fft_res.spectral_decrease,
-                    fft_res.spectral_slope,
-                    full_series,
-                ) {
-                    return val;
-                }
-                0.0
-            })
-            .collect()
+        feats
     }
 }

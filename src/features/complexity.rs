@@ -1,12 +1,12 @@
 use crate::types::Feature;
 
 #[inline(always)]
-pub fn eval_runs(
+pub fn eval_complexity(
     feat: &Feature,
-    context: &mut crate::sliding::context::FeatureContext,
+    context: &mut crate::context::FeatureContext,
 ) -> Option<f32> {
-    let _values = context.values;
-    let _state = &mut *context.state;
+    let values = context.values;
+    let state = &mut *context.state;
     let _n = context.n;
     let _mean = context.mean;
     let _m2 = context.m2;
@@ -24,10 +24,10 @@ pub fn eval_runs(
     let _iqr = context.iqr;
     let _entropy = context.entropy;
     let _mad_sum = context.mad_sum;
-    let count_a = context.count_a;
-    let count_b = context.count_b;
-    let max_strike_a = context.max_strike_a;
-    let max_strike_b = context.max_strike_b;
+    let _count_a = context.count_a;
+    let _count_b = context.count_b;
+    let _max_strike_a = context.max_strike_a;
+    let _max_strike_b = context.max_strike_b;
     let _zc_mean = context.zc_mean;
     let _zc_std = context.zc_std;
     let _freq_centroid = context.freq_centroid;
@@ -41,10 +41,16 @@ pub fn eval_runs(
     let _paa_boundaries = context.paa_boundaries;
     
     let res = match feat {
-                Feature::CountAboveMean => count_a as f32,
-                Feature::CountBelowMean => count_b as f32,
-                Feature::LongestStrikeAboveMean => max_strike_a as f32,
-                Feature::LongestStrikeBelowMean => max_strike_b as f32,
+                Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
+                    let m_val = *m as usize;
+                    let r = f32::from_bits(*r_bits);
+                    let mut buffer = std::mem::take(&mut state.approx_entropy_buffer);
+
+                    let res = crate::common::approx_entropy_phi(m_val, r, values, &mut buffer)
+                        - crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer);
+                    state.approx_entropy_buffer = buffer;
+                    res
+                }
         _ => return None,
     };
     Some(res)

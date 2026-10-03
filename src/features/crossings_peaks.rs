@@ -1,18 +1,18 @@
 use crate::types::Feature;
 
 #[inline(always)]
-pub fn eval_misc(
+pub fn eval_crossings_peaks(
     feat: &Feature,
-    context: &mut crate::sliding::context::FeatureContext,
+    context: &mut crate::context::FeatureContext,
 ) -> Option<f32> {
     let _values = context.values;
-    let _state = &mut *context.state;
+    let state = &mut *context.state;
     let n = context.n;
     let _mean = context.mean;
     let _m2 = context.m2;
     let _m3 = context.m3;
     let _m4 = context.m4;
-    let var = context.var;
+    let _var = context.var;
     let _std_dev = context.std_dev;
     let _mac_sum = context.mac_sum;
     let _mc_sum = context.mc_sum;
@@ -28,8 +28,8 @@ pub fn eval_misc(
     let _count_b = context.count_b;
     let _max_strike_a = context.max_strike_a;
     let _max_strike_b = context.max_strike_b;
-    let _zc_mean = context.zc_mean;
-    let _zc_std = context.zc_std;
+    let zc_mean = context.zc_mean;
+    let zc_std = context.zc_std;
     let _freq_centroid = context.freq_centroid;
     let _spectral_decrease = context.spectral_decrease;
     let _spectral_slope = context.spectral_slope;
@@ -41,14 +41,10 @@ pub fn eval_misc(
     let _paa_boundaries = context.paa_boundaries;
     
     let res = match feat {
-                Feature::Length => n as f32,
-                Feature::VarianceLargerThanStandardDeviation => {
-                    if var > 1.0 {
-                        1.0
-                    } else {
-                        0.0
-                    }
-                }
+                Feature::ZeroCrossingRate => state.zcr_count as f32 / n,
+                Feature::PeakCount => state.peaks as f32,
+                Feature::ZeroCrossingMean => zc_mean,
+                Feature::ZeroCrossingStd => zc_std,
         _ => return None,
     };
     Some(res)

@@ -60,7 +60,15 @@ impl TrendProcessor {
         if compute.contains(Compute::SLOPE) {
             let offset = global_idx as f32;
             let indices = f32x4::from_array([offset, offset + 1.0, offset + 2.0, offset + 3.0]);
-            state.sum_ix += (indices * chunk).reduce_sum();
+            state.sum_ix_vec += indices * chunk;
+        }
+    }
+
+    #[inline(always)]
+    pub fn finalize_simd(compute: Compute, state: &mut ColumnState) {
+        if compute.contains(Compute::SLOPE) {
+            state.sum_ix += state.sum_ix_vec.reduce_sum();
+            state.sum_ix_vec = f32x4::splat(0.0);
         }
     }
 

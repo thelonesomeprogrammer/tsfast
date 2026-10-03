@@ -2,12 +2,14 @@ use crate::common::{ColumnState, LANES};
 use crate::types::{Compute, Feature};
 use realfft::RealToComplex;
 use std::simd::f32x4;
-use std::simd::num::SimdFloat;
 use std::sync::Arc;
 
 use super::processors::stats_processor::StatsProcessor;
 use super::processors::diff_processor::DiffProcessor;
 use super::processors::trend_processor::TrendProcessor;
+use super::processors::sort_processor::SortProcessor;
+use super::processors::mean_processor::MeanProcessor;
+use super::processors::fft_processor::FftProcessor;
 
 pub(crate) struct StaticEngine<'a> {
     pub(crate) compute: Compute,
@@ -93,179 +95,67 @@ impl<'a> StaticEngine<'a> {
 
     #[inline(always)]
     fn finalize_results(&self, values: &[f32], n: f32, mut state: ColumnState) -> Vec<f32> {
-        let mean = state.total_sum / n;
-        let mac_sum = state.mac_sum_vec.reduce_sum();
-        let mc_sum = state.mc_sum_vec.reduce_sum();
+        StatsProcessor::finalize_simd(self.compute, &mut state);
+        DiffProcessor::finalize_simd(self.compute, &mut state);
+        TrendProcessor::finalize_simd(self.compute, &mut state);
+        
+        let base_metrics = StatsProcessor::finalize_base_metrics(&mut state, n);
 
-        let m2 = state.energy - (state.total_sum * state.total_sum) / n;
-        let m3 = state.sum_cubes - 3.0 * mean * state.energy + 2.0 * mean * mean * state.total_sum;
-        let m4 = state.sum_quads - 4.0 * mean * state.sum_cubes + 6.0 * mean * mean * state.energy
-            - 3.0 * mean * mean * mean * state.total_sum;
-
-        let mut mad_sum = 0.0;
-        let mut count_a = 0;
-        let mut count_b = 0;
-        let mut max_strike_a = 0;
-        let mut max_strike_b = 0;
-        let mut median = 0.0;
-        let mut iqr = 0.0;
-        let mut entropy = 0.0;
-        let mut zc_mean = 0.0;
-        let mut zc_std = 0.0;
-        let mut first_max_idx = 0;
-        let mut last_max_idx = 0;
-        let mut first_min_idx = 0;
-        let mut last_min_idx = 0;
-
-        let mut sorted_copy = crate::static_ext::features::distribution::compute_distribution_features(
-            &self.compute,
+        let sort_metrics = SortProcessor::finalize(self.compute, values, n, &mut state);
+        let mean_metrics = MeanProcessor::finalize(self.compute, values, n, base_metrics.mean);
+        let fft_res = FftProcessor::finalize(
+            self.compute,
             values,
-            &mut state,
             n,
-            &mut median,
-            &mut iqr,
-            &mut entropy,
-        );
-
-        let benford_corr = crate::static_ext::features::benford::compute_benford_correlation(&self.compute, values);
-
-        let mut spectrum = Vec::new();
-        let mut fft_complex = Vec::new();
-        let mut freq_centroid = 0.0;
-        let mut spectral_decrease = 0.0;
-        let mut spectral_slope = 0.0;
-
-        crate::static_ext::features::spectral::compute_spectral_features(
-            &self.compute,
-            values,
-            &mut state,
+            base_metrics.mean,
+            base_metrics.m2,
             self.fft_size,
             &self.r2c,
-            &mut spectrum,
-            &mut fft_complex,
-            &mut freq_centroid,
-            &mut spectral_decrease,
-            &mut spectral_slope,
+            &mut state,
+        ).unwrap_or(crate::metrics::FftResult {
+            spectrum: Vec::new(),
+            fft_complex: Vec::new(),
+            freq_centroid: 0.0,
+            spectral_decrease: 0.0,
+            spectral_slope: 0.0,
+            fft_autocorr: Vec::new(),
+        });
+        
+        let zc_metrics = DiffProcessor::finalize(self.compute, &state);
+
+        let mut context = crate::context::FeatureContext::new(
+            values,
+            None,
+            &mut state,
+            n,
+            base_metrics,
+            sort_metrics,
+            mean_metrics,
+            zc_metrics,
+            &fft_res,
+            &self.unique_c3_lags,
+            &self.unique_paa_totals,
+            &self.paa_boundaries,
         );
 
-        let mut signal_dist = 0.0;
-        if self.compute.contains(Compute::SIG_DISTANCE) {
-            for i in 1..values.len() {
-                signal_dist += ((values[i] - values[i - 1]).powi(2) + 1.0).sqrt();
-            }
+        let mut feats = Vec::with_capacity(self.features.len());
+        for feat in self.features {
+            let val = {
+                if let Some(v) = crate::features::moments::eval_moments(feat, &mut context) { v }
+                else if let Some(v) = crate::features::min_max::eval_min_max(feat, &mut context) { v }
+                else if let Some(v) = crate::features::distribution::eval_distribution(feat, &mut context) { v }
+                else if let Some(v) = crate::features::energy::eval_energy(feat, &mut context) { v }
+                else if let Some(v) = crate::features::crossings_peaks::eval_crossings_peaks(feat, &mut context) { v }
+                else if let Some(v) = crate::features::autocorrelation::eval_autocorrelation(feat, &mut context) { v }
+                else if let Some(v) = crate::features::changes::eval_changes(feat, &mut context) { v }
+                else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) { v }
+                else if let Some(v) = crate::features::transform::eval_transform(feat, &mut context) { v }
+                else if let Some(v) = crate::features::complexity::eval_complexity(feat, &mut context) { v }
+                else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) { v }
+                else { 0.0 }
+            };
+            feats.push(val);
         }
-
-        let fft_autocorr = crate::static_ext::features::autocorr::compute_fft_autocorr(&self.compute, values, n, mean, m2);
-
-        if self.compute.contains(Compute::NEEDS_SORT) {
-            crate::static_ext::features::extrema::compute_extrema_features(
-                &self.compute,
-                values,
-                state.max_value,
-                state.min_value,
-                &mut first_max_idx,
-                &mut last_max_idx,
-                &mut first_min_idx,
-                &mut last_min_idx,
-            );
-
-            crate::static_ext::features::strikes::compute_strike_features(
-                &self.compute,
-                values,
-                mean,
-                &mut mad_sum,
-                &mut count_a,
-                &mut count_b,
-                &mut max_strike_a,
-                &mut max_strike_b,
-            );
-
-            if self.compute.contains(Compute::ZC_STATS) && !state.zc_indices.is_empty() {
-                zc_mean = state.zc_indices.iter().sum::<f32>() / state.zc_indices.len() as f32;
-                if self.compute.contains(Compute::ZC_STD) {
-                    let zc_m2 = state
-                        .zc_indices
-                        .iter()
-                        .map(|&idx| (idx - zc_mean).powi(2))
-                        .sum::<f32>();
-                    zc_std = (zc_m2 / state.zc_indices.len() as f32).sqrt();
-                }
-            }
-        }
-
-        let var = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
-        let std_dev = var.sqrt();
-
-        self.features
-            .iter()
-            .map(|feat| {
-                if let Some(val) = crate::static_ext::features::eval_basic::eval_basic(
-                    feat, n, mean, var, std_dev, &state,
-                ) {
-                    return val;
-                }
-                if let Some(val) = crate::static_ext::features::eval_statistics::eval_statistics(
-                    feat,
-                    n,
-                    mean,
-                    var,
-                    std_dev,
-                    m2,
-                    m3,
-                    m4,
-                    mad_sum,
-                    median,
-                    iqr,
-                    entropy,
-                    count_a,
-                    count_b,
-                    max_strike_a,
-                    max_strike_b,
-                    zc_mean,
-                    zc_std,
-                    &mut state,
-                    values,
-                    &mut sorted_copy,
-                    benford_corr,
-                    first_max_idx,
-                    last_max_idx,
-                    first_min_idx,
-                    last_min_idx,
-                ) {
-                    return val;
-                }
-                if let Some(val) = crate::static_ext::features::eval_time_series::eval_time_series(
-                    feat,
-                    n,
-                    mean,
-                    var,
-                    m2,
-                    mac_sum,
-                    mc_sum,
-                    &mut state,
-                    &self.unique_c3_lags,
-                    &self.unique_paa_totals,
-                    &self.paa_boundaries,
-                    &fft_autocorr,
-                    values,
-                    signal_dist,
-                ) {
-                    return val;
-                }
-                if let Some(val) = crate::static_ext::features::eval_fft::eval_fft(
-                    feat,
-                    n,
-                    &spectrum,
-                    &fft_complex,
-                    freq_centroid,
-                    spectral_decrease,
-                    spectral_slope,
-                    values,
-                ) {
-                    return val;
-                }
-                0.0
-            })
-            .collect()
+        feats
     }
 }

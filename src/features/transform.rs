@@ -3,7 +3,7 @@ use crate::types::Feature;
 #[inline(always)]
 pub fn eval_transform(
     feat: &Feature,
-    context: &mut crate::sliding::context::FeatureContext,
+    context: &mut crate::context::FeatureContext,
 ) -> Option<f32> {
     let values = context.values;
     let state = &mut *context.state;

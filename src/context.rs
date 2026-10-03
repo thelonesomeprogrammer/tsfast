@@ -2,6 +2,7 @@ use crate::common::ColumnState;
 
 pub struct FeatureContext<'a> {
     pub values: &'a [f32],
+    pub running_sorted: Option<&'a [f32]>,
     pub state: &'a mut ColumnState,
     pub n: f32,
     
@@ -53,19 +54,21 @@ impl<'a> FeatureContext<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         values: &'a [f32],
+        running_sorted: Option<&'a [f32]>,
         state: &'a mut ColumnState,
         n: f32,
-        base: crate::sliding::processors::stats_processor::BaseMetrics,
-        sort: crate::sliding::processors::sort_processor::SortMetrics,
-        mean: crate::sliding::processors::mean_processor::MeanMetrics,
-        zc: crate::sliding::processors::diff_processor::ZcMetrics,
-        fft: &'a crate::sliding::processors::fft_processor::FftResult,
+        base: crate::metrics::BaseMetrics,
+        sort: crate::metrics::SortMetrics,
+        mean: crate::metrics::MeanMetrics,
+        zc: crate::metrics::ZcMetrics,
+        fft: &'a crate::metrics::FftResult,
         unique_c3_lags: &'a [u16],
         unique_paa_totals: &'a [u16],
         paa_boundaries: &'a [Vec<usize>],
     ) -> Self {
         Self {
             values,
+            running_sorted,
             n,
             mean: base.mean,
             m2: base.m2,
