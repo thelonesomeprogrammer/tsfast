@@ -87,7 +87,10 @@ bitflags! {
         const HAS_DUP_MAX    = 1 << 68;
         const HAS_DUP_MIN    = 1 << 69;
         const REOCCUR_RATIOS = 1 << 70;
-        const RATIO_BEYOND_R_SIGMA = 1 << 71;
+        const SPEC_SPREAD    = 1 << 71;
+        const SPEC_SKEWNESS  = 1 << 72;
+        const SPEC_KURTOSIS  = 1 << 73;
+        const RATIO_BEYOND_R_SIGMA = 1 << 74;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()
@@ -96,6 +99,9 @@ bitflags! {
             | Self::SPEC_DISTANCE.bits()
             | Self::SPEC_DECREASE.bits()
             | Self::SPEC_SLOPE.bits()
+            | Self::SPEC_SPREAD.bits()
+            | Self::SPEC_SKEWNESS.bits()
+            | Self::SPEC_KURTOSIS.bits()
             | Self::SPECTROGRAM.bits();
 
         const ANY_DIFF = Self::ZERO_CROSS.bits()

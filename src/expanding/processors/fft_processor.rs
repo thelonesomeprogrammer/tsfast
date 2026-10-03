@@ -21,6 +21,9 @@ impl FftProcessor {
         let mut freq_centroid = 0.0;
         let mut spectral_decrease = 0.0;
         let mut spectral_slope = 0.0;
+        let mut spectral_spread = 0.0;
+        let mut spectral_skewness = 0.0;
+        let mut spectral_kurtosis = 0.0;
 
         if compute.intersects(Compute::ANY_FFT) {
             let n_total = full_series.len();
@@ -129,6 +132,9 @@ impl FftProcessor {
             freq_centroid,
             spectral_decrease,
             spectral_slope,
+            spectral_spread,
+            spectral_skewness,
+            spectral_kurtosis,
             fft_autocorr: Vec::new(),
         }
     }
