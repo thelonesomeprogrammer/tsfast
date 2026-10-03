@@ -124,6 +124,7 @@ pub struct ColumnState {
     pub last_fft_complex: Vec<num_complex::Complex<f32>>,
     pub fft_in_buffer: Vec<f32>,
     pub fft_out_buffer: Vec<num_complex::Complex<f32>>,
+    pub fft_inv_buffer: Vec<f32>,
     pub sliding_dft: Option<SlidingDFT>,
     pub spectrum_buffer: Vec<f32>,
 }
@@ -239,6 +240,7 @@ impl ColumnState {
             last_fft_complex: Vec::new(),
             fft_in_buffer: Vec::new(),
             fft_out_buffer: Vec::new(),
+            fft_inv_buffer: Vec::new(),
             sliding_dft: None,
             spectrum_buffer: Vec::new(),
         }
