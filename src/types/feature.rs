@@ -1,0 +1,237 @@
+use super::compute::Compute;
+
+// ─── Feature enum ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+pub enum Feature {
+    TotalSum,
+    Mean,
+    Variance,
+    Std,
+    Min,
+    Max,
+    Median,
+    Skew,
+    UnbiasedFisherKurtosis, // tsfresh default
+    BiasedFisherKurtosis,   // tsfel default
+    Mad,
+    Iqr,
+    Entropy,
+    Energy,
+    Rms,
+    RootMeanSquare,
+    ZeroCrossingRate,
+    PeakCount,
+    AutocorrLag1,    // Centered (tsfresh default)
+    AutocorrFirst1e, // tsfel 'Autocorrelation' feature
+    MeanAbsChange,
+    MeanChange,
+    CidCe,
+    Slope,
+    Intercept,
+    Paa(u16, u16),
+    AbsSumChange,
+    CountAboveMean,
+    CountBelowMean,
+    LongestStrikeAboveMean,
+    LongestStrikeBelowMean,
+    VariationCoefficient,
+    C3(u16),
+    Auc,
+    SlopeSignChange,
+    TurningPoints,
+    ZeroCrossingMean,
+    ZeroCrossingStd,
+    AbsMax,
+    FirstLocMax,
+    LastLocMax,
+    FirstLocMin,
+    LastLocMin,
+    Autocorr(u16),
+    PartialAutocorr(u16),
+    TimeReversalAsymmetry(u16),
+    FftCoefficient(u16, FftAttr),
+    ApproxEntropy(u8, u32), // r is encoded as u32 (fixed point or bitcast)
+    AggLinearTrend(AggAttr, u16, AggFunc),
+    Quantile(u32),          // q encoded as u32 bits
+    IndexMassQuantile(u32), // q encoded as u32 bits
+    BenfordCorrelation,
+    MaxLangevinFixedPoint(u8, u32), // m, r as bits
+    SumOfReoccurringValues,
+    SumOfReoccurringDataPoints,
+    PercentageOfReoccurringDatapointsToAllDatapoints,
+    PercentageOfReoccurringValuesToAllValues,
+    RatioValueNumberToTimeSeriesLength,
+    MeanNAbsoluteMax(u16),
+    Length,
+    VarianceLargerThanStandardDeviation,
+    HumanRangeEnergy(u32), // fs as bits
+    SpectralCentroid,
+    SpectralDistance,
+    SpectralDecrease,
+    SpectralSlope,
+    SignalDistance,
+    WaveletFeatures(u32, u16), // mother wavelet (freq stored as f32 bits), feature type
+    SpectrogramCoefficients(u16, u32), // time, freq stored as f32 bits
+    MeanSecondDerivativeCentral,
+    LargeStandardDeviation(u32),
+    SymmetryLooking(u32),
+    HasDuplicateMax,
+    HasDuplicateMin,
+    HasDuplicate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+pub enum FftAttr {
+    Real,
+    Imag,
+    Abs,
+    Angle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+pub enum AggAttr {
+    Slope,
+    Intercept,
+    Stderr,
+    RValue,
+    PValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+pub enum AggFunc {
+    Max,
+    Min,
+    Mean,
+    Var,
+}
+
+// ─── Feature → Compute dependency mapping ───────────────────────────────────
+
+impl Feature {
+    /// Returns the set of computation flags this feature requires.
+    pub fn required_compute(&self) -> Compute {
+        use Compute as C;
+        match self {
+            Self::TotalSum => C::SUM,
+            Self::Mean => C::SUM | C::MEAN,
+            Self::Variance => C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::NEEDS_SORT,
+            Self::Std => C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::NEEDS_SORT,
+            Self::Min => C::MIN,
+            Self::Max => C::MAX,
+            Self::Median => C::MEDIAN | C::NEEDS_SORT,
+            Self::Skew => C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT,
+            Self::UnbiasedFisherKurtosis | Self::BiasedFisherKurtosis => {
+                C::SUM | C::MEAN | C::VARIANCE | C::KURTOSIS | C::ENERGY | C::NEEDS_SORT
+            }
+            Self::Mad => C::SUM | C::MEAN | C::MAD | C::NEEDS_SORT,
+            Self::Iqr => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::NEEDS_SORT,
+            Self::Entropy => {
+                C::MIN | C::MAX | C::MEDIAN | C::IQR | C::ENTROPY | C::NEEDS_SORT
+            }
+            Self::Energy => C::ENERGY,
+            Self::Rms => C::ENERGY | C::RMS,
+            Self::RootMeanSquare => C::ENERGY | C::ROOT_MEAN_SQ,
+            Self::ZeroCrossingRate => C::ZERO_CROSS,
+            Self::PeakCount => C::PEAKS,
+            Self::AutocorrLag1 => C::SUM | C::MEAN | C::ENERGY | C::AUTOCORR_LAG1,
+            Self::AutocorrFirst1e => {
+                C::SUM | C::MEAN | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
+            }
+            Self::MeanAbsChange => C::SUM | C::MEAN | C::MAC,
+            Self::MeanChange => C::SUM | C::MEAN | C::MC,
+            Self::CidCe => C::SUM | C::MEAN | C::CID_CE,
+            Self::Slope => C::SUM | C::MEAN | C::SLOPE,
+            Self::Intercept => C::SUM | C::MEAN | C::SLOPE | C::INTERCEPT,
+            Self::Paa(_, _) => C::PAA,
+            Self::AbsSumChange => C::ABS_SUM_CHG,
+            Self::CountAboveMean => C::SUM | C::MEAN | C::CNT_ABOVE_MEAN | C::NEEDS_SORT,
+            Self::CountBelowMean => C::SUM | C::MEAN | C::CNT_BELOW_MEAN | C::NEEDS_SORT,
+            Self::LongestStrikeAboveMean => {
+                C::SUM | C::MEAN | C::STRIKE_ABOVE | C::NEEDS_SORT
+            }
+            Self::LongestStrikeBelowMean => {
+                C::SUM | C::MEAN | C::STRIKE_BELOW | C::NEEDS_SORT
+            }
+            Self::VariationCoefficient => {
+                C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::VAR_COEFF | C::NEEDS_SORT
+            }
+            Self::C3(_) => C::C3,
+            Self::Auc => C::AUC,
+            Self::SlopeSignChange => C::PEAKS | C::SLOPE_SIGN_CHG,
+            Self::TurningPoints => C::PEAKS | C::TURNING_PTS,
+            Self::ZeroCrossingMean => {
+                C::SUM | C::MEAN | C::ZERO_CROSS | C::ZC_STATS | C::ZC_INDICES | C::NEEDS_SORT
+            }
+            Self::ZeroCrossingStd => {
+                C::SUM
+                    | C::MEAN
+                    | C::ZERO_CROSS
+                    | C::ZC_STATS
+                    | C::ZC_STD
+                    | C::ZC_INDICES
+                    | C::NEEDS_SORT
+            }
+            Self::AbsMax => C::ABS_MAX,
+            Self::FirstLocMax => C::MAX | C::NEEDS_SORT | C::FIRST_LOC_MAX,
+            Self::LastLocMax => C::MAX | C::NEEDS_SORT | C::LAST_LOC_MAX,
+            Self::FirstLocMin => C::MIN | C::NEEDS_SORT | C::FIRST_LOC_MIN,
+            Self::LastLocMin => C::MIN | C::NEEDS_SORT | C::LAST_LOC_MIN,
+            Self::Autocorr(lag) => {
+                if *lag == 1 {
+                    C::SUM | C::MEAN | C::ENERGY | C::AUTOCORR_LAG1 | C::NEEDS_SORT
+                } else {
+                    C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
+                }
+            }
+            Self::PartialAutocorr(_) => {
+                C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::PACF | C::NEEDS_SORT
+            }
+            Self::TimeReversalAsymmetry(_) => C::TRA | C::NEEDS_SORT,
+            Self::FftCoefficient(_, _) => C::FFT_COEFF | C::NEEDS_SORT,
+            Self::ApproxEntropy(_, _) => C::APPROX_ENT | C::NEEDS_SORT,
+            Self::AggLinearTrend(_, _, _) => C::AGG_LIN_TREND | C::NEEDS_SORT,
+            Self::Quantile(_) => C::QUANTILE | C::NEEDS_SORT,
+            Self::IndexMassQuantile(_) => C::ABS_SUM | C::IDX_MASS_Q | C::NEEDS_SORT,
+            Self::BenfordCorrelation => C::BENFORD | C::NEEDS_SORT,
+            Self::MaxLangevinFixedPoint(_, _) => C::LANGEVIN | C::NEEDS_SORT,
+            Self::SumOfReoccurringValues => C::REOCCUR_VAL | C::NEEDS_SORT,
+            Self::SumOfReoccurringDataPoints => C::REOCCUR_DP | C::NEEDS_SORT,
+            Self::PercentageOfReoccurringDatapointsToAllDatapoints => C::REOCCUR_RATIOS | C::NEEDS_SORT,
+            Self::PercentageOfReoccurringValuesToAllValues => C::REOCCUR_RATIOS | C::NEEDS_SORT,
+            Self::RatioValueNumberToTimeSeriesLength => C::REOCCUR_RATIOS | C::NEEDS_SORT,
+            Self::MeanNAbsoluteMax(_) => C::MEAN_N_ABS_MAX | C::NEEDS_SORT,
+            Self::Length => C::LENGTH | C::NEEDS_SORT,
+            Self::VarianceLargerThanStandardDeviation => {
+                C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::NEEDS_SORT | C::VAR_GT_STD
+            }
+            Self::HumanRangeEnergy(_) => C::HUMAN_RANGE_E | C::NEEDS_SORT,
+            Self::SpectralCentroid => C::SPEC_CENTROID | C::NEEDS_SORT,
+            Self::SpectralDistance => C::SPEC_DISTANCE | C::NEEDS_SORT,
+            Self::SpectralDecrease => C::SPEC_DECREASE | C::NEEDS_SORT,
+            Self::SpectralSlope => C::SPEC_SLOPE | C::NEEDS_SORT,
+            Self::SignalDistance => C::SIG_DISTANCE | C::NEEDS_SORT,
+            Self::WaveletFeatures(_, _) => C::WAVELET | C::NEEDS_SORT,
+            Self::SpectrogramCoefficients(_, _) => C::SPECTROGRAM | C::NEEDS_SORT,
+            Self::MeanSecondDerivativeCentral => C::LENGTH | C::NEEDS_SORT,
+            Self::LargeStandardDeviation(_) => {
+                C::SUM | C::MEAN | C::VARIANCE | C::MIN | C::MAX | C::ENERGY | C::NEEDS_SORT
+            }
+            Self::SymmetryLooking(_) => {
+                C::SUM | C::MEAN | C::MIN | C::MAX | C::MEDIAN | C::NEEDS_SORT
+            }
+            Self::HasDuplicateMax => C::MAX | C::HAS_DUP_MAX | C::NEEDS_SORT,
+            Self::HasDuplicateMin => C::MIN | C::HAS_DUP_MIN | C::NEEDS_SORT,
+            Self::HasDuplicate => C::HAS_DUPLICATE | C::NEEDS_SORT,
+        }
+    }
+}
+
+// ─── Feature → Compute aggregation ─────────────────────────────────────────
+
+/// Fold a feature list into a single `Compute` bitflag set.
+pub fn compute_flags(features: &[Feature]) -> Compute {
+    features
+        .iter()
+        .fold(Compute::empty(), |acc, f| acc | f.required_compute())
+}

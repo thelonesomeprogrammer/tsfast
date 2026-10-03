@@ -5,3 +5,8 @@
 ## 2023-10-02 - Variance edge case testing
 **Learning:** Adding variance-dependent features requires ensuring edge cases are covered properly in sliding/expanding calculations. Variance might equal 0.0, or arrays might have insufficient length to calculate ddof=1 variance, leading to potential assertion failures if expected bounds are not set or float edge conditions are not handled.
 **Action:** In `test_tsfast.py`, added a specific assertion to correctly verify that the condition var > 1.0 translates cleanly across the Rust FFI boundaries without panic or precision bugs.
+
+## 2023-10-02 - Python FFI Panic on PyArrow Downcasts
+**Vulnerability:** Calling `.expect()` or `.unwrap()` when downcasting user-provided data types across the PyO3 FFI boundary (like PyArrow Float64 to Float32) causes a hard panic. This terminates the host Python interpreter ungracefully, leading to a critical Denial of Service vulnerability on servers accepting user data.
+**Learning:** Rust panics cannot be cleanly caught by Python unless explicitly converted into standard `PyResult` types mapped to Python Exceptions.
+**Prevention:** Never use `.unwrap()` or `.expect()` on dynamically-typed external FFI inputs like DataFrames/RecordBatches. Always map errors (`.ok_or_else()`) into `PyTypeError` or `PyValueError` to return a `Result` type up the call stack to Python.

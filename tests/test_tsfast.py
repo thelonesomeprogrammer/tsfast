@@ -160,3 +160,59 @@ def test_duplicate_features():
         assert results[0] == expected_has_duplicate
         assert results[1] == expected_has_duplicate_max
         assert results[2] == expected_has_duplicate_min
+
+def test_extract_invalid_type():
+    # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
+    x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
+    features = ["mean", "std"]
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    with pytest.raises(TypeError, match="Failed to downcast column to Float32Array"):
+        extractor.process_2d_floats(batch)
+
+def test_extract_empty_batch():
+    # Verify the Rust engine handles zero-length batches without panicking
+    features = ["mean", "std"]
+    extractor = tsfast.Extractor(features)
+
+    empty_data = pa.RecordBatch.from_arrays([pa.array([], type=pa.float32())], names=['c1'])
+    result = extractor.process_2d_floats(empty_data)
+
+    df = result.to_pandas()
+    assert len(df) == 1
+    # For empty batches, the rust engine defaults to returning 0.0 values across all requested features
+    assert df.iloc[0]['mean'] == 0.0
+
+def test_extract_invalid_feature():
+    # Verify unsupported features immediately error during initialization
+    features = ["invalid_feature"]
+    with pytest.raises(ValueError, match="Unknown feature"):
+        extractor = tsfast.Extractor(features)
+
+def test_reoccurring_ratios():
+    import pyarrow as pa
+    import tsfast
+    import numpy as np
+
+    x = np.array([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0], dtype=np.float32)
+    # len = 7
+    # values: 1, 2, 3, 4 (4 unique values)
+    # 2 occurs twice (reoccurring) -> reoccurring_datapoints = 2
+    # 3 occurs three times (reoccurring) -> reoccurring_datapoints = 3
+    # reoccurring_values = 2 (the values 2 and 3)
+    # Total reoccurring datapoints = 5
+
+    features = [
+        "percentage_of_reoccurring_datapoints_to_all_datapoints",
+        "percentage_of_reoccurring_values_to_all_values",
+        "ratio_value_number_to_time_series_length"
+    ]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    assert np.allclose(results[0], 5.0 / 7.0)
+    assert np.allclose(results[1], 2.0 / 4.0)
+    assert np.allclose(results[2], 4.0 / 7.0)

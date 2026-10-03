@@ -130,3 +130,20 @@ def test_select_features_unsupervised():
     ], dtype=np.float64)
 
     np.testing.assert_array_almost_equal(X_out, expected_X)
+
+def test_select_features_all_constant():
+    # Test early return when all features are constant
+    X = np.array([
+        [1.0, 2.0],
+        [1.0, 2.0],
+        [1.0, 2.0],
+        [1.0, 2.0]
+    ])
+    y = np.array([0, 1, 0, 1])
+
+    selected_X, constant_mask = select_features(X, y=y)
+
+    # Since all features are constant, selected_X should have 0 columns
+    # and constant_mask should be all False.
+    assert selected_X.shape[1] == 0
+    np.testing.assert_array_equal(constant_mask, [False, False])
