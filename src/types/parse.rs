@@ -7,6 +7,7 @@ impl std::str::FromStr for Feature {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // 1. Exact matches (simple features)
         match s {
+            "sample_entropy" => return Ok(Feature::SampleEntropy),
             "total_sum" | "value__sum_values" => return Ok(Feature::TotalSum),
             "mean" | "value__mean" => return Ok(Feature::Mean),
             "variance" | "value__variance" => return Ok(Feature::Variance),
@@ -92,7 +93,16 @@ impl std::str::FromStr for Feature {
             }
             "spectral_slope" | "torque_Spectral slope" => return Ok(Feature::SpectralSlope),
             "spectral_roll_on" | "torque_Spectral roll-on" => return Ok(Feature::SpectralRollOn),
-            "spectral_roll_off" | "torque_Spectral roll-off" => return Ok(Feature::SpectralRollOff),
+            "spectral_roll_off" | "torque_Spectral roll-off" => {
+                return Ok(Feature::SpectralRollOff);
+            }
+            "spectral_spread" | "torque_Spectral spread" => return Ok(Feature::SpectralSpread),
+            "spectral_skewness" | "torque_Spectral skewness" => {
+                return Ok(Feature::SpectralSkewness);
+            }
+            "spectral_kurtosis" | "torque_Spectral kurtosis" => {
+                return Ok(Feature::SpectralKurtosis);
+            }
             "signal_distance" | "torque_Signal distance" => return Ok(Feature::SignalDistance),
             "human_range_energy" | "torque_Human range energy" => {
                 return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
@@ -201,6 +211,15 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("symmetry_looking-") {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
+    }
+    if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
+        && let Ok(bins) = arg.parse::<u32>()
+    {
+        return Some(Feature::BinnedEntropy(bins));
+    }
+    if let Some(arg) = s.strip_prefix("ratio_beyond_r_sigma-") {
+        let r: f32 = arg.parse().ok()?;
+        return Some(Feature::RatioBeyondRSigma(r.to_bits()));
     }
     None
 }
@@ -312,6 +331,16 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
+        && let Ok(bins) = arg.parse::<u32>()
+    {
+        return Some(Feature::BinnedEntropy(bins));
+    }
+    if s.contains("value__ratio_beyond_r_sigma__r_") {
+        let pos = s.find("r_")?;
+        let r: f32 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::RatioBeyondRSigma(r.to_bits()));
+    }
     None
 }
 
@@ -398,6 +427,8 @@ impl Feature {
                 };
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
+            Feature::SampleEntropy => "sample_entropy".to_string(),
+            Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
             }
@@ -450,6 +481,9 @@ impl Feature {
             Feature::SpectralSlope => "spectral_slope".to_string(),
             Feature::SpectralRollOn => "spectral_roll_on".to_string(),
             Feature::SpectralRollOff => "spectral_roll_off".to_string(),
+            Feature::SpectralSpread => "spectral_spread".to_string(),
+            Feature::SpectralSkewness => "spectral_skewness".to_string(),
+            Feature::SpectralKurtosis => "spectral_kurtosis".to_string(),
             Feature::SignalDistance => "signal_distance".to_string(),
             Feature::WaveletFeatures(w_bits, f) => {
                 format!("wavelet-{}-{}", f32::from_bits(*w_bits), f)
@@ -463,6 +497,9 @@ impl Feature {
             }
             Feature::SymmetryLooking(r_bits) => {
                 format!("symmetry_looking-{}", f32::from_bits(*r_bits))
+            }
+            Feature::RatioBeyondRSigma(r_bits) => {
+                format!("ratio_beyond_r_sigma-{}", f32::from_bits(*r_bits))
             }
             Feature::HasDuplicateMax => "has_duplicate_max".to_string(),
             Feature::HasDuplicateMin => "has_duplicate_min".to_string(),

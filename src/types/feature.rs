@@ -17,6 +17,8 @@ pub enum Feature {
     Mad,
     Iqr,
     Entropy,
+    SampleEntropy,
+    BinnedEntropy(u32),
     Energy,
     Rms,
     RootMeanSquare,
@@ -72,6 +74,9 @@ pub enum Feature {
     SpectralSlope,
     SpectralRollOn,
     SpectralRollOff,
+    SpectralSpread,
+    SpectralSkewness,
+    SpectralKurtosis,
     SignalDistance,
     WaveletFeatures(u32, u16), // mother wavelet (freq stored as f32 bits), feature type
     SpectrogramCoefficients(u16, u32), // time, freq stored as f32 bits
@@ -81,6 +86,7 @@ pub enum Feature {
     MeanSecondDerivativeCentral,
     LargeStandardDeviation(u32),
     SymmetryLooking(u32),
+    RatioBeyondRSigma(u32), // r encoded as u32 bits
     HasDuplicateMax,
     HasDuplicateMin,
     HasDuplicate,
@@ -132,6 +138,10 @@ impl Feature {
             Self::Mad => C::SUM | C::MEAN | C::MAD | C::NEEDS_SORT,
             Self::Iqr => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::NEEDS_SORT,
             Self::Entropy => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::ENTROPY | C::NEEDS_SORT,
+            Self::SampleEntropy => {
+                C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::SAMP_ENT | C::NEEDS_SORT
+            }
+            Self::BinnedEntropy(_) => C::MIN | C::MAX | C::BINNED_ENT,
             Self::Energy => C::ENERGY,
             Self::Rms => C::ENERGY | C::RMS,
             Self::RootMeanSquare => C::ENERGY | C::ROOT_MEAN_SQ,
@@ -213,6 +223,9 @@ impl Feature {
             Self::SpectralSlope => C::SPEC_SLOPE | C::NEEDS_SORT,
             Self::SpectralRollOn => C::SPEC_ROLLON | C::NEEDS_SORT,
             Self::SpectralRollOff => C::SPEC_ROLLOFF | C::NEEDS_SORT,
+            Self::SpectralSpread => C::SPEC_SPREAD | C::NEEDS_SORT,
+            Self::SpectralSkewness => C::SPEC_SKEWNESS | C::NEEDS_SORT,
+            Self::SpectralKurtosis => C::SPEC_KURTOSIS | C::NEEDS_SORT,
             Self::SignalDistance => C::SIG_DISTANCE | C::NEEDS_SORT,
             Self::WaveletFeatures(_, _) => C::WAVELET | C::NEEDS_SORT,
             Self::SpectrogramCoefficients(_, _) => C::SPECTROGRAM | C::NEEDS_SORT,
@@ -222,6 +235,9 @@ impl Feature {
             }
             Self::SymmetryLooking(_) => {
                 C::SUM | C::MEAN | C::MIN | C::MAX | C::MEDIAN | C::NEEDS_SORT
+            }
+            Self::RatioBeyondRSigma(_) => {
+                C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::NEEDS_SORT | C::RATIO_BEYOND_R_SIGMA
             }
             Self::HasDuplicateMax => C::MAX | C::HAS_DUP_MAX | C::NEEDS_SORT,
             Self::HasDuplicateMin => C::MIN | C::HAS_DUP_MIN | C::NEEDS_SORT,

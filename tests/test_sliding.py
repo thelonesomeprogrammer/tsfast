@@ -4,7 +4,7 @@ import numpy as np
 from tsfast._tsfast import SlidingExtractor
 
 def test_sliding_multiple_columns():
-    features = ["mean", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
+    features = ["mean", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05', 'ratio_beyond_r_sigma-1.0', 'index_mass_quantile-0.5', 'c3-1']
     n_cols = 2
     window_size = 2
     stride = 1

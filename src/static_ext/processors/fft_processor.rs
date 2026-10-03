@@ -1,6 +1,8 @@
 use crate::common::ColumnState;
 use crate::common::SlidingDFT;
 use crate::types::Compute;
+use std::simd::f32x4;
+use std::simd::num::SimdFloat;
 
 use crate::metrics::FftResult;
 
@@ -26,7 +28,8 @@ impl FftProcessor {
                     let mut indata = vec![0.0; fft_size];
                     indata[..values.len()].copy_from_slice(values);
                     let mut outdata = r2c_ref.make_output_vec();
-                    r2c_ref.process(&mut indata, &mut outdata)
+                    r2c_ref
+                        .process(&mut indata, &mut outdata)
                         .map_err(|e| e.to_string())?;
                     state.sliding_dft = Some(SlidingDFT::from_fft(outdata, values.len()));
                 }
@@ -34,7 +37,10 @@ impl FftProcessor {
 
             if let Some(ref sdft) = state.sliding_dft {
                 fft_complex = sdft.bins.clone();
-                spectrum = fft_complex.iter().map(|c| c.norm()).collect();
+                let mut buf = std::mem::take(&mut state.spectrum_buffer);
+                buf.clear();
+                buf.extend(fft_complex.iter().map(|c| c.norm()));
+                spectrum = buf;
             }
         }
 
@@ -43,6 +49,9 @@ impl FftProcessor {
         let mut spectral_slope = 0.0;
         let mut spectral_roll_on = 0.0;
         let mut spectral_roll_off = 0.0;
+        let mut spectral_spread = 0.0;
+        let mut spectral_skewness = 0.0;
+        let mut spectral_kurtosis = 0.0;
 
         let mut fft_autocorr = Vec::new();
         if compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) && n > 1.0 {
@@ -83,32 +92,56 @@ impl FftProcessor {
         }
 
         if !spectrum.is_empty() {
-            let spec_sum: f32 = spectrum.iter().sum();
-            if spec_sum > 0.0 {
-                freq_centroid = spectrum
-                    .iter()
-                    .enumerate()
-                    .map(|(i, &mag)| i as f32 * mag)
-                    .sum::<f32>()
-                    / spec_sum;
+            let mut m0 = 0.0;
+            let mut m1 = 0.0;
+            let mut m2 = 0.0;
+            let mut m3 = 0.0;
+            let mut m4 = 0.0;
+
+            for (i, &mag) in spectrum.iter().enumerate() {
+                let f = i as f32;
+                m0 += mag;
+                let f_mag = f * mag;
+                m1 += f_mag;
+                let f2_mag = f * f_mag;
+                m2 += f2_mag;
+                let f3_mag = f * f2_mag;
+                m3 += f3_mag;
+                m4 += f * f3_mag;
+            }
+
+            if m0 > 0.0 {
+                let c = m1 / m0;
+                freq_centroid = c;
+
+                // algebraic expansion of spread
+                let spread_sq = (m2 / m0) - (c * c);
+                if spread_sq > 0.0 {
+                    spectral_spread = spread_sq.sqrt();
+                    let spread_cube = spectral_spread * spread_sq;
+                    let spread_quad = spread_sq * spread_sq;
+
+                    let skew_num = m3 - 3.0 * c * m2 + 3.0 * c * c * m1 - c * c * c * m0;
+                    spectral_skewness = skew_num / (m0 * spread_cube);
+
+                    let kurt_num = m4 - 4.0 * c * m3 + 6.0 * c * c * m2 - 4.0 * c * c * c * m1
+                        + c * c * c * c * m0;
+                    spectral_kurtosis = kurt_num / (m0 * spread_quad);
+                }
 
                 if spectrum.len() > 1 {
-                    let spec_sum_no_first: f32 = spectrum[1..].iter().sum();
+                    let spec_sum_no_first = m0 - spectrum[0];
                     if spec_sum_no_first > 0.0 {
-                        spectral_decrease = spectrum[1..]
-                            .iter()
-                            .enumerate()
-                            .map(|(i, &mag)| (mag - spectrum[0]) / (i + 1) as f32)
-                            .sum::<f32>()
-                            / spec_sum_no_first;
+                        let mut sd_num = 0.0;
+                        for (i, &mag) in spectrum[1..].iter().enumerate() {
+                            sd_num += (mag - spectrum[0]) / (i + 1) as f32;
+                        }
+                        spectral_decrease = sd_num / spec_sum_no_first;
                     }
 
                     let m_n = spectrum.len() as f32;
                     let n_fft = (spectrum.len() - 1) * 2;
                     let freq_step = 100.0 / n_fft as f32;
-
-                    use std::simd::f32x4;
-                    use std::simd::num::SimdFloat;
 
                     let mut sum_y_vec = f32x4::splat(0.0);
                     let mut sum_xy_vec = f32x4::splat(0.0);
@@ -117,12 +150,12 @@ impl FftProcessor {
 
                     let mut i = 0;
                     while i + 4 <= spectrum.len() {
-                        let mag = f32x4::from_slice(&spectrum[i..i+4]);
+                        let mag = f32x4::from_slice(&spectrum[i..i + 4]);
                         let f = f32x4::from_array([
                             i as f32 * freq_step,
-                            (i+1) as f32 * freq_step,
-                            (i+2) as f32 * freq_step,
-                            (i+3) as f32 * freq_step
+                            (i + 1) as f32 * freq_step,
+                            (i + 2) as f32 * freq_step,
+                            (i + 3) as f32 * freq_step,
                         ]);
 
                         sum_y_vec += mag;
@@ -162,7 +195,7 @@ impl FftProcessor {
 
                     let mut j = 0;
                     while j + 4 <= spectrum.len() {
-                        let mag = f32x4::from_slice(&spectrum[j..j+4]);
+                        let mag = f32x4::from_slice(&spectrum[j..j + 4]);
                         let block_sum = mag.reduce_sum();
 
                         // We check if either roll_on or roll_off is hit in this block
@@ -171,12 +204,12 @@ impl FftProcessor {
 
                         if hit_on || hit_off {
                             for k in 0..4 {
-                                cumsum += spectrum[j+k];
+                                cumsum += spectrum[j + k];
                                 if roll_on_idx < 0.0 && cumsum >= roll_on_thresh {
-                                    roll_on_idx = (j+k) as f32;
+                                    roll_on_idx = (j + k) as f32;
                                 }
                                 if roll_off_idx < 0.0 && cumsum >= roll_off_thresh {
-                                    roll_off_idx = (j+k) as f32;
+                                    roll_off_idx = (j + k) as f32;
                                 }
                             }
                             if roll_off_idx >= 0.0 {
@@ -210,6 +243,15 @@ impl FftProcessor {
                     if roll_off_idx >= 0.0 {
                         spectral_roll_off = roll_off_idx * freq_step;
                     }
+                    let sum_x = m_n * (m_n - 1.0) / 2.0;
+                    let sum_y = m0;
+                    let sum_xx = m_n * (m_n - 1.0) * (2.0 * m_n - 1.0) / 6.0;
+                    let sum_xy = m1;
+                    let s_xx = sum_xx - (sum_x * sum_x) / m_n;
+                    let s_xy = sum_xy - (sum_x * sum_y) / m_n;
+                    if s_xx.abs() > 1e-9 {
+                        spectral_slope = s_xy / s_xx;
+                    }
                 }
             }
         }
@@ -222,6 +264,9 @@ impl FftProcessor {
             spectral_slope,
             spectral_roll_on,
             spectral_roll_off,
+            spectral_spread,
+            spectral_skewness,
+            spectral_kurtosis,
             fft_autocorr,
         })
     }

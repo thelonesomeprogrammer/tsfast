@@ -23,6 +23,9 @@ impl FftProcessor {
         let mut spectral_slope = 0.0;
         let mut spectral_roll_on = 0.0;
         let mut spectral_roll_off = 0.0;
+        let mut spectral_spread = 0.0;
+        let mut spectral_skewness = 0.0;
+        let mut spectral_kurtosis = 0.0;
 
         if compute.intersects(Compute::ANY_FFT) {
             let n_total = full_series.len();
@@ -52,7 +55,14 @@ impl FftProcessor {
                         .map(|c| c.norm())
                         .collect();
                     fft_complex = state.fft_out_buffer[..complex_len].to_vec();
-                } else if compute.intersects(Compute::SPEC_CENTROID | Compute::SPEC_DISTANCE | Compute::SPEC_DECREASE | Compute::SPEC_SLOPE | Compute::SPECTROGRAM | Compute::HUMAN_RANGE_E) {
+                } else if compute.intersects(
+                    Compute::SPEC_CENTROID
+                        | Compute::SPEC_DISTANCE
+                        | Compute::SPEC_DECREASE
+                        | Compute::SPEC_SLOPE
+                        | Compute::SPECTROGRAM
+                        | Compute::HUMAN_RANGE_E,
+                ) {
                     use realfft::RealFftPlanner;
                     let mut planner = RealFftPlanner::<f32>::new();
                     let r2c = planner.plan_fft_forward(n_total);
@@ -107,112 +117,113 @@ impl FftProcessor {
                         }
 
                         let m_n = spectrum.len() as f32;
-                    let n_fft = (spectrum.len() - 1) * 2;
-                    let freq_step = 100.0 / n_fft as f32;
+                        let n_fft = (spectrum.len() - 1) * 2;
+                        let freq_step = 100.0 / n_fft as f32;
 
-                    use std::simd::f32x4;
-                    use std::simd::num::SimdFloat;
+                        use std::simd::f32x4;
+                        use std::simd::num::SimdFloat;
 
-                    let mut sum_y_vec = f32x4::splat(0.0);
-                    let mut sum_xy_vec = f32x4::splat(0.0);
-                    let mut sum_f_vec = f32x4::splat(0.0);
-                    let mut dot_ff_vec = f32x4::splat(0.0);
+                        let mut sum_y_vec = f32x4::splat(0.0);
+                        let mut sum_xy_vec = f32x4::splat(0.0);
+                        let mut sum_f_vec = f32x4::splat(0.0);
+                        let mut dot_ff_vec = f32x4::splat(0.0);
 
-                    let mut i = 0;
-                    while i + 4 <= spectrum.len() {
-                        let mag = f32x4::from_slice(&spectrum[i..i+4]);
-                        let f = f32x4::from_array([
-                            i as f32 * freq_step,
-                            (i+1) as f32 * freq_step,
-                            (i+2) as f32 * freq_step,
-                            (i+3) as f32 * freq_step
-                        ]);
+                        let mut i = 0;
+                        while i + 4 <= spectrum.len() {
+                            let mag = f32x4::from_slice(&spectrum[i..i + 4]);
+                            let f = f32x4::from_array([
+                                i as f32 * freq_step,
+                                (i + 1) as f32 * freq_step,
+                                (i + 2) as f32 * freq_step,
+                                (i + 3) as f32 * freq_step,
+                            ]);
 
-                        sum_y_vec += mag;
-                        sum_xy_vec += f * mag;
-                        sum_f_vec += f;
-                        dot_ff_vec += f * f;
-                        i += 4;
-                    }
+                            sum_y_vec += mag;
+                            sum_xy_vec += f * mag;
+                            sum_f_vec += f;
+                            dot_ff_vec += f * f;
+                            i += 4;
+                        }
 
-                    let mut sum_y = sum_y_vec.reduce_sum();
-                    let mut sum_xy = sum_xy_vec.reduce_sum();
-                    let mut sum_f = sum_f_vec.reduce_sum();
-                    let mut dot_ff = dot_ff_vec.reduce_sum();
+                        let mut sum_y = sum_y_vec.reduce_sum();
+                        let mut sum_xy = sum_xy_vec.reduce_sum();
+                        let mut sum_f = sum_f_vec.reduce_sum();
+                        let mut dot_ff = dot_ff_vec.reduce_sum();
 
-                    while i < spectrum.len() {
-                        let f = i as f32 * freq_step;
-                        let mag = spectrum[i];
-                        sum_y += mag;
-                        sum_xy += f * mag;
-                        sum_f += f;
-                        dot_ff += f * f;
-                        i += 1;
-                    }
+                        while i < spectrum.len() {
+                            let f = i as f32 * freq_step;
+                            let mag = spectrum[i];
+                            sum_y += mag;
+                            sum_xy += f * mag;
+                            sum_f += f;
+                            dot_ff += f * f;
+                            i += 1;
+                        }
 
-                    let denom = m_n * dot_ff - (sum_f * sum_f);
-                    if denom.abs() > 1e-9 {
-                        let num = (1.0 / sum_y) * (m_n * sum_xy - sum_f * sum_y);
-                        spectral_slope = num / denom;
-                    }
+                        let denom = m_n * dot_ff - (sum_f * sum_f);
+                        if denom.abs() > 1e-9 {
+                            let num = (1.0 / sum_y) * (m_n * sum_xy - sum_f * sum_y);
+                            spectral_slope = num / denom;
+                        }
 
-                    let roll_on_thresh = 0.05 * sum_y;
-                    let roll_off_thresh = 0.95 * sum_y;
+                        let roll_on_thresh = 0.05 * sum_y;
+                        let roll_off_thresh = 0.95 * sum_y;
 
-                    let mut cumsum = 0.0;
-                    let mut roll_on_idx = -1.0;
-                    let mut roll_off_idx = -1.0;
+                        let mut cumsum = 0.0;
+                        let mut roll_on_idx = -1.0;
+                        let mut roll_off_idx = -1.0;
 
-                    let mut j = 0;
-                    while j + 4 <= spectrum.len() {
-                        let mag = f32x4::from_slice(&spectrum[j..j+4]);
-                        let block_sum = mag.reduce_sum();
+                        let mut j = 0;
+                        while j + 4 <= spectrum.len() {
+                            let mag = f32x4::from_slice(&spectrum[j..j + 4]);
+                            let block_sum = mag.reduce_sum();
 
-                        // We check if either roll_on or roll_off is hit in this block
-                        let hit_on = roll_on_idx < 0.0 && cumsum + block_sum >= roll_on_thresh;
-                        let hit_off = roll_off_idx < 0.0 && cumsum + block_sum >= roll_off_thresh;
+                            // We check if either roll_on or roll_off is hit in this block
+                            let hit_on = roll_on_idx < 0.0 && cumsum + block_sum >= roll_on_thresh;
+                            let hit_off =
+                                roll_off_idx < 0.0 && cumsum + block_sum >= roll_off_thresh;
 
-                        if hit_on || hit_off {
-                            for k in 0..4 {
-                                cumsum += spectrum[j+k];
-                                if roll_on_idx < 0.0 && cumsum >= roll_on_thresh {
-                                    roll_on_idx = (j+k) as f32;
+                            if hit_on || hit_off {
+                                for k in 0..4 {
+                                    cumsum += spectrum[j + k];
+                                    if roll_on_idx < 0.0 && cumsum >= roll_on_thresh {
+                                        roll_on_idx = (j + k) as f32;
+                                    }
+                                    if roll_off_idx < 0.0 && cumsum >= roll_off_thresh {
+                                        roll_off_idx = (j + k) as f32;
+                                    }
                                 }
-                                if roll_off_idx < 0.0 && cumsum >= roll_off_thresh {
-                                    roll_off_idx = (j+k) as f32;
+                                if roll_off_idx >= 0.0 {
+                                    break;
                                 }
+                            } else {
+                                cumsum += block_sum;
                             }
+
+                            j += 4;
+                        }
+
+                        while j < spectrum.len() {
                             if roll_off_idx >= 0.0 {
                                 break;
                             }
-                        } else {
-                            cumsum += block_sum;
+                            cumsum += spectrum[j];
+                            if roll_on_idx < 0.0 && cumsum >= roll_on_thresh {
+                                roll_on_idx = j as f32;
+                            }
+                            if roll_off_idx < 0.0 && cumsum >= roll_off_thresh {
+                                roll_off_idx = j as f32;
+                                break;
+                            }
+                            j += 1;
                         }
 
-                        j += 4;
-                    }
-
-                    while j < spectrum.len() {
+                        if roll_on_idx >= 0.0 {
+                            spectral_roll_on = roll_on_idx * freq_step;
+                        }
                         if roll_off_idx >= 0.0 {
-                            break;
+                            spectral_roll_off = roll_off_idx * freq_step;
                         }
-                        cumsum += spectrum[j];
-                        if roll_on_idx < 0.0 && cumsum >= roll_on_thresh {
-                            roll_on_idx = j as f32;
-                        }
-                        if roll_off_idx < 0.0 && cumsum >= roll_off_thresh {
-                            roll_off_idx = j as f32;
-                            break;
-                        }
-                        j += 1;
-                    }
-
-                    if roll_on_idx >= 0.0 {
-                        spectral_roll_on = roll_on_idx * freq_step;
-                    }
-                    if roll_off_idx >= 0.0 {
-                        spectral_roll_off = roll_off_idx * freq_step;
-                    }
                     }
                 }
             }
@@ -226,6 +237,9 @@ impl FftProcessor {
             spectral_slope,
             spectral_roll_on,
             spectral_roll_off,
+            spectral_spread,
+            spectral_skewness,
+            spectral_kurtosis,
             fft_autocorr: Vec::new(),
         }
     }
