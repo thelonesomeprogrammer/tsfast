@@ -133,7 +133,12 @@ impl std::str::FromStr for Feature {
 fn parse_parameterized(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("paa-") {
         let (n, m) = arg.split_once('-')?;
-        return Some(Feature::Paa(n.parse().ok()?, m.parse().ok()?));
+        let total = n.parse::<u16>().ok()?;
+        let index = m.parse::<u16>().ok()?;
+        if index >= total {
+            return None;
+        }
+        return Some(Feature::Paa(total, index));
     }
     if let Some(arg) = s.strip_prefix("c3-") {
         return Some(Feature::C3(arg.trim().parse().ok()?));
