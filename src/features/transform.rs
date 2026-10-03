@@ -30,6 +30,8 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
     let freq_centroid = context.freq_centroid;
     let spectral_decrease = context.spectral_decrease;
     let spectral_slope = context.spectral_slope;
+    let spectral_spread = context.spectral_spread;
+    let spectral_entropy = context.spectral_entropy;
     let spectral_roll_on = context.spectral_roll_on;
     let spectral_roll_off = context.spectral_roll_off;
     let spectral_spread = context.spectral_spread;
@@ -268,6 +270,36 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
         Feature::SpectralSpread => spectral_spread,
         Feature::SpectralSkewness => spectral_skewness,
         Feature::SpectralKurtosis => spectral_kurtosis,
+        Feature::SpectrogramCoefficients(_, f_bits) => {
+            if !spectrum.is_empty() {
+                let target_freq = f32::from_bits(*f_bits);
+                let fs = 100.0;
+                let n_fft = (spectrum.len() - 1) * 2;
+                let freq_step = fs / n_fft as f32;
+                let idx = (target_freq / freq_step).round() as usize;
+                let idx = idx.min(spectrum.len() - 1);
+                spectrum[idx]
+            } else {
+                0.0
+            }
+        }
+        Feature::SpectralCentroid => freq_centroid,
+        Feature::SpectralDistance => {
+            if !spectrum.is_empty() {
+                let m = spectrum.iter().sum::<f32>() / spectrum.len() as f32;
+                spectrum
+                    .iter()
+                    .map(|&s| (s - m).powi(2))
+                    .sum::<f32>()
+                    .sqrt()
+            } else {
+                0.0
+            }
+        }
+        Feature::SpectralDecrease => spectral_decrease,
+        Feature::SpectralSlope => spectral_slope,
+        Feature::SpectralSpread => spectral_spread,
+        Feature::SpectralEntropy => spectral_entropy,
         Feature::SpectrogramCoefficients(_, f_bits) => {
             if !spectrum.is_empty() {
                 let target_freq = f32::from_bits(*f_bits);

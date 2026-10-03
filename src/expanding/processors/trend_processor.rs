@@ -81,7 +81,7 @@ impl TrendProcessor {
                     } else {
                         values[global_idx - 2 * l - global_start_idx]
                     };
-                    state.tra_sums[l_idx] += v_2l * v_2l * v_l - v_l * val * val;
+                    state.tra_sums[l_idx] += val * val * v_l - v_l * v_2l * v_2l;
                 }
             }
         }

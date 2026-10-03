@@ -47,6 +47,8 @@ impl FftProcessor {
         let mut freq_centroid = 0.0;
         let mut spectral_decrease = 0.0;
         let mut spectral_slope = 0.0;
+        let mut spectral_spread = 0.0;
+        let mut spectral_entropy = 0.0;
         let mut spectral_roll_on = 0.0;
         let mut spectral_roll_off = 0.0;
         let mut spectral_spread = 0.0;
@@ -243,14 +245,37 @@ impl FftProcessor {
                     if roll_off_idx >= 0.0 {
                         spectral_roll_off = roll_off_idx * freq_step;
                     }
-                    let sum_x = m_n * (m_n - 1.0) / 2.0;
-                    let sum_y = m0;
-                    let sum_xx = m_n * (m_n - 1.0) * (2.0 * m_n - 1.0) / 6.0;
-                    let sum_xy = m1;
-                    let s_xx = sum_xx - (sum_x * sum_x) / m_n;
-                    let s_xy = sum_xy - (sum_x * sum_y) / m_n;
-                    if s_xx.abs() > 1e-9 {
-                        spectral_slope = s_xy / s_xx;
+                }
+
+                if compute.intersects(Compute::SPEC_SPREAD) {
+                    let spread_sum: f32 = spectrum
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &mag)| (i as f32 - freq_centroid).powi(2) * mag)
+                        .sum();
+                    spectral_spread = (spread_sum / m0).sqrt();
+                }
+
+                if compute.intersects(Compute::SPEC_ENTROPY) {
+                    let mut p_sum = 0.0;
+                    let mut power_vals = Vec::with_capacity(spectrum.len());
+                    for (i, &mag) in spectrum.iter().enumerate() {
+                        let power = if i == 0 { 0.0 } else { mag * mag };
+                        power_vals.push(power);
+                        p_sum += power;
+                    }
+
+                    if p_sum > 0.0 {
+                        let mut entropy_sum = 0.0;
+                        for &power in &power_vals {
+                            if power > 0.0 {
+                                let p = power / p_sum;
+                                entropy_sum += p * p.log2();
+                            }
+                        }
+                        if spectrum.len() > 1 {
+                            spectral_entropy = -entropy_sum / (spectrum.len() as f32).log2();
+                        }
                     }
                 }
             }
@@ -264,7 +289,9 @@ impl FftProcessor {
                 let mut num_segments = 0;
 
                 if state.welch_planner.is_none() {
-                    state.welch_planner = Some(std::sync::Arc::new(std::sync::Mutex::new(realfft::RealFftPlanner::<f32>::new())));
+                    state.welch_planner = Some(std::sync::Arc::new(std::sync::Mutex::new(
+                        realfft::RealFftPlanner::<f32>::new(),
+                    )));
                 }
 
                 let mut planner_lock = state.welch_planner.as_ref().unwrap().lock().unwrap();
@@ -283,7 +310,11 @@ impl FftProcessor {
                     window_sum_sq += w * w;
                 }
 
-                let scale = if window_sum_sq > 0.0 { 1.0 / window_sum_sq } else { 1.0 };
+                let scale = if window_sum_sq > 0.0 {
+                    1.0 / window_sum_sq
+                } else {
+                    1.0
+                };
 
                 let mut start = 0;
                 while start < values.len() {
@@ -341,9 +372,10 @@ impl FftProcessor {
             freq_centroid,
             spectral_decrease,
             spectral_slope,
+            spectral_spread,
+            spectral_entropy,
             spectral_roll_on,
             spectral_roll_off,
-            spectral_spread,
             spectral_skewness,
             spectral_kurtosis,
             fft_autocorr,

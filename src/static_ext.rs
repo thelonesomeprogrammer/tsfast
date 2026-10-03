@@ -52,8 +52,6 @@ impl Extractor {
             } else if let Feature::C3(lag) = feat {
                 c3_args.push(lag);
                 unique_c3_lags.insert(lag);
-            } else if let Feature::TimeReversalAsymmetry(lag) = feat {
-                unique_tra_lags.insert(lag);
             }
             features.push(feat);
         }

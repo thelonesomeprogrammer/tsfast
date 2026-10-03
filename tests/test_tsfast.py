@@ -245,8 +245,31 @@ def test_reoccurring_ratios():
     assert np.allclose(results[1], 2.0 / 4.0)
     assert np.allclose(results[2], 4.0 / 7.0)
 
+def test_spectral_shape():
+    np.random.seed(42)
+    data = np.random.randn(100).astype(np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(data)], names=["x"])
+
+    features = ["spectral_centroid", "spectral_spread", "spectral_entropy"]
+    extractor = tsfast.Extractor(features)
+    result_rust = extractor.process_2d_floats(batch)
+
+    from tsfel.feature_extraction.features import spectral_centroid, spectral_spread, spectral_entropy
+
+    fs = 100
+    # tsfel needs sampling freq for these, default 100
+    tsfel_centroid = spectral_centroid(data, fs)
+    tsfel_spread = spectral_spread(data, fs)
+    tsfel_entropy = spectral_entropy(data, fs)
+
+    # tsfast calculates spectral centroid and spread as bin indices (e.g., 0, 1, 2, ... N/2)
+    # to match tsfel we must multiply by (fs / len(data))
+    freq_resolution = fs / len(data)
+    assert result_rust.column("spectral_centroid")[0].as_py() * freq_resolution == pytest.approx(tsfel_centroid, rel=1e-5)
+    assert result_rust.column("spectral_spread")[0].as_py() * freq_resolution == pytest.approx(tsfel_spread, rel=1e-5)
+    assert result_rust.column("spectral_entropy")[0].as_py() == pytest.approx(tsfel_entropy, rel=1e-5)
+
 def test_dynamic_features():
-    import tsfresh
     from tsfresh.feature_extraction import feature_calculators as fc
     np.random.seed(42)
     # We need a large array so tsfresh's pd.qcut doesn't fail with duplicate bin edges
@@ -292,6 +315,3 @@ def test_dynamic_features():
 
     # Check Max Langevin
     assert np.allclose(results[7], mlfp_ref, equal_nan=True, rtol=1e-1, atol=1e-2)
-
-if __name__ == "__main__":
-    test_dynamic_features()
