@@ -199,3 +199,37 @@ def test_sliding_duplicate_features():
     np.testing.assert_allclose(result['has_duplicate'].values, expected_has_duplicate)
     np.testing.assert_allclose(result['has_duplicate_max'].values, expected_has_duplicate_max)
     np.testing.assert_allclose(result['has_duplicate_min'].values, expected_has_duplicate_min)
+
+def test_reoccurring_ratios_sliding():
+    import pyarrow as pa
+    import tsfast
+    import numpy as np
+
+    x = np.array([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0], dtype=np.float32)
+
+    features = [
+        "percentage_of_reoccurring_datapoints_to_all_datapoints",
+        "percentage_of_reoccurring_values_to_all_values",
+        "ratio_value_number_to_time_series_length"
+    ]
+
+    extractor = tsfast.SlidingExtractor(features, 1, 5, 1)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.update(batch)
+    results = result_batch.to_pandas()
+
+
+    # window 0: [1, 2, 2, 3, 3]
+    # len=5, values={1,2,3} (3 unique), reoccur_dp=4 (two 2s, two 3s), reoccur_val=2 (2 and 3)
+    # res: [4/5, 2/3, 3/5]
+    assert np.allclose(results.iloc[0].values, [4.0/5.0, 2.0/3.0, 3.0/5.0])
+
+    # window 1: [2, 2, 3, 3, 3]
+    # len=5, values={2,3} (2 unique), reoccur_dp=5 (two 2s, three 3s), reoccur_val=2 (2 and 3)
+    # res: [5/5, 2/2, 2/5]
+    assert np.allclose(results.iloc[1].values, [5.0/5.0, 2.0/2.0, 2.0/5.0])
+
+    # window 2: [2, 3, 3, 3, 4]
+    # len=5, values={2,3,4} (3 unique), reoccur_dp=3 (three 3s), reoccur_val=1 (3)
+    # res: [3/5, 1/3, 3/5]
+    assert np.allclose(results.iloc[2].values, [3.0/5.0, 1.0/3.0, 3.0/5.0])

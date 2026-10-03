@@ -19,7 +19,14 @@ impl DiffProcessor {
         let simd_zero = f32x4::splat(0.0);
 
         let diff = chunk - shifted;
-        if compute.intersects(Compute::ZERO_CROSS | Compute::AUTOCORR_LAG1 | Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUC) {
+        if compute.intersects(
+            Compute::ZERO_CROSS
+                | Compute::AUTOCORR_LAG1
+                | Compute::MAC
+                | Compute::MC
+                | Compute::CID_CE
+                | Compute::AUC,
+        ) {
             if compute.contains(Compute::MAC) {
                 state.mac_sum_vec += diff.abs();
             }
@@ -109,10 +116,7 @@ impl DiffProcessor {
         }
     }
 
-    pub fn finalize(
-        compute: Compute,
-        state: &ColumnState,
-    ) -> crate::metrics::ZcMetrics {
+    pub fn finalize(compute: Compute, state: &ColumnState) -> crate::metrics::ZcMetrics {
         let mut zc_mean = 0.0;
         let mut zc_std = 0.0;
 
@@ -128,9 +132,6 @@ impl DiffProcessor {
             }
         }
 
-        crate::metrics::ZcMetrics {
-            zc_mean,
-            zc_std,
-        }
+        crate::metrics::ZcMetrics { zc_mean, zc_std }
     }
 }

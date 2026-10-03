@@ -2,8 +2,8 @@ use crate::common::ColumnState;
 use crate::types::Compute;
 
 use crate::metrics::BaseMetrics;
-use std::simd::num::SimdFloat;
 use std::simd::f32x4;
+use std::simd::num::SimdFloat;
 
 pub struct StatsProcessor;
 
@@ -25,7 +25,6 @@ impl StatsProcessor {
             state.max_q_tail = 0;
             state.max_q_len = 0;
         }
-
         state.abs_max = 0.0;
         state.abs_sum = 0.0;
     }
@@ -138,8 +137,6 @@ impl StatsProcessor {
         }
     }
 
-
-
     #[inline(always)]
     pub fn process_simd(
         compute: Compute,
@@ -148,8 +145,6 @@ impl StatsProcessor {
         window_size: usize,
         state: &mut ColumnState,
     ) {
-        use std::simd::num::SimdFloat;
-
         if compute.contains(Compute::SUM) {
             state.sum_vec += chunk;
         }
@@ -202,7 +197,10 @@ impl StatsProcessor {
                     }
                 }
                 state.min_queue[state.min_q_tail] = (idx, val);
-                state.min_q_tail += 1; if state.min_q_tail >= window_size { state.min_q_tail -= window_size; }
+                state.min_q_tail += 1;
+                if state.min_q_tail >= window_size {
+                    state.min_q_tail -= window_size;
+                }
                 state.min_q_len += 1;
 
                 // Max Queue
@@ -220,18 +218,17 @@ impl StatsProcessor {
                     }
                 }
                 state.max_queue[state.max_q_tail] = (idx, val);
-                state.max_q_tail += 1; if state.max_q_tail >= window_size { state.max_q_tail -= window_size; }
+                state.max_q_tail += 1;
+                if state.max_q_tail >= window_size {
+                    state.max_q_tail -= window_size;
+                }
                 state.max_q_len += 1;
             }
         }
     }
 
     #[inline(always)]
-    pub fn process_remainder(
-        compute: Compute,
-        val: f32,
-        state: &mut ColumnState,
-    ) {
+    pub fn process_remainder(compute: Compute, val: f32, state: &mut ColumnState) {
         if compute.contains(Compute::SUM) {
             state.total_sum += val;
         }
@@ -258,7 +255,6 @@ impl StatsProcessor {
         if compute.contains(Compute::ABS_MAX) {
             state.abs_max = state.abs_max.max(val.abs());
         }
-
     }
 
     #[inline(always)]
@@ -316,5 +312,4 @@ impl StatsProcessor {
             std_dev,
         }
     }
-
 }

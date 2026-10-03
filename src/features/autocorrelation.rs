@@ -41,80 +41,82 @@ pub fn eval_autocorrelation(
     let _paa_boundaries = context.paa_boundaries;
 
     let res = match feat {
-                Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
-                    let x0 = values[0];
-                    let xn = values[values.len() - 1];
-                    let cov = state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn)
-                        + (n - 1.0) * mean * mean;
-                    (cov / m2) as f32
+        Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
+            let x0 = values[0];
+            let xn = values[values.len() - 1];
+            let cov =
+                state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn) + (n - 1.0) * mean * mean;
+            cov / m2
+        }
+        Feature::AutocorrFirst1e => {
+            if !fft_autocorr.is_empty() {
+                let threshold = 0.36787944;
+                let mut found = false;
+                let mut first_lag = 0.0;
+                for (l, &val) in fft_autocorr.iter().enumerate().skip(1) {
+                    if val < threshold {
+                        first_lag = l as f32;
+                        found = true;
+                        break;
+                    }
                 }
-                Feature::AutocorrFirst1e => {
-                    if !fft_autocorr.is_empty() {
-                        let threshold = 0.36787944;
-                        let mut found = false;
-                        let mut first_lag = 0.0;
-                        for (l, &val) in fft_autocorr.iter().enumerate().skip(1) {
-                            if val < threshold {
-                                first_lag = l as f32;
-                                found = true;
-                                break;
-                            }
+                if found { first_lag } else { 0.0 }
+            } else {
+                0.0
+            }
+        }
+        Feature::Autocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
+            let l = *lag as usize;
+            if !fft_autocorr.is_empty() && l < fft_autocorr.len() {
+                fft_autocorr[l]
+            } else {
+                0.0
+            }
+        }
+        Feature::TimeReversalAsymmetry(lag) if values.len() > 2 * *lag as usize => {
+            let l = *lag as usize;
+            let mut sum = 0.0;
+            for i in 0..values.len() - 2 * l {
+                sum +=
+                    values[i + 2 * l].powi(2) * values[i + l] - values[i + l] * values[i].powi(2);
+            }
+            sum / (values.len() - 2 * l) as f32
+        }
+        Feature::PartialAutocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
+            let l = *lag as usize;
+            if fft_autocorr.is_empty() || fft_autocorr.len() <= l {
+                0.0
+            } else {
+                let r = &fft_autocorr;
+                let stride = l + 1;
+                let mut phi = vec![0.0; stride * stride];
+                let mut error = r[0] as f64;
+                if error.abs() < 1e-9 {
+                    0.0
+                } else {
+                    phi[stride + 1] = r[1] / r[0];
+                    error *= 1.0 - (phi[stride + 1] * phi[stride + 1]) as f64;
+                    for k in 1..l {
+                        let mut sum = 0.0;
+                        for i in 1..=k {
+                            sum += phi[k * stride + i] * r[k + 1 - i];
                         }
-                        if found { first_lag } else { 0.0 }
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::Autocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
-                    let l = *lag as usize;
-                    if !fft_autocorr.is_empty() && l < fft_autocorr.len() {
-                        fft_autocorr[l]
-                    } else {
-                        0.0
-                    }
-                }
-                Feature::TimeReversalAsymmetry(lag) if values.len() > 2 * *lag as usize => {
-                    let l = *lag as usize;
-                    let mut sum = 0.0;
-                    for i in 0..values.len() - 2 * l {
-                        sum += values[i + 2 * l].powi(2) * values[i + l]
-                            - values[i + l] * values[i].powi(2);
-                    }
-                    sum / (values.len() - 2 * l) as f32
-                }
-                Feature::PartialAutocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
-                    let l = *lag as usize;
-                    if fft_autocorr.is_empty() || fft_autocorr.len() <= l {
-                        0.0
-                    } else {
-                        let r = &fft_autocorr;
-                        let stride = l + 1;
-                        let mut phi = vec![0.0; stride * stride];
-                        let mut error = r[0] as f64;
+                        phi[(k + 1) * stride + (k + 1)] = (r[k + 1] - sum) / error as f32;
+                        for i in 1..=k {
+                            phi[(k + 1) * stride + i] = phi[k * stride + i]
+                                - phi[(k + 1) * stride + (k + 1)] * phi[k * stride + (k + 1 - i)];
+                        }
+                        error *= 1.0
+                            - (phi[(k + 1) * stride + (k + 1)] * phi[(k + 1) * stride + (k + 1)])
+                                as f64;
                         if error.abs() < 1e-9 {
-                            0.0
-                        } else {
-                            phi[1 * stride + 1] = r[1] / r[0];
-                            error *= 1.0 - (phi[1 * stride + 1] * phi[1 * stride + 1]) as f64;
-                            for k in 1..l {
-                                let mut sum = 0.0;
-                                for i in 1..=k {
-                                    sum += phi[k * stride + i] * r[k + 1 - i];
-                                }
-                                phi[(k + 1) * stride + (k + 1)] = (r[k + 1] - sum) / error as f32;
-                                for i in 1..=k {
-                                    phi[(k + 1) * stride + i] =
-                                        phi[k * stride + i] - phi[(k + 1) * stride + (k + 1)] * phi[k * stride + (k + 1 - i)];
-                                }
-                                error *= 1.0 - (phi[(k + 1) * stride + (k + 1)] * phi[(k + 1) * stride + (k + 1)]) as f64;
-                                if error.abs() < 1e-9 {
-                                    break;
-                                }
-                            }
-                            phi[l * stride + l]
+                            break;
                         }
                     }
+                    phi[l * stride + l]
                 }
+            }
+        }
         _ => return None,
     };
     Some(res)

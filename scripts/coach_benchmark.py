@@ -149,52 +149,72 @@ def generate_chart():
 
     df['Date'] = pd.to_datetime(df['Date'])
 
-    tsfast_ms = df[df['Benchmark_Name'] == 'tsfast_sliding_avg_next_50']['Metric_Value'].values
-    tsfresh_ms = df[df['Benchmark_Name'] == 'tsfresh_sliding_avg_next_50']['Metric_Value'].values
-    tsfel_ms = df[df['Benchmark_Name'] == 'tsfel_sliding_avg_next_50']['Metric_Value'].values
+    tsfast_sliding = df[df['Benchmark_Name'] == 'tsfast_sliding_avg_next_50']['Metric_Value'].values
+    tsfresh_sliding = df[df['Benchmark_Name'] == 'tsfresh_sliding_avg_next_50']['Metric_Value'].values
+    tsfel_sliding = df[df['Benchmark_Name'] == 'tsfel_sliding_avg_next_50']['Metric_Value'].values
+
+    tsfast_exp = df[df['Benchmark_Name'] == 'tsfast_expanding_avg_next_50']['Metric_Value'].values
+    tsfresh_exp = df[df['Benchmark_Name'] == 'tsfresh_expanding_avg_next_50']['Metric_Value'].values
+    tsfel_exp = df[df['Benchmark_Name'] == 'tsfel_expanding_avg_next_50']['Metric_Value'].values
 
     tsfast_feats = df[df['Benchmark_Name'] == 'tsfast_compatible_features']['Metric_Value'].values
     tsfresh_feats = df[df['Benchmark_Name'] == 'tsfresh_compatible_features']['Metric_Value'].values
     tsfel_feats = df[df['Benchmark_Name'] == 'tsfel_compatible_features']['Metric_Value'].values
 
-    runs = range(1, len(tsfast_ms) + 1)
+    runs = range(1, len(tsfast_sliding) + 1)
 
-    fig, ax1 = plt.subplots(figsize=(10, 6))
+    try:
+        plt.style.use('seaborn-v0_8-darkgrid')
+    except:
+        pass  # Fallback if style not available
+        
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+    
     color_fast = 'tab:blue'
     color_fresh = 'tab:green'
     color_fel = 'tab:red'
 
-    ax1.set_xlabel('Benchmark Run')
-    ax1.set_ylabel('ms per window (sliding avg)', color='black')
+    # Top Plot: Execution Time
+    ax1.set_title("Benchmark Execution Time Trends", fontsize=14, fontweight='bold')
+    ax1.set_ylabel("Time per window (ms) [Log Scale]", fontsize=12)
+    
+    if len(tsfast_sliding) > 0:
+        ax1.plot(runs, tsfast_sliding, color=color_fast, linestyle='-', label='tsfast Sliding', marker='o')
+    if len(tsfresh_sliding) > 0:
+        ax1.plot(runs, tsfresh_sliding, color=color_fresh, linestyle='-', label='tsfresh Sliding', marker='s')
+    if len(tsfel_sliding) > 0:
+        ax1.plot(runs, tsfel_sliding, color=color_fel, linestyle='-', label='tsfel Sliding', marker='^')
+        
+    if len(tsfast_exp) > 0:
+        ax1.plot(runs, tsfast_exp, color=color_fast, linestyle='--', label='tsfast Expanding', marker='o', alpha=0.7)
+    if len(tsfresh_exp) > 0:
+        ax1.plot(runs, tsfresh_exp, color=color_fresh, linestyle='--', label='tsfresh Expanding', marker='s', alpha=0.7)
+    if len(tsfel_exp) > 0:
+        ax1.plot(runs, tsfel_exp, color=color_fel, linestyle='--', label='tsfel Expanding', marker='^', alpha=0.7)
 
-    if len(tsfast_ms) > 0:
-        ax1.plot(runs, tsfast_ms, color=color_fast, linestyle='-', label='tsfast ms/window', marker='o')
-    if len(tsfresh_ms) > 0:
-        ax1.plot(runs, tsfresh_ms, color=color_fresh, linestyle='-', label='tsfresh ms/window', marker='s')
-    if len(tsfel_ms) > 0:
-        ax1.plot(runs, tsfel_ms, color=color_fel, linestyle='-', label='tsfel ms/window', marker='^')
-
-    ax1.tick_params(axis='y', labelcolor='black')
     ax1.set_yscale('log')
-    ax1.legend(loc='upper left')
+    ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax1.grid(True, which="both", ls="--", alpha=0.5)
 
-    ax2 = ax1.twinx()
-    ax2.set_ylabel('total compatible features', color='black')
-
+    # Bottom Plot: Features
+    ax2.set_title("Compatible Feature Count Trends", fontsize=14, fontweight='bold')
+    ax2.set_xlabel("Benchmark Run", fontsize=12)
+    ax2.set_ylabel("Number of Features", fontsize=12)
+    
     if len(tsfast_feats) > 0:
-        ax2.plot(runs, tsfast_feats, color=color_fast, linestyle='--', label='tsfast features', marker='o', alpha=0.6)
+        ax2.plot(runs, tsfast_feats, color=color_fast, linestyle='-', label='tsfast', marker='o')
     if len(tsfresh_feats) > 0:
-        ax2.plot(runs, tsfresh_feats, color=color_fresh, linestyle='--', label='tsfresh features', marker='s', alpha=0.6)
+        ax2.plot(runs, tsfresh_feats, color=color_fresh, linestyle='-', label='tsfresh', marker='s')
     if len(tsfel_feats) > 0:
-        ax2.plot(runs, tsfel_feats, color=color_fel, linestyle='--', label='tsfel features', marker='^', alpha=0.6)
+        ax2.plot(runs, tsfel_feats, color=color_fel, linestyle='-', label='tsfel', marker='^')
 
-    ax2.tick_params(axis='y', labelcolor='black')
-    ax2.set_ylim(0, max(max(tsfast_feats, default=1), max(tsfresh_feats, default=1), max(tsfel_feats, default=1)) + 10)
-    ax2.legend(loc='upper right')
+    max_feats = max(max(tsfast_feats, default=1), max(tsfresh_feats, default=1), max(tsfel_feats, default=1))
+    ax2.set_ylim(0, max_feats + 10)
+    ax2.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax2.grid(True, ls="--", alpha=0.5)
 
     fig.tight_layout()
-    plt.title("Benchmark Trends: Execution Time vs Feature Support")
-    plt.savefig(chart_path)
+    plt.savefig(chart_path, dpi=300, bbox_inches='tight')
     print(f"Chart saved to {chart_path}")
 
 

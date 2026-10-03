@@ -21,7 +21,12 @@ impl SortProcessor {
         let mut entropy = 0.0;
 
         if compute.contains(Compute::NEEDS_SORT) {
-            if compute.intersects(Compute::FIRST_LOC_MAX | Compute::LAST_LOC_MAX | Compute::FIRST_LOC_MIN | Compute::LAST_LOC_MIN) {
+            if compute.intersects(
+                Compute::FIRST_LOC_MAX
+                    | Compute::LAST_LOC_MAX
+                    | Compute::FIRST_LOC_MIN
+                    | Compute::LAST_LOC_MIN,
+            ) {
                 let mut found_max = false;
                 let mut found_min = false;
                 for (i, &v) in values.iter().enumerate() {
@@ -80,15 +85,28 @@ impl SortProcessor {
                         let f = q_idx - i as f32;
 
                         let n = data.len();
-                        if n == 0 { return 0.0; }
-                        if n == 1 { return data[0]; }
+                        if n == 0 {
+                            return 0.0;
+                        }
+                        if n == 1 {
+                            return data[0];
+                        }
 
                         let (val_i, val_i_plus_1) = if i >= n - 1 {
-                            let (_, &mut val, _) = data.select_nth_unstable_by(n - 1, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                            let (_, &mut val, _) = data.select_nth_unstable_by(n - 1, |a, b| {
+                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                            });
                             (val, val)
                         } else {
-                            let (_, &mut val1, _) = data.select_nth_unstable_by(i + 1, |a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                            let val0 = *data[..=i].iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
+                            let (_, &mut val1, _) = data.select_nth_unstable_by(i + 1, |a, b| {
+                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                            });
+                            let val0 = *data[..=i]
+                                .iter()
+                                .max_by(|a, b| {
+                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                                .unwrap();
                             (val0, val1)
                         };
 

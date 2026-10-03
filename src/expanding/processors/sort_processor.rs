@@ -11,10 +11,13 @@ impl SortProcessor {
         let mut median = 0.0;
         let mut iqr = 0.0;
 
-        if compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::QUANTILE | Compute::MEAN_N_ABS_MAX) {
+        if compute.intersects(
+            Compute::MEDIAN | Compute::IQR | Compute::QUANTILE | Compute::MEAN_N_ABS_MAX,
+        ) {
             if running_sorted.len() < full_series.len() {
                 running_sorted.extend_from_slice(&full_series[running_sorted.len()..]);
-                running_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                running_sorted
+                    .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
             }
             let n_size = running_sorted.len();
             if n_size > 0 {
@@ -45,7 +48,6 @@ impl SortProcessor {
                 }
             }
         }
-
         (median, iqr)
     }
 }

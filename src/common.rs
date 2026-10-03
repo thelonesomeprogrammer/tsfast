@@ -106,6 +106,10 @@ pub struct ColumnState {
     pub agg_linear_trend_buffer: Vec<f32>,
     pub sort_buffer: Vec<f32>,
     pub pacf_buffer: Vec<f32>,
+    pub value_counts: rustc_hash::FxHashMap<u32, u32>,
+    pub reoccurring_datapoints: u32,
+    pub reoccurring_values: u32,
+
     // Incremental moments (Welford's or similar)
     pub n: f32,
     pub mean: f32,
@@ -215,6 +219,9 @@ impl ColumnState {
             agg_linear_trend_buffer: Vec::new(),
             sort_buffer: Vec::new(),
             pacf_buffer: Vec::new(),
+            value_counts: rustc_hash::FxHashMap::default(),
+            reoccurring_datapoints: 0,
+            reoccurring_values: 0,
             n: 0.0,
             mean: 0.0,
             m2: 0.0,

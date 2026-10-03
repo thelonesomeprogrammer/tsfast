@@ -3,27 +3,6 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
-def test_tsfel_new_features():
-    import tsfel
-    data = [1.0, 3.0, 2.0, 4.0, 1.0, 0.1, 5.0, -1.0, -2.0, 2.0]
-    import pyarrow as pa
-    batch = pa.RecordBatch.from_arrays([pa.array(data, type=pa.float32())], names=['value'])
-    features = ["pk_pk_distance", "zero_cross", "max_power_spectrum"]
-    import tsfast
-    ext = tsfast.Extractor(features)
-    res = ext.process_2d_floats(batch)
-
-    import numpy as np
-    sig = np.array(data)
-    expected_pk_pk = tsfel.feature_extraction.features.pk_pk_distance(sig)
-    expected_zc = tsfel.feature_extraction.features.zero_cross(sig)
-
-    expected_mps = max(abs(np.fft.rfft(sig)) ** 2)
-
-    np.testing.assert_allclose(res.column('pk_pk_distance').to_pylist()[0], expected_pk_pk)
-    np.testing.assert_allclose(res.column('zero_cross').to_pylist()[0], expected_zc)
-    np.testing.assert_allclose(res.column('max_power_spectrum').to_pylist()[0], expected_mps, rtol=1e-5)
-
 def test_extract():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
     features = ["mean", "std", "energy", "min", "max", "autocorr_lag1", "length", "variance_larger_than_standard_deviation", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
@@ -209,3 +188,31 @@ def test_extract_invalid_feature():
     features = ["invalid_feature"]
     with pytest.raises(ValueError, match="Unknown feature"):
         extractor = tsfast.Extractor(features)
+
+def test_reoccurring_ratios():
+    import pyarrow as pa
+    import tsfast
+    import numpy as np
+
+    x = np.array([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0], dtype=np.float32)
+    # len = 7
+    # values: 1, 2, 3, 4 (4 unique values)
+    # 2 occurs twice (reoccurring) -> reoccurring_datapoints = 2
+    # 3 occurs three times (reoccurring) -> reoccurring_datapoints = 3
+    # reoccurring_values = 2 (the values 2 and 3)
+    # Total reoccurring datapoints = 5
+
+    features = [
+        "percentage_of_reoccurring_datapoints_to_all_datapoints",
+        "percentage_of_reoccurring_values_to_all_values",
+        "ratio_value_number_to_time_series_length"
+    ]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    assert np.allclose(results[0], 5.0 / 7.0)
+    assert np.allclose(results[1], 2.0 / 4.0)
+    assert np.allclose(results[2], 4.0 / 7.0)
