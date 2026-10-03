@@ -20,6 +20,7 @@ pub struct SlidingExtractor {
     pub unique_paa_totals: Vec<u16>,
     pub unique_c3_lags: Vec<u16>,
     pub unique_autocorr_lags: Vec<u16>,
+    pub unique_tra_lags: Vec<u16>,
     pub window_size: usize,
     pub stride: usize,
     // State per column
@@ -42,6 +43,7 @@ impl SlidingExtractor {
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
         let mut unique_autocorr_lags = std::collections::BTreeSet::new();
+        let mut unique_tra_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
             let feat = std::str::FromStr::from_str(&i)
@@ -61,6 +63,9 @@ impl SlidingExtractor {
                         unique_autocorr_lags.insert(l);
                     }
                 }
+                Feature::TimeReversalAsymmetry(lag) => {
+                    unique_tra_lags.insert(lag);
+                }
                 _ => {}
             }
             features.push(feat);
@@ -69,6 +74,7 @@ impl SlidingExtractor {
         let unique_paa_totals: Vec<u16> = unique_paa_totals.into_iter().collect();
         let unique_c3_lags: Vec<u16> = unique_c3_lags.into_iter().collect();
         let unique_autocorr_lags: Vec<u16> = unique_autocorr_lags.into_iter().collect();
+        let unique_tra_lags: Vec<u16> = unique_tra_lags.into_iter().collect();
 
         let planner = RealFftPlanner::<f32>::new();
         let planner_arc = Arc::new(Mutex::new(planner));
@@ -84,6 +90,7 @@ impl SlidingExtractor {
             unique_paa_totals: unique_paa_totals.clone(),
             unique_c3_lags: unique_c3_lags.clone(),
             unique_autocorr_lags: unique_autocorr_lags.clone(),
+            unique_tra_lags: unique_tra_lags.clone(),
             window_size,
             stride,
             states: (0..n_cols)
@@ -92,6 +99,7 @@ impl SlidingExtractor {
                         &unique_paa_totals,
                         &unique_c3_lags,
                         &unique_autocorr_lags,
+                        &unique_tra_lags,
                         0.0,
                     )
                 })
@@ -119,6 +127,7 @@ impl SlidingExtractor {
                     &self.unique_paa_totals,
                     &self.unique_c3_lags,
                     &self.unique_autocorr_lags,
+                    &self.unique_tra_lags,
                     0.0,
                 ));
                 self.histories
@@ -168,6 +177,7 @@ impl SlidingExtractor {
                         features: &self.features,
                         unique_paa_totals: &self.unique_paa_totals,
                         unique_c3_lags: &self.unique_c3_lags,
+                        unique_tra_lags: &self.unique_tra_lags,
                         paa_boundaries: &paa_boundaries,
                         r2c: r2c.as_ref().cloned(),
                         fft_size,

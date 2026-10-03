@@ -17,6 +17,7 @@ pub(crate) struct SlidingEngine<'a> {
     pub(crate) features: &'a [Feature],
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
+    pub(crate) unique_tra_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn realfft::RealToComplex<f32>>>,
     pub(crate) fft_size: usize,
@@ -236,6 +237,7 @@ impl<'a> SlidingEngine<'a> {
                 self.unique_paa_totals,
                 self.paa_boundaries,
                 self.unique_c3_lags,
+                self.unique_tra_lags,
                 state,
             );
 
@@ -311,6 +313,7 @@ impl<'a> SlidingEngine<'a> {
                 self.unique_paa_totals,
                 self.paa_boundaries,
                 self.unique_c3_lags,
+                self.unique_tra_lags,
                 state,
             );
         }
@@ -328,7 +331,7 @@ impl<'a> SlidingEngine<'a> {
         TrendProcessor::finalize_simd(self.compute, state);
         ComplexityProcessor::finalize_simd(self.compute, state);
         let base_metrics = StatsProcessor::finalize_base_metrics(state, n);
-        let fft_res = FftProcessor::finalize(
+        let mut fft_res = FftProcessor::finalize(
             self.compute,
             values,
             n,
@@ -354,6 +357,7 @@ impl<'a> SlidingEngine<'a> {
             zc_metrics,
             &fft_res,
             self.unique_c3_lags,
+            self.unique_tra_lags,
             self.unique_paa_totals,
             self.paa_boundaries,
         );
@@ -392,7 +396,7 @@ impl<'a> SlidingEngine<'a> {
                 {
                     v
                 } else {
-                    crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0)
+                    crate::features::dynamic::eval_dynamic(feat, &mut context).unwrap_or_else(|| crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0))
                 }
             };
             feats.push(val);

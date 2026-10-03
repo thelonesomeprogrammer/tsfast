@@ -30,6 +30,11 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
     let freq_centroid = context.freq_centroid;
     let spectral_decrease = context.spectral_decrease;
     let spectral_slope = context.spectral_slope;
+    let spectral_roll_on = context.spectral_roll_on;
+    let spectral_roll_off = context.spectral_roll_off;
+    let spectral_spread = context.spectral_spread;
+    let spectral_skewness = context.spectral_skewness;
+    let spectral_kurtosis = context.spectral_kurtosis;
     let _fft_autocorr = context.fft_autocorr;
     let fft_complex = context.fft_complex;
     let spectrum = context.spectrum;
@@ -258,6 +263,11 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
         }
         Feature::SpectralDecrease => spectral_decrease,
         Feature::SpectralSlope => spectral_slope,
+        Feature::SpectralRollOn => spectral_roll_on,
+        Feature::SpectralRollOff => spectral_roll_off,
+        Feature::SpectralSpread => spectral_spread,
+        Feature::SpectralSkewness => spectral_skewness,
+        Feature::SpectralKurtosis => spectral_kurtosis,
         Feature::SpectrogramCoefficients(_, f_bits) => {
             if !spectrum.is_empty() {
                 let target_freq = f32::from_bits(*f_bits);

@@ -7,6 +7,7 @@ impl std::str::FromStr for Feature {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // 1. Exact matches (simple features)
         match s {
+            "sample_entropy" => return Ok(Feature::SampleEntropy),
             "total_sum" | "value__sum_values" => return Ok(Feature::TotalSum),
             "mean" | "value__mean" => return Ok(Feature::Mean),
             "variance" | "value__variance" => return Ok(Feature::Variance),
@@ -91,6 +92,17 @@ impl std::str::FromStr for Feature {
                 return Ok(Feature::SpectralDecrease);
             }
             "spectral_slope" | "torque_Spectral slope" => return Ok(Feature::SpectralSlope),
+            "spectral_roll_on" | "torque_Spectral roll-on" => return Ok(Feature::SpectralRollOn),
+            "spectral_roll_off" | "torque_Spectral roll-off" => {
+                return Ok(Feature::SpectralRollOff);
+            }
+            "spectral_spread" | "torque_Spectral spread" => return Ok(Feature::SpectralSpread),
+            "spectral_skewness" | "torque_Spectral skewness" => {
+                return Ok(Feature::SpectralSkewness);
+            }
+            "spectral_kurtosis" | "torque_Spectral kurtosis" => {
+                return Ok(Feature::SpectralKurtosis);
+            }
             "signal_distance" | "torque_Signal distance" => return Ok(Feature::SignalDistance),
             "human_range_energy" | "torque_Human range energy" => {
                 return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
@@ -153,6 +165,10 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let r: f32 = r_s.parse().ok()?;
         return Some(Feature::ApproxEntropy(m, r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("linear_trend-") {
+        let attr = parse_agg_attr(arg)?;
+        return Some(Feature::LinearTrend(attr));
+    }
     if let Some(arg) = s.strip_prefix("agg_linear_trend-") {
         let parts: Vec<&str> = arg.split('-').collect();
         if parts.len() != 3 {
@@ -170,6 +186,21 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("index_mass_quantile-") {
         let q: f32 = arg.parse().ok()?;
         return Some(Feature::IndexMassQuantile(q.to_bits()));
+    }
+    if let Some(arg) = s.strip_prefix("ar_coefficient-") {
+        let (k_s, p_s) = arg.split_once('-')?;
+        let k: u16 = k_s.parse().ok()?;
+        let p: u16 = p_s.parse().ok()?;
+        return Some(Feature::ArCoefficient(k, p));
+    }
+    if let Some(arg) = s.strip_prefix("friedrich_coefficients-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.len() == 3 {
+            let m: u8 = parts[0].parse().ok()?;
+            let r: f32 = parts[1].parse().ok()?;
+            let coeff: u16 = parts[2].parse().ok()?;
+            return Some(Feature::FriedrichCoefficients(m, r.to_bits(), coeff));
+        }
     }
     if let Some(arg) = s.strip_prefix("max_langevin_fixed_point-") {
         let (m_s, r_s) = arg.split_once('-')?;
@@ -200,6 +231,15 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
+        && let Ok(bins) = arg.parse::<u32>()
+    {
+        return Some(Feature::BinnedEntropy(bins));
+    }
+    if let Some(arg) = s.strip_prefix("ratio_beyond_r_sigma-") {
+        let r: f32 = arg.parse().ok()?;
+        return Some(Feature::RatioBeyondRSigma(r.to_bits()));
+    }
     None
 }
 
@@ -215,6 +255,22 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         let pos = s.find("lag_")?;
         let n: u16 = s[pos + 4..].parse().ok()?;
         return Some(Feature::TimeReversalAsymmetry(n));
+    }
+    if s.contains("linear_trend__attr_") && !s.contains("agg_linear_trend__attr_") {
+        let attr = if s.contains("attr_\"slope\"") {
+            AggAttr::Slope
+        } else if s.contains("attr_\"intercept\"") {
+            AggAttr::Intercept
+        } else if s.contains("attr_\"stderr\"") {
+            AggAttr::Stderr
+        } else if s.contains("attr_\"rvalue\"") {
+            AggAttr::RValue
+        } else if s.contains("attr_\"pvalue\"") {
+            AggAttr::PValue
+        } else {
+            AggAttr::Slope
+        };
+        return Some(Feature::LinearTrend(attr));
     }
     if s.contains("agg_linear_trend__attr_") {
         let attr = if s.contains("attr_\"slope\"") {
@@ -342,6 +398,16 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
+        && let Ok(bins) = arg.parse::<u32>()
+    {
+        return Some(Feature::BinnedEntropy(bins));
+    }
+    if s.contains("value__ratio_beyond_r_sigma__r_") {
+        let pos = s.find("r_")?;
+        let r: f32 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::RatioBeyondRSigma(r.to_bits()));
+    }
     None
 }
 
@@ -428,8 +494,20 @@ impl Feature {
                 };
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
+            Feature::SampleEntropy => "sample_entropy".to_string(),
+            Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
+            }
+            Feature::LinearTrend(attr) => {
+                let attr_str = match attr {
+                    AggAttr::Slope => "slope",
+                    AggAttr::Intercept => "intercept",
+                    AggAttr::Stderr => "stderr",
+                    AggAttr::RValue => "rvalue",
+                    AggAttr::PValue => "pvalue",
+                };
+                format!("linear_trend-{}", attr_str)
             }
             Feature::AggLinearTrend(attr, chunk_len, func) => {
                 let attr_str = match attr {
@@ -478,6 +556,11 @@ impl Feature {
             Feature::SpectralDistance => "spectral_distance".to_string(),
             Feature::SpectralDecrease => "spectral_decrease".to_string(),
             Feature::SpectralSlope => "spectral_slope".to_string(),
+            Feature::SpectralRollOn => "spectral_roll_on".to_string(),
+            Feature::SpectralRollOff => "spectral_roll_off".to_string(),
+            Feature::SpectralSpread => "spectral_spread".to_string(),
+            Feature::SpectralSkewness => "spectral_skewness".to_string(),
+            Feature::SpectralKurtosis => "spectral_kurtosis".to_string(),
             Feature::SignalDistance => "signal_distance".to_string(),
             Feature::WaveletFeatures(w_bits, f) => {
                 format!("wavelet-{}-{}", f32::from_bits(*w_bits), f)
@@ -491,6 +574,9 @@ impl Feature {
             }
             Feature::SymmetryLooking(r_bits) => {
                 format!("symmetry_looking-{}", f32::from_bits(*r_bits))
+            }
+            Feature::RatioBeyondRSigma(r_bits) => {
+                format!("ratio_beyond_r_sigma-{}", f32::from_bits(*r_bits))
             }
             Feature::HasDuplicateMax => "has_duplicate_max".to_string(),
             Feature::HasDuplicateMin => "has_duplicate_min".to_string(),
@@ -514,6 +600,15 @@ impl Feature {
                 )
             }
             Feature::NumberCwtPeaks(n) => format!("number_cwt_peaks__n_{}", n),
+            Feature::ArCoefficient(k, p) => format!("ar_coefficient-{}-{}", k, p),
+            Feature::FriedrichCoefficients(m, r_bits, coeff) => {
+                format!(
+                    "friedrich_coefficients-{}-{}-{}",
+                    m,
+                    f32::from_bits(*r_bits),
+                    coeff
+                )
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ import numpy as np
 from tsfast._tsfast import ExpandingExtractor
 
 def test_expanding_multiple_columns():
-    features = ["mean", "max_value", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
+    features = ["mean", "max_value", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05', 'ratio_beyond_r_sigma-1.0', 'index_mass_quantile-0.5', 'c3-1']
     n_cols = 2
     extractor = ExpandingExtractor(features, n_cols)
     
@@ -203,3 +203,12 @@ def test_reoccurring_ratios_expanding():
     # res: [2/3, 1/2, 2/3]
     assert np.allclose(results.iloc[0].values, [4.0/5.0, 2.0/3.0, 3.0/5.0])
 
+
+def test_expanding_invalid_type():
+    # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
+    x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
+    features = ["mean", "std_dev"]
+    extractor = ExpandingExtractor(features, 1)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    with pytest.raises(TypeError, match="Expected Float32Array"):
+        extractor.update(batch)

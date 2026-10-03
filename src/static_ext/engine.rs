@@ -16,6 +16,7 @@ pub(crate) struct StaticEngine<'a> {
     pub(crate) features: &'a [Feature],
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
+    pub(crate) unique_tra_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
     pub(crate) fft_size: usize,
@@ -30,7 +31,7 @@ impl<'a> StaticEngine<'a> {
         }
 
         let mut state =
-            ColumnState::new(self.unique_paa_totals, self.unique_c3_lags, &[], values[0]);
+            ColumnState::new(self.unique_paa_totals, self.unique_c3_lags, &[], self.unique_tra_lags, values[0]);
 
         let rem_start = self.process_simd_chunks(values, &mut state);
         self.process_remainder(values, rem_start, &mut state);
@@ -120,7 +121,7 @@ impl<'a> StaticEngine<'a> {
 
         let sort_metrics = SortProcessor::finalize(self.compute, values, n, &mut state);
         let mean_metrics = MeanProcessor::finalize(self.compute, values, n, base_metrics.mean);
-        let fft_res = FftProcessor::finalize(
+        let mut fft_res = FftProcessor::finalize(
             self.compute,
             values,
             n,
@@ -136,6 +137,11 @@ impl<'a> StaticEngine<'a> {
             freq_centroid: 0.0,
             spectral_decrease: 0.0,
             spectral_slope: 0.0,
+            spectral_roll_on: 0.0,
+            spectral_roll_off: 0.0,
+            spectral_spread: 0.0,
+            spectral_skewness: 0.0,
+            spectral_kurtosis: 0.0,
             fft_autocorr: Vec::new(),
             cwt_peaks: 0,
             welch_density: Vec::new(),
@@ -154,6 +160,7 @@ impl<'a> StaticEngine<'a> {
             zc_metrics,
             &fft_res,
             self.unique_c3_lags,
+            self.unique_tra_lags,
             self.unique_paa_totals,
             self.paa_boundaries,
         );
@@ -192,11 +199,16 @@ impl<'a> StaticEngine<'a> {
                 {
                     v
                 } else {
-                    crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0)
+                    crate::features::dynamic::eval_dynamic(feat, &mut context).unwrap_or_else(|| crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0))
                 }
             };
             feats.push(val);
         }
+
+        if self.compute.intersects(Compute::ANY_FFT) {
+            state.spectrum_buffer = std::mem::take(&mut fft_res.spectrum);
+        }
+
         feats
     }
 }
