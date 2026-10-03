@@ -54,11 +54,14 @@ pub enum Feature {
     TimeReversalAsymmetry(u16),
     FftCoefficient(u16, FftAttr),
     ApproxEntropy(u8, u32), // r is encoded as u32 (fixed point or bitcast)
+    LinearTrend(AggAttr),
     AggLinearTrend(AggAttr, u16, AggFunc),
     Quantile(u32),          // q encoded as u32 bits
     IndexMassQuantile(u32), // q encoded as u32 bits
     BenfordCorrelation,
     MaxLangevinFixedPoint(u8, u32), // m, r as bits
+    ArCoefficient(u16, u16),
+    FriedrichCoefficients(u8, u32, u16),
     SumOfReoccurringValues,
     SumOfReoccurringDataPoints,
     PercentageOfReoccurringDatapointsToAllDatapoints,
@@ -72,9 +75,10 @@ pub enum Feature {
     SpectralDistance,
     SpectralDecrease,
     SpectralSlope,
+    SpectralSpread,
+    SpectralEntropy,
     SpectralRollOn,
     SpectralRollOff,
-    SpectralSpread,
     SpectralSkewness,
     SpectralKurtosis,
     SignalDistance,
@@ -90,6 +94,9 @@ pub enum Feature {
     HasDuplicateMax,
     HasDuplicateMin,
     HasDuplicate,
+    SpktWelchDensity(u16),
+    CwtCoefficients([u16; 8], u8, u16, u16),
+    NumberCwtPeaks(u16),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -199,11 +206,14 @@ impl Feature {
             Self::TimeReversalAsymmetry(_) => C::TRA | C::NEEDS_SORT,
             Self::FftCoefficient(_, _) => C::FFT_COEFF | C::NEEDS_SORT,
             Self::ApproxEntropy(_, _) => C::APPROX_ENT | C::NEEDS_SORT,
+            Self::LinearTrend(_) => C::SUM | C::MEAN | C::SLOPE | C::VARIANCE | C::ENERGY,
             Self::AggLinearTrend(_, _, _) => C::AGG_LIN_TREND | C::NEEDS_SORT,
             Self::Quantile(_) => C::QUANTILE | C::NEEDS_SORT,
             Self::IndexMassQuantile(_) => C::ABS_SUM | C::IDX_MASS_Q | C::NEEDS_SORT,
             Self::BenfordCorrelation => C::BENFORD | C::NEEDS_SORT,
             Self::MaxLangevinFixedPoint(_, _) => C::LANGEVIN | C::NEEDS_SORT,
+            Self::ArCoefficient(_, _) => C::AR_COEFF | C::NEEDS_SORT,
+            Self::FriedrichCoefficients(_, _, _) => C::FRIEDRICH | C::NEEDS_SORT,
             Self::SumOfReoccurringValues => C::REOCCUR_VAL | C::NEEDS_SORT,
             Self::SumOfReoccurringDataPoints => C::REOCCUR_DP | C::NEEDS_SORT,
             Self::PercentageOfReoccurringDatapointsToAllDatapoints => {
@@ -221,6 +231,8 @@ impl Feature {
             Self::SpectralDistance => C::SPEC_DISTANCE | C::NEEDS_SORT,
             Self::SpectralDecrease => C::SPEC_DECREASE | C::NEEDS_SORT,
             Self::SpectralSlope => C::SPEC_SLOPE | C::NEEDS_SORT,
+            Self::SpectralSpread => C::SPEC_SPREAD | C::NEEDS_SORT,
+            Self::SpectralEntropy => C::SPEC_ENTROPY | C::NEEDS_SORT,
             Self::SpectralRollOn => C::SPEC_ROLLON | C::NEEDS_SORT,
             Self::SpectralRollOff => C::SPEC_ROLLOFF | C::NEEDS_SORT,
             Self::SpectralSpread => C::SPEC_SPREAD | C::NEEDS_SORT,
@@ -245,6 +257,9 @@ impl Feature {
             Self::PkPkDistance => C::MIN | C::MAX,
             Self::ZeroCross => C::ZERO_CROSS,
             Self::MaxPowerSpectrum => C::ANY_FFT,
+            Self::SpktWelchDensity(_) => C::WELCH,
+            Self::CwtCoefficients(_, _, _, _) => C::CWT,
+            Self::NumberCwtPeaks(_) => C::CWT,
         }
     }
 }

@@ -95,6 +95,11 @@ bitflags! {
         const BINNED_ENT           = 1 << 76;
         const SPEC_ROLLON          = 1 << 77;
         const SPEC_ROLLOFF         = 1 << 78;
+        const AR_COEFF             = 1 << 79;
+        const FRIEDRICH            = 1 << 80;
+        const CWT                  = 1 << 81;
+        const WELCH                = 1 << 82;
+        const SPEC_ENTROPY         = 1 << 83;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()
@@ -103,9 +108,12 @@ bitflags! {
             | Self::SPEC_DISTANCE.bits()
             | Self::SPEC_DECREASE.bits()
             | Self::SPEC_SLOPE.bits()
+            | Self::SPEC_SPREAD.bits()
+            | Self::SPEC_ENTROPY.bits()
+            | Self::SPECTROGRAM.bits()
+            | Self::WELCH.bits()
             | Self::SPEC_ROLLON.bits()
             | Self::SPEC_ROLLOFF.bits()
-            | Self::SPEC_SPREAD.bits()
             | Self::SPEC_SKEWNESS.bits()
             | Self::SPEC_KURTOSIS.bits()
             | Self::SPECTROGRAM.bits();
