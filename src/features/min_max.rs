@@ -1,10 +1,7 @@
 use crate::types::Feature;
 
 #[inline(always)]
-pub fn eval_min_max(
-    feat: &Feature,
-    context: &mut crate::context::FeatureContext,
-) -> Option<f32> {
+pub fn eval_min_max(feat: &Feature, context: &mut crate::context::FeatureContext) -> Option<f32> {
     let values = context.values;
     let state = &mut *context.state;
     let n = context.n;
@@ -41,62 +38,62 @@ pub fn eval_min_max(
     let _paa_boundaries = context.paa_boundaries;
 
     let res = match feat {
-                Feature::Min => state.min_value,
-                Feature::Max => state.max_value,
-                Feature::AbsMax => state.abs_max,
-                Feature::FirstLocMax => first_max_idx as f32 / n,
-                Feature::LastLocMax => (last_max_idx + 1) as f32 / n,
-                Feature::FirstLocMin => first_min_idx as f32 / n,
-                Feature::LastLocMin => (last_min_idx + 1) as f32 / n,
-                Feature::MeanNAbsoluteMax(n_max) => {
-                    let mut abs_vals: Vec<f32> = values.iter().map(|v| v.abs()).collect();
-                    let count = (*n_max as usize).min(abs_vals.len());
-                    if count > 0 {
-                        if count < abs_vals.len() {
-                            abs_vals.select_nth_unstable_by(count, |a, b| {
-                                b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
-                            });
-                        }
-                        abs_vals.iter().take(count).sum::<f32>() / count as f32
-                    } else {
-                        0.0
+        Feature::Min => state.min_value,
+        Feature::Max => state.max_value,
+        Feature::AbsMax => state.abs_max,
+        Feature::FirstLocMax => first_max_idx as f32 / n,
+        Feature::LastLocMax => (last_max_idx + 1) as f32 / n,
+        Feature::FirstLocMin => first_min_idx as f32 / n,
+        Feature::LastLocMin => (last_min_idx + 1) as f32 / n,
+        Feature::MeanNAbsoluteMax(n_max) => {
+            let mut abs_vals: Vec<f32> = values.iter().map(|v| v.abs()).collect();
+            let count = (*n_max as usize).min(abs_vals.len());
+            if count > 0 {
+                if count < abs_vals.len() {
+                    abs_vals.select_nth_unstable_by(count, |a, b| {
+                        b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                }
+                abs_vals.iter().take(count).sum::<f32>() / count as f32
+            } else {
+                0.0
+            }
+        }
+        Feature::HasDuplicateMax => {
+            let mut count = 0;
+            for &v in values {
+                if v == state.max_value {
+                    count += 1;
+                    if count > 1 {
+                        break;
                     }
                 }
-                Feature::HasDuplicateMax => {
-                    let mut count = 0;
-                    for &v in values {
-                        if v == state.max_value {
-                            count += 1;
-                            if count > 1 {
-                                break;
-                            }
-                        }
+            }
+            if count > 1 { 1.0 } else { 0.0 }
+        }
+        Feature::HasDuplicateMin => {
+            let mut count = 0;
+            for &v in values {
+                if v == state.min_value {
+                    count += 1;
+                    if count > 1 {
+                        break;
                     }
-                    if count > 1 { 1.0 } else { 0.0 }
                 }
-                Feature::HasDuplicateMin => {
-                    let mut count = 0;
-                    for &v in values {
-                        if v == state.min_value {
-                            count += 1;
-                            if count > 1 {
-                                break;
-                            }
-                        }
-                    }
-                    if count > 1 { 1.0 } else { 0.0 }
+            }
+            if count > 1 { 1.0 } else { 0.0 }
+        }
+        Feature::HasDuplicate => {
+            let mut unique = rustc_hash::FxHashSet::default();
+            let mut has_dup = false;
+            for &v in values {
+                if !unique.insert(v.to_bits()) {
+                    has_dup = true;
+                    break;
                 }
-                Feature::HasDuplicate => {
-                    let mut unique = rustc_hash::FxHashSet::default();
-                    let mut has_dup = false;
-                    for &v in values {
-                        if !unique.insert(v.to_bits()) {
-                            has_dup = true;
-                            break;
-                        }
-                    }
-                    if has_dup { 1.0 } else { 0.0 }
-                }
+            }
+            if has_dup { 1.0 } else { 0.0 }
+        }
         _ => return None,
     };
     Some(res)

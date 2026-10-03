@@ -5,12 +5,12 @@ use realfft::RealToComplex;
 use std::simd::f32x4;
 use std::sync::Arc;
 
-use super::processors::stats_processor::StatsProcessor;
 use super::processors::diff_processor::DiffProcessor;
-use super::processors::trend_processor::TrendProcessor;
-use super::processors::sort_processor::SortProcessor;
-use super::processors::mean_processor::MeanProcessor;
 use super::processors::fft_processor::FftProcessor;
+use super::processors::mean_processor::MeanProcessor;
+use super::processors::sort_processor::SortProcessor;
+use super::processors::stats_processor::StatsProcessor;
+use super::processors::trend_processor::TrendProcessor;
 
 pub(crate) struct ExpandingEngine<'a> {
     pub(crate) compute: Compute,
@@ -37,7 +37,10 @@ impl<'a> ExpandingEngine<'a> {
         let rem_start = self.process_simd_chunks(values, global_idx, state, full_series);
         self.process_remainder(values, rem_start, global_idx, state, full_series);
 
-        if self.compute.intersects(crate::types::Compute::REOCCUR_RATIOS) {
+        if self
+            .compute
+            .intersects(crate::types::Compute::REOCCUR_RATIOS)
+        {
             for &val in values {
                 let bits = val.to_bits();
                 let count = state.value_counts.entry(bits).or_insert(0);
@@ -99,8 +102,15 @@ impl<'a> ExpandingEngine<'a> {
         for (i, &val) in values[..rem_start].iter().enumerate() {
             let global_idx = global_start_idx + i;
             TrendProcessor::process_sequential(
-                self.compute, val, global_idx, global_start_idx, state, full_series, values,
-                self.unique_c3_lags, self.unique_autocorr_lags
+                self.compute,
+                val,
+                global_idx,
+                global_start_idx,
+                state,
+                full_series,
+                values,
+                self.unique_c3_lags,
+                self.unique_autocorr_lags,
             );
         }
         rem_start
@@ -131,8 +141,15 @@ impl<'a> ExpandingEngine<'a> {
             }
 
             TrendProcessor::process_sequential(
-                self.compute, val, global_idx, global_start_idx, state, full_series, values,
-                self.unique_c3_lags, self.unique_autocorr_lags
+                self.compute,
+                val,
+                global_idx,
+                global_start_idx,
+                state,
+                full_series,
+                values,
+                self.unique_c3_lags,
+                self.unique_autocorr_lags,
             );
 
             state.prev_last = val;
@@ -150,11 +167,18 @@ impl<'a> ExpandingEngine<'a> {
         StatsProcessor::finalize_simd(self.compute, state);
         DiffProcessor::finalize_simd(self.compute, state);
         TrendProcessor::finalize_simd(self.compute, state);
-        TrendProcessor::finalize_paa(self.compute, self.unique_paa_totals, self.paa_boundaries, full_series, state);
+        TrendProcessor::finalize_paa(
+            self.compute,
+            self.unique_paa_totals,
+            self.paa_boundaries,
+            full_series,
+            state,
+        );
 
         let base_metrics = StatsProcessor::finalize_base_metrics(state, n);
 
-        let (median, iqr) = SortProcessor::process_running_sorted(self.compute, full_series, running_sorted);
+        let (median, iqr) =
+            SortProcessor::process_running_sorted(self.compute, full_series, running_sorted);
 
         let fft_res = FftProcessor::finalize(
             self.compute,
@@ -165,13 +189,8 @@ impl<'a> ExpandingEngine<'a> {
             state,
         );
 
-        let (mean_metrics, entropy) = MeanProcessor::finalize(
-            self.compute,
-            full_series,
-            n,
-            base_metrics.mean,
-            state,
-        );
+        let (mean_metrics, entropy) =
+            MeanProcessor::finalize(self.compute, full_series, n, base_metrics.mean, state);
 
         let zc_metrics = DiffProcessor::finalize(self.compute, state);
 
@@ -203,18 +222,41 @@ impl<'a> ExpandingEngine<'a> {
         let mut feats = Vec::with_capacity(self.features.len());
         for feat in self.features {
             let val = {
-                if let Some(v) = crate::features::moments::eval_moments(feat, &mut context) { v }
-                else if let Some(v) = crate::features::min_max::eval_min_max(feat, &mut context) { v }
-                else if let Some(v) = crate::features::distribution::eval_distribution(feat, &mut context) { v }
-                else if let Some(v) = crate::features::energy::eval_energy(feat, &mut context) { v }
-                else if let Some(v) = crate::features::crossings_peaks::eval_crossings_peaks(feat, &mut context) { v }
-                else if let Some(v) = crate::features::autocorrelation::eval_autocorrelation(feat, &mut context) { v }
-                else if let Some(v) = crate::features::changes::eval_changes(feat, &mut context) { v }
-                else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) { v }
-                else if let Some(v) = crate::features::transform::eval_transform(feat, &mut context) { v }
-                else if let Some(v) = crate::features::complexity::eval_complexity(feat, &mut context) { v }
-                else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) { v }
-                else { 0.0 }
+                if let Some(v) = crate::features::moments::eval_moments(feat, &mut context) {
+                    v
+                } else if let Some(v) = crate::features::min_max::eval_min_max(feat, &mut context) {
+                    v
+                } else if let Some(v) =
+                    crate::features::distribution::eval_distribution(feat, &mut context)
+                {
+                    v
+                } else if let Some(v) = crate::features::energy::eval_energy(feat, &mut context) {
+                    v
+                } else if let Some(v) =
+                    crate::features::crossings_peaks::eval_crossings_peaks(feat, &mut context)
+                {
+                    v
+                } else if let Some(v) =
+                    crate::features::autocorrelation::eval_autocorrelation(feat, &mut context)
+                {
+                    v
+                } else if let Some(v) = crate::features::changes::eval_changes(feat, &mut context) {
+                    v
+                } else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) {
+                    v
+                } else if let Some(v) =
+                    crate::features::transform::eval_transform(feat, &mut context)
+                {
+                    v
+                } else if let Some(v) =
+                    crate::features::complexity::eval_complexity(feat, &mut context)
+                {
+                    v
+                } else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) {
+                    v
+                } else {
+                    0.0
+                }
             };
             feats.push(val);
         }

@@ -109,6 +109,7 @@ pub struct ColumnState {
     pub value_counts: rustc_hash::FxHashMap<u32, u32>,
     pub reoccurring_datapoints: u32,
     pub reoccurring_values: u32,
+
     // Incremental moments (Welford's or similar)
     pub n: f32,
     pub mean: f32,

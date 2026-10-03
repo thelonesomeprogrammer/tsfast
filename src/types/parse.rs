@@ -16,7 +16,7 @@ impl std::str::FromStr for Feature {
             "median" | "value__median" => return Ok(Feature::Median),
             "skew" | "skewness" | "value__skewness" => return Ok(Feature::Skew),
             "kurtosis" | "value__kurtosis" | "unbiased_fisher_kurtosis" => {
-                return Ok(Feature::UnbiasedFisherKurtosis)
+                return Ok(Feature::UnbiasedFisherKurtosis);
             }
             "biased_fisher_kurtosis" => return Ok(Feature::BiasedFisherKurtosis),
             "mad" => return Ok(Feature::Mad),
@@ -50,55 +50,52 @@ impl std::str::FromStr for Feature {
             "zero_crossing_std" => return Ok(Feature::ZeroCrossingStd),
             "abs_max" | "value__absolute_maximum" => return Ok(Feature::AbsMax),
             "first_loc_max" | "value__first_location_of_maximum" => {
-                return Ok(Feature::FirstLocMax)
+                return Ok(Feature::FirstLocMax);
             }
-            "last_loc_max" | "value__last_location_of_maximum" => {
-                return Ok(Feature::LastLocMax)
-            }
+            "last_loc_max" | "value__last_location_of_maximum" => return Ok(Feature::LastLocMax),
             "first_loc_min" | "value__first_location_of_minimum" => {
-                return Ok(Feature::FirstLocMin)
+                return Ok(Feature::FirstLocMin);
             }
-            "last_loc_min" | "value__last_location_of_minimum" => {
-                return Ok(Feature::LastLocMin)
-            }
+            "last_loc_min" | "value__last_location_of_minimum" => return Ok(Feature::LastLocMin),
             "benford_correlation" | "value__benford_correlation" => {
-                return Ok(Feature::BenfordCorrelation)
+                return Ok(Feature::BenfordCorrelation);
             }
             "sum_of_reoccurring_values" | "value__sum_of_reoccurring_values" => {
-                return Ok(Feature::SumOfReoccurringValues)
+                return Ok(Feature::SumOfReoccurringValues);
             }
             "sum_of_reoccurring_data_points" | "value__sum_of_reoccurring_data_points" => {
-                return Ok(Feature::SumOfReoccurringDataPoints)
+                return Ok(Feature::SumOfReoccurringDataPoints);
             }
-            "percentage_of_reoccurring_datapoints_to_all_datapoints" | "value__percentage_of_reoccurring_datapoints_to_all_datapoints" => {
-                return Ok(Feature::PercentageOfReoccurringDatapointsToAllDatapoints)
+            "percentage_of_reoccurring_datapoints_to_all_datapoints"
+            | "value__percentage_of_reoccurring_datapoints_to_all_datapoints" => {
+                return Ok(Feature::PercentageOfReoccurringDatapointsToAllDatapoints);
             }
-            "percentage_of_reoccurring_values_to_all_values" | "value__percentage_of_reoccurring_values_to_all_values" => {
-                return Ok(Feature::PercentageOfReoccurringValuesToAllValues)
+            "percentage_of_reoccurring_values_to_all_values"
+            | "value__percentage_of_reoccurring_values_to_all_values" => {
+                return Ok(Feature::PercentageOfReoccurringValuesToAllValues);
             }
-            "ratio_value_number_to_time_series_length" | "value__ratio_value_number_to_time_series_length" => {
-                return Ok(Feature::RatioValueNumberToTimeSeriesLength)
+            "ratio_value_number_to_time_series_length"
+            | "value__ratio_value_number_to_time_series_length" => {
+                return Ok(Feature::RatioValueNumberToTimeSeriesLength);
             }
             "length" | "value__length" => return Ok(Feature::Length),
             "variance_larger_than_standard_deviation"
             | "value__variance_larger_than_standard_deviation" => {
-                return Ok(Feature::VarianceLargerThanStandardDeviation)
+                return Ok(Feature::VarianceLargerThanStandardDeviation);
             }
             "spectral_centroid" | "torque_Centroid" => return Ok(Feature::SpectralCentroid),
             "spectral_distance" | "torque_Spectral distance" => {
-                return Ok(Feature::SpectralDistance)
+                return Ok(Feature::SpectralDistance);
             }
             "spectral_decrease" | "torque_Spectral decrease" => {
-                return Ok(Feature::SpectralDecrease)
+                return Ok(Feature::SpectralDecrease);
             }
             "spectral_slope" | "torque_Spectral slope" => return Ok(Feature::SpectralSlope),
             "signal_distance" | "torque_Signal distance" => return Ok(Feature::SignalDistance),
             "human_range_energy" | "torque_Human range energy" => {
-                return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())) // Default fs=100
+                return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
             }
-            "mean_second_derivative_central" => {
-                return Ok(Feature::MeanSecondDerivativeCentral)
-            }
+            "mean_second_derivative_central" => return Ok(Feature::MeanSecondDerivativeCentral),
             _ => {}
         }
 
@@ -295,13 +292,12 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         };
         return Some(Feature::WaveletFeatures(freq.to_bits(), f_type));
     }
-    if s.contains("torque_Spectrogram mean coefficient_") {
-        if let Some(pos) = s.rfind('_') {
-            if let Some(end) = s.find("Hz") {
-                let freq = s[pos + 1..end].parse::<f32>().unwrap_or(0.0);
-                return Some(Feature::SpectrogramCoefficients(0, freq.to_bits()));
-            }
-        }
+    if s.contains("torque_Spectrogram mean coefficient_")
+        && let Some(pos) = s.rfind('_')
+        && let Some(end) = s.find("Hz")
+    {
+        let freq = s[pos + 1..end].parse::<f32>().unwrap_or(0.0);
+        return Some(Feature::SpectrogramCoefficients(0, freq.to_bits()));
     }
     if let Some(arg) = s.strip_prefix("large_standard_deviation__r_") {
         let r: f32 = arg.parse().ok()?;
@@ -426,9 +422,15 @@ impl Feature {
             }
             Feature::SumOfReoccurringValues => "sum_of_reoccurring_values".to_string(),
             Feature::SumOfReoccurringDataPoints => "sum_of_reoccurring_data_points".to_string(),
-            Feature::PercentageOfReoccurringDatapointsToAllDatapoints => "percentage_of_reoccurring_datapoints_to_all_datapoints".to_string(),
-            Feature::PercentageOfReoccurringValuesToAllValues => "percentage_of_reoccurring_values_to_all_values".to_string(),
-            Feature::RatioValueNumberToTimeSeriesLength => "ratio_value_number_to_time_series_length".to_string(),
+            Feature::PercentageOfReoccurringDatapointsToAllDatapoints => {
+                "percentage_of_reoccurring_datapoints_to_all_datapoints".to_string()
+            }
+            Feature::PercentageOfReoccurringValuesToAllValues => {
+                "percentage_of_reoccurring_values_to_all_values".to_string()
+            }
+            Feature::RatioValueNumberToTimeSeriesLength => {
+                "ratio_value_number_to_time_series_length".to_string()
+            }
             Feature::Length => "length".to_string(),
             Feature::VarianceLargerThanStandardDeviation => {
                 "variance_larger_than_standard_deviation".to_string()

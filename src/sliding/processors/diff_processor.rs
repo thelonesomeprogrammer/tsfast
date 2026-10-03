@@ -2,8 +2,8 @@ use crate::common::ColumnState;
 use crate::types::Compute;
 
 use crate::metrics::ZcMetrics;
-use std::simd::num::SimdFloat;
 use std::simd::f32x4;
+use std::simd::num::SimdFloat;
 
 pub struct DiffProcessor;
 
@@ -20,8 +20,8 @@ impl DiffProcessor {
             state.zcr_count = 0;
         }
 
-        state.mac_sum_vec = std::simd::f32x4::splat(0.0);
-        state.mc_sum_vec = std::simd::f32x4::splat(0.0);
+        state.mac_sum_vec = f32x4::splat(0.0);
+        state.mc_sum_vec = f32x4::splat(0.0);
 
         state.peaks = 0;
         // Recount peaks for the whole window
@@ -102,7 +102,9 @@ impl DiffProcessor {
                 if compute.contains(Compute::AUC) {
                     state.auc_sum -= (old_slice[i] + old_slice[i - 1]) * 0.5;
                 }
-                if compute.contains(Compute::ZERO_CROSS) && (old_slice[i] < 0.0) != (old_slice[i - 1] < 0.0) {
+                if compute.contains(Compute::ZERO_CROSS)
+                    && (old_slice[i] < 0.0) != (old_slice[i - 1] < 0.0)
+                {
                     state.zcr_count -= 1;
                 }
             }
@@ -124,7 +126,9 @@ impl DiffProcessor {
             if compute.contains(Compute::AUC) {
                 state.auc_sum -= (value_after_old + old_slice[y - 1]) * 0.5;
             }
-            if compute.contains(Compute::ZERO_CROSS) && (value_after_old < 0.0) != (old_slice[y - 1] < 0.0) {
+            if compute.contains(Compute::ZERO_CROSS)
+                && (value_after_old < 0.0) != (old_slice[y - 1] < 0.0)
+            {
                 state.zcr_count -= 1;
             }
 
@@ -146,7 +150,9 @@ impl DiffProcessor {
             if compute.contains(Compute::AUC) {
                 state.auc_sum += (new_slice[0] + value_before_new) * 0.5;
             }
-            if compute.contains(Compute::ZERO_CROSS) && (new_slice[0] < 0.0) != (value_before_new < 0.0) {
+            if compute.contains(Compute::ZERO_CROSS)
+                && (new_slice[0] < 0.0) != (value_before_new < 0.0)
+            {
                 state.zcr_count += 1;
             }
 
@@ -168,7 +174,9 @@ impl DiffProcessor {
                 if compute.contains(Compute::AUC) {
                     state.auc_sum += (new_slice[i] + new_slice[i - 1]) * 0.5;
                 }
-                if compute.contains(Compute::ZERO_CROSS) && (new_slice[i] < 0.0) != (new_slice[i - 1] < 0.0) {
+                if compute.contains(Compute::ZERO_CROSS)
+                    && (new_slice[i] < 0.0) != (new_slice[i - 1] < 0.0)
+                {
                     state.zcr_count += 1;
                 }
             }
@@ -185,11 +193,7 @@ impl DiffProcessor {
         state: &mut ColumnState,
     ) {
         if compute.intersects(
-            Compute::MAC
-                | Compute::MC
-                | Compute::CID_CE
-                | Compute::AUTOCORR_LAG1
-                | Compute::AUC
+            Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUTOCORR_LAG1 | Compute::AUC,
         ) {
             // Remove effect of (old_val, old_val_next)
             let old_diff = old_val_next - old_val;
@@ -248,24 +252,21 @@ impl DiffProcessor {
         is_incremental: bool,
         state: &mut ColumnState,
     ) {
-        use std::simd::num::SimdFloat;
         use std::simd::cmp::SimdPartialOrd;
+        use std::simd::num::SimdFloat;
 
-        if compute.intersects(Compute::ZERO_CROSS | Compute::AUTOCORR_LAG1 | Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUC) {
+        if compute.intersects(
+            Compute::ZERO_CROSS
+                | Compute::AUTOCORR_LAG1
+                | Compute::MAC
+                | Compute::MC
+                | Compute::CID_CE
+                | Compute::AUC,
+        ) {
             let shifted = if global_idx == 0 {
-                std::simd::f32x4::from_array([
-                    state.prev_last,
-                    chunk[0],
-                    chunk[1],
-                    chunk[2]
-                ])
+                std::simd::f32x4::from_array([state.prev_last, chunk[0], chunk[1], chunk[2]])
             } else {
-                std::simd::f32x4::from_array([
-                    values[global_idx - 1],
-                    chunk[0],
-                    chunk[1],
-                    chunk[2]
-                ])
+                std::simd::f32x4::from_array([values[global_idx - 1], chunk[0], chunk[1], chunk[2]])
             };
 
             state.prev_last = chunk[3];
@@ -340,7 +341,10 @@ impl DiffProcessor {
             }
         }
 
-        if compute.contains(Compute::ZC_INDICES) && compute.contains(Compute::ZERO_CROSS) && (val < 0.0) != (prev < 0.0) {
+        if compute.contains(Compute::ZC_INDICES)
+            && compute.contains(Compute::ZERO_CROSS)
+            && (val < 0.0) != (prev < 0.0)
+        {
             state.zc_indices.push(offset);
         }
     }
@@ -369,10 +373,7 @@ impl DiffProcessor {
         }
     }
 
-    pub fn finalize(
-        compute: Compute,
-        state: &ColumnState,
-    ) -> ZcMetrics {
+    pub fn finalize(compute: Compute, state: &ColumnState) -> ZcMetrics {
         let mut zc_mean = 0.0;
         let mut zc_std = 0.0;
 
@@ -388,9 +389,6 @@ impl DiffProcessor {
             }
         }
 
-        ZcMetrics {
-            zc_mean,
-            zc_std,
-        }
+        ZcMetrics { zc_mean, zc_std }
     }
 }
