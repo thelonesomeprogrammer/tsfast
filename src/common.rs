@@ -122,6 +122,10 @@ pub struct ColumnState {
     pub fft_in_buffer: Vec<f32>,
     pub fft_out_buffer: Vec<num_complex::Complex<f32>>,
     pub sliding_dft: Option<SlidingDFT>,
+    pub cwt_peaks: u16,
+    pub welch_density: Vec<f32>,
+    pub welch_planner: Option<std::sync::Arc<std::sync::Mutex<realfft::RealFftPlanner<f32>>>>,
+    pub cwt_wavelets: rustc_hash::FxHashMap<u16, Vec<f32>>,
 }
 
 pub fn next_good_fft_size(n: usize) -> usize {
@@ -233,6 +237,10 @@ impl ColumnState {
             fft_in_buffer: Vec::new(),
             fft_out_buffer: Vec::new(),
             sliding_dft: None,
+            cwt_peaks: 0,
+            welch_density: Vec::new(),
+            welch_planner: None,
+            cwt_wavelets: rustc_hash::FxHashMap::default(),
         }
     }
 }

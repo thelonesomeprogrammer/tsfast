@@ -26,7 +26,8 @@ impl FftProcessor {
                     let mut indata = vec![0.0; fft_size];
                     indata[..values.len()].copy_from_slice(values);
                     let mut outdata = r2c_ref.make_output_vec();
-                    r2c_ref.process(&mut indata, &mut outdata)
+                    r2c_ref
+                        .process(&mut indata, &mut outdata)
                         .map_err(|e| e.to_string())?;
                     state.sliding_dft = Some(SlidingDFT::from_fft(outdata, values.len()));
                 }
@@ -119,7 +120,86 @@ impl FftProcessor {
             }
         }
 
+        let mut welch_density = Vec::new();
+        if compute.intersects(Compute::WELCH) && !values.is_empty() {
+            let nperseg = values.len().min(256);
+            if nperseg > 0 {
+                let step = nperseg / 2;
+                let mut num_segments = 0;
+
+                if state.welch_planner.is_none() {
+                    state.welch_planner = Some(std::sync::Arc::new(std::sync::Mutex::new(realfft::RealFftPlanner::<f32>::new())));
+                }
+
+                let mut planner_lock = state.welch_planner.as_ref().unwrap().lock().unwrap();
+                let r2c_welch = planner_lock.plan_fft_forward(nperseg);
+                let complex_len = r2c_welch.complex_len();
+                welch_density = vec![0.0; complex_len];
+                let mut indata = vec![0.0; nperseg];
+                let mut outdata = r2c_welch.make_output_vec();
+
+                let mut window = vec![0.0; nperseg];
+                let mut window_sum_sq = 0.0;
+                let pi2 = 2.0 * std::f32::consts::PI;
+                for i in 0..nperseg {
+                    let w = 0.5 * (1.0 - (pi2 * i as f32 / nperseg as f32).cos());
+                    window[i] = w;
+                    window_sum_sq += w * w;
+                }
+
+                let scale = if window_sum_sq > 0.0 { 1.0 / window_sum_sq } else { 1.0 };
+
+                let mut start = 0;
+                while start < values.len() {
+                    let end = (start + nperseg).min(values.len());
+                    let actual_len = end - start;
+                    if actual_len < nperseg {
+                        if num_segments == 0 {
+                        } else {
+                            break;
+                        }
+                    }
+
+                    for i in 0..nperseg {
+                        if start + i < values.len() {
+                            indata[i] = values[start + i] * window[i];
+                        } else {
+                            indata[i] = 0.0;
+                        }
+                    }
+
+                    if r2c_welch.process(&mut indata, &mut outdata).is_ok() {
+                        for (i, c) in outdata.iter().enumerate() {
+                            let mag_sq = c.norm_sqr();
+                            if i == 0 || i == complex_len - 1 {
+                                welch_density[i] += mag_sq * scale;
+                            } else {
+                                welch_density[i] += mag_sq * scale * 2.0;
+                            }
+                        }
+                        num_segments += 1;
+                    }
+
+                    if start + nperseg >= values.len() {
+                        break;
+                    }
+                    start += step;
+                }
+
+                if num_segments > 0 {
+                    for v in welch_density.iter_mut() {
+                        *v /= num_segments as f32;
+                    }
+                }
+            }
+        }
+
+        let cwt_peaks = 0;
+
         Ok(FftResult {
+            cwt_peaks,
+            welch_density,
+
             fft_complex,
             spectrum,
             freq_centroid,

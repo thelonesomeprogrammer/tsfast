@@ -37,4 +37,6 @@ pub struct FftResult {
     pub spectral_decrease: f32,
     pub spectral_slope: f32,
     pub fft_autocorr: Vec<f32>,
+    pub cwt_peaks: u16,
+    pub welch_density: Vec<f32>,
 }
