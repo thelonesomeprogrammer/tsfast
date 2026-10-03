@@ -48,6 +48,8 @@ pub struct FeatureContext<'a> {
     pub fft_autocorr: &'a [f32],
     pub fft_complex: &'a [realfft::num_complex::Complex<f32>],
     pub spectrum: &'a [f32],
+    pub cwt_peaks: u16,
+    pub welch_density: &'a [f32],
 
     // Complexity Arrays (from engine)
     pub unique_c3_lags: &'a [u16],
@@ -110,6 +112,9 @@ impl<'a> FeatureContext<'a> {
             fft_autocorr: &fft.fft_autocorr,
             fft_complex: &fft.fft_complex,
             spectrum: &fft.spectrum,
+            cwt_peaks: fft.cwt_peaks,
+            welch_density: &fft.welch_density,
+
             unique_c3_lags,
             unique_tra_lags,
             unique_paa_totals,

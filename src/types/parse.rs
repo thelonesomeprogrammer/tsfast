@@ -358,6 +358,38 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         let freq = s[pos + 1..end].parse::<f32>().unwrap_or(0.0);
         return Some(Feature::SpectrogramCoefficients(0, freq.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("spkt_welch_density__coeff_") {
+        let coeff: u16 = arg.parse().ok()?;
+        return Some(Feature::SpktWelchDensity(coeff));
+    }
+    if let Some(arg) = s.strip_prefix("number_cwt_peaks__n_") {
+        let n: u16 = arg.parse().ok()?;
+        return Some(Feature::NumberCwtPeaks(n));
+    }
+    if s.starts_with("cwt_coefficients__coeff_") {
+        if let Some(coeff_end) = s.find("__w_") {
+            let coeff_str = &s[24..coeff_end];
+            let coeff = coeff_str.parse::<u16>().ok()?;
+            if let Some(w_end) = s.find("__widths_") {
+                let w_str = &s[coeff_end + 4..w_end];
+                let w = w_str.parse::<u16>().ok()?;
+                let widths_str = &s[w_end + 9..];
+                let cleaned = widths_str
+                    .replace("(", "")
+                    .replace(")", "")
+                    .replace(" ", "");
+                let parts: Vec<&str> = cleaned.split(',').collect();
+                let mut widths = [0u16; 8];
+                let len = parts.len().min(8) as u8;
+                for i in 0..(len as usize) {
+                    if let Ok(val) = parts[i].parse::<u16>() {
+                        widths[i] = val;
+                    }
+                }
+                return Some(Feature::CwtCoefficients(widths, len, coeff, w));
+            }
+        }
+    }
     if let Some(arg) = s.strip_prefix("large_standard_deviation__r_") {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::LargeStandardDeviation(r.to_bits()));
@@ -552,10 +584,31 @@ impl Feature {
             Feature::PkPkDistance => "pk_pk_distance".to_string(),
             Feature::ZeroCross => "zero_cross".to_string(),
             Feature::MaxPowerSpectrum => "max_power_spectrum".to_string(),
+            Feature::SpktWelchDensity(coeff) => format!("spkt_welch_density__coeff_{}", coeff),
+            Feature::CwtCoefficients(widths, len, coeff, w) => {
+                let mut w_str = String::from("(");
+                for i in 0..*len as usize {
+                    if i > 0 {
+                        w_str.push_str(", ");
+                    }
+                    w_str.push_str(&widths[i].to_string());
+                }
+                w_str.push(')');
+                format!(
+                    "cwt_coefficients__coeff_{}__w_{}__widths_{}",
+                    coeff, w, w_str
+                )
+            }
+            Feature::NumberCwtPeaks(n) => format!("number_cwt_peaks__n_{}", n),
             Feature::ArCoefficient(k, p) => format!("ar_coefficient-{}-{}", k, p),
             Feature::FriedrichCoefficients(m, r_bits, coeff) => {
-                format!("friedrich_coefficients-{}-{}-{}", m, f32::from_bits(*r_bits), coeff)
-            },
+                format!(
+                    "friedrich_coefficients-{}-{}-{}",
+                    m,
+                    f32::from_bits(*r_bits),
+                    coeff
+                )
+            }
         }
     }
 }

@@ -93,6 +93,9 @@ pub enum Feature {
     HasDuplicateMax,
     HasDuplicateMin,
     HasDuplicate,
+    SpktWelchDensity(u16),
+    CwtCoefficients([u16; 8], u8, u16, u16),
+    NumberCwtPeaks(u16),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -251,6 +254,9 @@ impl Feature {
             Self::PkPkDistance => C::MIN | C::MAX,
             Self::ZeroCross => C::ZERO_CROSS,
             Self::MaxPowerSpectrum => C::ANY_FFT,
+            Self::SpktWelchDensity(_) => C::WELCH,
+            Self::CwtCoefficients(_, _, _, _) => C::CWT,
+            Self::NumberCwtPeaks(_) => C::CWT,
         }
     }
 }

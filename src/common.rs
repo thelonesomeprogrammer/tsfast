@@ -135,6 +135,10 @@ pub struct ColumnState {
     pub fft_in_buffer: Vec<f32>,
     pub fft_out_buffer: Vec<num_complex::Complex<f32>>,
     pub sliding_dft: Option<SlidingDFT>,
+    pub cwt_peaks: u16,
+    pub welch_density: Vec<f32>,
+    pub welch_planner: Option<std::sync::Arc<std::sync::Mutex<realfft::RealFftPlanner<f32>>>>,
+    pub cwt_wavelets: rustc_hash::FxHashMap<u16, Vec<f32>>,
     pub spectrum_buffer: Vec<f32>,
 }
 
@@ -250,7 +254,7 @@ impl ColumnState {
             last_dynamic_n: 0,
             last_dynamic_ptr: 0,
             dynamic_val_cache: Vec::new(),
-                                                            n: 0.0,
+            n: 0.0,
             mean: 0.0,
             m2: 0.0,
             m3: 0.0,
@@ -261,6 +265,10 @@ impl ColumnState {
             fft_in_buffer: Vec::new(),
             fft_out_buffer: Vec::new(),
             sliding_dft: None,
+            cwt_peaks: 0,
+            welch_density: Vec::new(),
+            welch_planner: None,
+            cwt_wavelets: rustc_hash::FxHashMap::default(),
             spectrum_buffer: Vec::new(),
         }
     }
@@ -273,7 +281,6 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> Compute {
         .iter()
         .fold(Compute::empty(), |acc, f| acc | f.required_compute())
 }
-
 
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::num::SimdFloat;
@@ -295,14 +302,14 @@ pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
     for i in 0..end_m {
         // We broadcast data[i..i+m+1]
         let v_i0 = f32x4::splat(data[i]);
-        let v_i1 = f32x4::splat(data[i+1]);
-        let v_i2 = f32x4::splat(data[i+2]);
+        let v_i1 = f32x4::splat(data[i + 1]);
+        let v_i2 = f32x4::splat(data[i + 2]);
 
         let mut j = i + 1; // only check j > i
         while j + 4 <= end_m {
-            let v_j0 = f32x4::from_slice(&data[j..j+4]);
-            let v_j1 = f32x4::from_slice(&data[j+1..j+5]);
-            let v_j2 = f32x4::from_slice(&data[j+2..j+6]);
+            let v_j0 = f32x4::from_slice(&data[j..j + 4]);
+            let v_j1 = f32x4::from_slice(&data[j + 1..j + 5]);
+            let v_j2 = f32x4::from_slice(&data[j + 2..j + 6]);
 
             let diff0 = (v_j0 - v_i0).abs();
             let diff1 = (v_j1 - v_i1).abs();
@@ -319,10 +326,12 @@ pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
         }
         // Remainder
         for j_rem in j..end_m {
-            let max_m = (data[j_rem] - data[i]).abs().max((data[j_rem+1] - data[i+1]).abs());
+            let max_m = (data[j_rem] - data[i])
+                .abs()
+                .max((data[j_rem + 1] - data[i + 1]).abs());
             if max_m <= r {
                 b_count += 1;
-                let max_mp1 = max_m.max((data[j_rem+2] - data[i+2]).abs());
+                let max_mp1 = max_m.max((data[j_rem + 2] - data[i + 2]).abs());
                 if max_mp1 <= r {
                     a_count += 1;
                 }
@@ -343,7 +352,9 @@ pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
 
 pub fn approx_entropy_simd(m: usize, r: f32, data: &[f32]) -> f32 {
     let n = data.len();
-    if n <= m { return 0.0; }
+    if n <= m {
+        return 0.0;
+    }
     let r_vec = f32x4::splat(r);
 
     let mut result = 0.0;
@@ -356,7 +367,7 @@ pub fn approx_entropy_simd(m: usize, r: f32, data: &[f32]) -> f32 {
             let mut max_diff = f32x4::splat(0.0);
             for k in 0..m {
                 let v_i = f32x4::splat(data[i + k]);
-                let v_j = f32x4::from_slice(&data[j + k .. j + k + 4]);
+                let v_j = f32x4::from_slice(&data[j + k..j + k + 4]);
                 let diff = (v_j - v_i).abs();
                 max_diff = max_diff.simd_max(diff);
             }
