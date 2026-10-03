@@ -7,6 +7,7 @@ impl std::str::FromStr for Feature {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // 1. Exact matches (simple features)
         match s {
+            "sample_entropy" => return Ok(Feature::SampleEntropy),
             "total_sum" | "value__sum_values" => return Ok(Feature::TotalSum),
             "mean" | "value__mean" => return Ok(Feature::Mean),
             "variance" | "value__variance" => return Ok(Feature::Variance),
@@ -200,6 +201,11 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_") {
+        if let Ok(bins) = arg.parse::<u32>() {
+            return Some(Feature::BinnedEntropy(bins));
+        }
+    }
     None
 }
 
@@ -310,6 +316,11 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_") {
+        if let Ok(bins) = arg.parse::<u32>() {
+            return Some(Feature::BinnedEntropy(bins));
+        }
+    }
     None
 }
 
@@ -396,6 +407,8 @@ impl Feature {
                 };
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
+            Feature::SampleEntropy => "sample_entropy".to_string(),
+            Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
             }

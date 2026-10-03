@@ -31,7 +31,8 @@ def test_extract():
 
 def test_new_features():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)
-    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce"]
+    import tsfresh.feature_extraction.feature_calculators as fc
+    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce", "sample_entropy", "binned_entropy__max_bins_5"]
     
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
@@ -46,6 +47,8 @@ def test_new_features():
     assert np.allclose(results[3], 1.0)
     assert np.allclose(results[4], 1.0)
     assert np.allclose(results[5], np.sqrt(5.0))
+    assert np.allclose(results[6], fc.sample_entropy(x), equal_nan=True)
+    assert np.allclose(results[7], fc.binned_entropy(x, 5), equal_nan=True)
     print("test_new_features passed!")
 
 def test_paa():

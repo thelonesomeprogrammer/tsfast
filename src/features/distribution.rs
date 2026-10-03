@@ -7,7 +7,7 @@ pub fn eval_distribution(
 ) -> Option<f32> {
     let values = context.values;
     let state = &mut *context.state;
-    let _n = context.n;
+    let n = context.n;
     let _mean = context.mean;
     let _m2 = context.m2;
     let _m3 = context.m3;
@@ -23,6 +23,8 @@ pub fn eval_distribution(
     let median = context.median;
     let _iqr = context.iqr;
     let entropy = context.entropy;
+    let min_val = state.min_value;
+    let max_val = state.max_value;
     let _mad_sum = context.mad_sum;
     let _count_a = context.count_a;
     let _count_b = context.count_b;
@@ -43,6 +45,39 @@ pub fn eval_distribution(
     let res = match feat {
                 Feature::Median => median,
                 Feature::Entropy => entropy,
+        Feature::BinnedEntropy(max_bins) => {
+            let max_bins = *max_bins as usize;
+            if max_bins == 0 || n == 0.0 {
+                return Some(f32::NAN);
+            }
+            if min_val == max_val {
+                return Some(0.0);
+            }
+
+            let mut hist = std::mem::take(&mut state.binned_entropy_buffer);
+            hist.clear();
+            hist.resize(max_bins, 0.0);
+
+            let bin_width = (max_val - min_val) / (max_bins as f32);
+
+            for &val in values {
+                let mut bin = ((val - min_val) / bin_width).floor() as usize;
+                if bin >= max_bins {
+                    bin = max_bins - 1;
+                }
+                hist[bin] += 1.0;
+            }
+
+            let mut entropy = 0.0_f32;
+            for &count in &hist {
+                if count > 0.0 {
+                    let p: f32 = count / n;
+                    entropy -= p * p.ln();
+                }
+            }
+            state.binned_entropy_buffer = hist;
+            entropy
+        }
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
 
