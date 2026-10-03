@@ -233,3 +233,12 @@ def test_reoccurring_ratios_sliding():
     # len=5, values={2,3,4} (3 unique), reoccur_dp=3 (three 3s), reoccur_val=1 (3)
     # res: [3/5, 1/3, 3/5]
     assert np.allclose(results.iloc[2].values, [3.0/5.0, 1.0/3.0, 3.0/5.0])
+
+def test_sliding_invalid_type():
+    # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
+    x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
+    features = ["mean", "std_dev"]
+    extractor = SlidingExtractor(features, 1, 2, 1)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    with pytest.raises(TypeError, match="Expected Float32Array"):
+        extractor.update(batch)

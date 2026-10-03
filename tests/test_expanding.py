@@ -203,3 +203,12 @@ def test_reoccurring_ratios_expanding():
     # res: [2/3, 1/2, 2/3]
     assert np.allclose(results.iloc[0].values, [4.0/5.0, 2.0/3.0, 3.0/5.0])
 
+
+def test_expanding_invalid_type():
+    # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
+    x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
+    features = ["mean", "std_dev"]
+    extractor = ExpandingExtractor(features, 1)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    with pytest.raises(TypeError, match="Expected Float32Array"):
+        extractor.update(batch)
