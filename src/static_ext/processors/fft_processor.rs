@@ -243,15 +243,6 @@ impl FftProcessor {
                     if roll_off_idx >= 0.0 {
                         spectral_roll_off = roll_off_idx * freq_step;
                     }
-                    let sum_x = m_n * (m_n - 1.0) / 2.0;
-                    let sum_y = m0;
-                    let sum_xx = m_n * (m_n - 1.0) * (2.0 * m_n - 1.0) / 6.0;
-                    let sum_xy = m1;
-                    let s_xx = sum_xx - (sum_x * sum_x) / m_n;
-                    let s_xy = sum_xy - (sum_x * sum_y) / m_n;
-                    if s_xx.abs() > 1e-9 {
-                        spectral_slope = s_xy / s_xx;
-                    }
                 }
             }
         }
