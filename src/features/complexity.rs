@@ -6,7 +6,7 @@ pub fn eval_complexity(
     context: &mut crate::context::FeatureContext,
 ) -> Option<f32> {
     let values = context.values;
-    let state = &mut *context.state;
+    let _state = &mut *context.state;
     let _n = context.n;
     let _mean = context.mean;
     let _m2 = context.m2;
@@ -44,12 +44,12 @@ pub fn eval_complexity(
                 Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
                     let m_val = *m as usize;
                     let r = f32::from_bits(*r_bits);
-                    let mut buffer = std::mem::take(&mut state.approx_entropy_buffer);
-
-                    let res = crate::common::approx_entropy_phi(m_val, r, values, &mut buffer)
-                        - crate::common::approx_entropy_phi(m_val + 1, r, values, &mut buffer);
-                    state.approx_entropy_buffer = buffer;
+                    let res = crate::common::approx_entropy_simd(m_val, r, values)
+                        - crate::common::approx_entropy_simd(m_val + 1, r, values);
                     res
+                }
+                Feature::SampleEntropy => {
+                    crate::common::sample_entropy_simd(values, _std_dev)
                 }
         _ => return None,
     };

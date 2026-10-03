@@ -183,7 +183,7 @@ impl<'a> ExpandingEngine<'a> {
         let (median, iqr) =
             SortProcessor::process_running_sorted(self.compute, full_series, running_sorted);
 
-        let fft_res = FftProcessor::finalize(
+        let mut fft_res = FftProcessor::finalize(
             self.compute,
             full_series,
             &self.r2c,
@@ -256,6 +256,8 @@ impl<'a> ExpandingEngine<'a> {
                     crate::features::complexity::eval_complexity(feat, &mut context)
                 {
                     v
+                } else if let Some(v) = crate::features::dynamic::eval_dynamic(feat, &mut context) {
+                    v
                 } else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) {
                     v
                 } else {
@@ -264,6 +266,11 @@ impl<'a> ExpandingEngine<'a> {
             };
             feats.push(val);
         }
+
+        if self.compute.intersects(Compute::ANY_FFT) {
+            state.spectrum_buffer = std::mem::take(&mut fft_res.spectrum);
+        }
+
         feats
     }
 }

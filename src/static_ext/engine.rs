@@ -121,7 +121,7 @@ impl<'a> StaticEngine<'a> {
 
         let sort_metrics = SortProcessor::finalize(self.compute, values, n, &mut state);
         let mean_metrics = MeanProcessor::finalize(self.compute, values, n, base_metrics.mean);
-        let fft_res = FftProcessor::finalize(
+        let mut fft_res = FftProcessor::finalize(
             self.compute,
             values,
             n,
@@ -137,6 +137,11 @@ impl<'a> StaticEngine<'a> {
             freq_centroid: 0.0,
             spectral_decrease: 0.0,
             spectral_slope: 0.0,
+            spectral_roll_on: 0.0,
+            spectral_roll_off: 0.0,
+            spectral_spread: 0.0,
+            spectral_skewness: 0.0,
+            spectral_kurtosis: 0.0,
             fft_autocorr: Vec::new(),
         });
 
@@ -192,11 +197,16 @@ impl<'a> StaticEngine<'a> {
                 {
                     v
                 } else {
-                    crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0)
+                    crate::features::dynamic::eval_dynamic(feat, &mut context).unwrap_or_else(|| crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0))
                 }
             };
             feats.push(val);
         }
+
+        if self.compute.intersects(Compute::ANY_FFT) {
+            state.spectrum_buffer = std::mem::take(&mut fft_res.spectrum);
+        }
+
         feats
     }
 }

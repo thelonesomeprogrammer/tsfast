@@ -331,7 +331,7 @@ impl<'a> SlidingEngine<'a> {
         TrendProcessor::finalize_simd(self.compute, state);
         ComplexityProcessor::finalize_simd(self.compute, state);
         let base_metrics = StatsProcessor::finalize_base_metrics(state, n);
-        let fft_res = FftProcessor::finalize(
+        let mut fft_res = FftProcessor::finalize(
             self.compute,
             values,
             n,
@@ -396,7 +396,7 @@ impl<'a> SlidingEngine<'a> {
                 {
                     v
                 } else {
-                    crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0)
+                    crate::features::dynamic::eval_dynamic(feat, &mut context).unwrap_or_else(|| crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0))
                 }
             };
             feats.push(val);
