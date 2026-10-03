@@ -43,6 +43,9 @@ pub struct FeatureContext<'a> {
     pub fft_autocorr: &'a [f32],
     pub fft_complex: &'a [realfft::num_complex::Complex<f32>],
     pub spectrum: &'a [f32],
+    pub mfcc: &'a [f32],
+    pub cwt_energy: &'a [f32],
+    pub cwt_entropy: f32,
 
     // Complexity Arrays (from engine)
     pub unique_c3_lags: &'a [u16],
@@ -96,6 +99,9 @@ impl<'a> FeatureContext<'a> {
             spectral_decrease: fft.spectral_decrease,
             spectral_slope: fft.spectral_slope,
             fft_autocorr: &fft.fft_autocorr,
+            mfcc: &fft.mfcc,
+            cwt_energy: &fft.cwt_energy,
+            cwt_entropy: fft.cwt_entropy,
             fft_complex: &fft.fft_complex,
             spectrum: &fft.spectrum,
             unique_c3_lags,

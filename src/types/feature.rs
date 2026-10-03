@@ -82,6 +82,9 @@ pub enum Feature {
     HasDuplicateMax,
     HasDuplicateMin,
     HasDuplicate,
+    Mfcc(u16),
+    WaveletEnergy(u16),
+    WaveletEntropy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -225,6 +228,9 @@ impl Feature {
             Self::PkPkDistance => C::MIN | C::MAX,
             Self::ZeroCross => C::ZERO_CROSS,
             Self::MaxPowerSpectrum => C::ANY_FFT,
+            Self::Mfcc(_) => C::MFCC,
+            Self::WaveletEnergy(_) => C::CWT_MEXH,
+            Self::WaveletEntropy => C::CWT_MEXH,
         }
     }
 }

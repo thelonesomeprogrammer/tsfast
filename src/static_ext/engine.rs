@@ -137,6 +137,9 @@ impl<'a> StaticEngine<'a> {
             spectral_decrease: 0.0,
             spectral_slope: 0.0,
             fft_autocorr: Vec::new(),
+            mfcc: Vec::new(),
+            cwt_energy: Vec::new(),
+            cwt_entropy: 0.0,
         });
 
         let zc_metrics = DiffProcessor::finalize(self.compute, &state);

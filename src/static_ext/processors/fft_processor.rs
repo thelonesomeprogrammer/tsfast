@@ -119,6 +119,177 @@ impl FftProcessor {
             }
         }
 
+
+        let mut mfcc = Vec::new();
+        let mut cwt_energy = Vec::new();
+        let mut cwt_entropy = 0.0;
+
+        if compute.intersects(Compute::MFCC) {
+            let nfilt = 40;
+            let num_ceps = 12;
+
+            if values.len() > 1 && !spectrum.is_empty() {
+                let nfft_f32 = (spectrum.len() - 1) as f32 * 2.0;
+                let fs = 100.0_f32;
+
+                if state.mfcc_filter_banks.is_empty() || state.mfcc_filter_banks[0].len() != spectrum.len() {
+                    let low_freq_mel = 0.0_f32;
+                    let high_freq_mel = 2595.0_f32 * (1.0_f32 + (fs / 2.0_f32) / 700.0_f32).log10();
+
+                    let mut mel_points = Vec::with_capacity(nfilt + 2);
+                    for i in 0..(nfilt + 2) {
+                        mel_points.push(low_freq_mel + i as f32 * (high_freq_mel - low_freq_mel) / (nfilt as f32 + 1.0_f32));
+                    }
+
+                    let hz_points: Vec<f32> = mel_points.iter().map(|m| 700.0_f32 * (10.0_f32.powf(m / 2595.0_f32) - 1.0_f32)).collect();
+                    let filter_bin: Vec<usize> = hz_points.iter().map(|h| (((nfft_f32 + 1.0) * h / fs).floor() as usize).min(spectrum.len() - 1)).collect();
+
+                    state.mfcc_filter_banks = vec![vec![0.0; spectrum.len()]; nfilt];
+                    for m in 1..=nfilt {
+                        let f_m_minus = filter_bin[m - 1];
+                        let f_m = filter_bin[m];
+                        let f_m_plus = filter_bin[m + 1];
+
+                        let enorm = 2.0_f32 / (hz_points[m + 1] - hz_points[m - 1]).max(f32::EPSILON);
+
+                        let denom1 = (f_m as f32 - f_m_minus as f32).max(1.0);
+                        for k in f_m_minus..f_m {
+                            state.mfcc_filter_banks[m - 1][k] = enorm * (k as f32 - f_m_minus as f32) / denom1;
+                        }
+
+                        let denom2 = (f_m_plus as f32 - f_m as f32).max(1.0);
+                        for k in f_m..f_m_plus {
+                            state.mfcc_filter_banks[m - 1][k] = enorm * (f_m_plus as f32 - k as f32) / denom2;
+                        }
+                    }
+
+                    state.mfcc_dct_matrix = vec![vec![0.0; nfilt]; num_ceps];
+                    let ortho_factor = (2.0_f32 / nfilt as f32).sqrt();
+                    for k in 1..=num_ceps {
+                        for n in 0..nfilt {
+                            state.mfcc_dct_matrix[k - 1][n] = ortho_factor * 2.0_f32 *
+                                (std::f32::consts::PI * k as f32 * (2.0 * n as f32 + 1.0) / (2.0 * nfilt as f32)).cos();
+                        }
+                    }
+                }
+
+                let mut pow_frames: Vec<f32> = std::mem::take(&mut state.fft_in_buffer);
+                pow_frames.clear();
+                for k in 0..spectrum.len() {
+                    let w = 2.0 * std::f32::consts::PI * (k as f32) / nfft_f32;
+                    let factor = 1.0 + 0.97 * 0.97 - 2.0 * 0.97 * w.cos();
+                    pow_frames.push(spectrum[k] * spectrum[k] * factor / nfft_f32);
+                }
+
+                let mut filter_banks = vec![0.0_f32; nfilt];
+
+                for m in 0..nfilt {
+                    let filter = &state.mfcc_filter_banks[m];
+                    let bank_sum: f32 = pow_frames.iter().zip(filter.iter()).map(|(p, f)| p * f).sum();
+                    let val = if bank_sum <= 0.0 { f32::EPSILON } else { bank_sum };
+                    filter_banks[m] = 20.0_f32 * val.log10();
+                }
+
+                let mut dct = vec![0.0_f32; num_ceps];
+                for k in 0..num_ceps {
+                    let dct_row = &state.mfcc_dct_matrix[k];
+                    dct[k] = filter_banks.iter().zip(dct_row.iter()).map(|(f, d)| f * d).sum();
+                }
+
+                let cep_lifter = 22.0_f32;
+                for i in 0..num_ceps {
+                    let lift = 1.0_f32 + (cep_lifter / 2.0_f32) * (std::f32::consts::PI * i as f32 / cep_lifter).sin();
+                    dct[i] *= lift;
+                }
+
+                mfcc = dct;
+                state.fft_in_buffer = pow_frames;
+            } else {
+                mfcc = vec![0.0_f32; num_ceps];
+            }
+        }
+
+        if compute.intersects(Compute::CWT_MEXH) {
+            let max_width = 10;
+            let dt = 1.0_f32;
+
+            if values.len() > 0 {
+                if state.cwt_kernels.is_empty() {
+                    state.cwt_kernels = Vec::with_capacity(max_width - 1);
+                    for scale in 1..max_width {
+                        let s = scale as f32;
+                        let bound = (8.0_f32 * s) as i32;
+                        let const_val = 2.0_f32 / (3.0_f32.sqrt() * std::f32::consts::PI.powf(0.25));
+                        let norm = 1.0_f32 / s.sqrt();
+
+                        let kernel_len = (2 * bound + 1) as usize;
+                        let mut kernel = Vec::with_capacity(kernel_len);
+                        for n in -bound..=bound {
+                            let t_val = n as f32 * dt / s;
+                            let psi = const_val * (1.0_f32 - t_val * t_val) * (-t_val * t_val / 2.0_f32).exp();
+                            kernel.push(psi * norm);
+                        }
+                        kernel.reverse();
+                        state.cwt_kernels.push(kernel);
+                    }
+                }
+
+                let mut buffer: Vec<f32> = std::mem::take(&mut state.fft_in_buffer);
+                let mut cwt_coeffs = Vec::with_capacity(max_width - 1);
+
+                for scale in 1..max_width {
+                    let kernel = &state.cwt_kernels[scale - 1];
+                    let bound = (kernel.len() / 2) as i32;
+                    let kernel_len = kernel.len();
+
+                    buffer.clear();
+                    buffer.resize(values.len(), 0.0);
+
+                    for i in 0..values.len() {
+                        let mut sum = 0.0_f32;
+                        let start_data_idx = i as i32 - bound;
+
+                        let start_k = if start_data_idx < 0 { (-start_data_idx) as usize } else { 0 };
+                        let end_k = if start_data_idx + kernel_len as i32 > values.len() as i32 {
+                            (values.len() as i32 - start_data_idx) as usize
+                        } else {
+                            kernel_len
+                        };
+
+                        if start_k < end_k {
+                            let data_slice = &values[(start_data_idx + start_k as i32) as usize .. (start_data_idx + end_k as i32) as usize];
+                            let kernel_slice = &kernel[start_k..end_k];
+                            sum = data_slice.iter().zip(kernel_slice.iter()).map(|(d, k)| d * k).sum();
+                        }
+                        buffer[i] = sum;
+                    }
+                    cwt_coeffs.push(buffer.clone());
+                }
+                state.fft_in_buffer = buffer;
+
+                let mut energy_sum = 0.0_f32;
+                for conv in &cwt_coeffs {
+                    let scale_energy: f32 = conv.iter().map(|c| c * c).sum();
+                    let scale_sum_abs: f32 = conv.iter().map(|c| c.abs()).sum();
+
+                    cwt_energy.push((scale_energy / values.len() as f32).sqrt());
+                    energy_sum += scale_sum_abs;
+                }
+
+                if energy_sum > 0.0_f32 {
+                    for conv in &cwt_coeffs {
+                        let scale_sum_abs: f32 = conv.iter().map(|c| c.abs()).sum();
+                        let p = scale_sum_abs / energy_sum;
+                        if p > 0.0_f32 {
+                            cwt_entropy -= p * p.ln();
+                        }
+                    }
+                }
+            } else {
+                cwt_energy = vec![0.0_f32; max_width - 1];
+            }
+        }
+
         Ok(FftResult {
             fft_complex,
             spectrum,
@@ -126,6 +297,9 @@ impl FftProcessor {
             spectral_decrease,
             spectral_slope,
             fft_autocorr,
+            mfcc,
+            cwt_energy,
+            cwt_entropy,
         })
     }
 }

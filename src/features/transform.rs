@@ -34,6 +34,9 @@ pub fn eval_transform(
     let spectral_decrease = context.spectral_decrease;
     let spectral_slope = context.spectral_slope;
     let _fft_autocorr = context.fft_autocorr;
+    let mfcc = context.mfcc;
+    let cwt_energy = context.cwt_energy;
+    let cwt_entropy = context.cwt_entropy;
     let fft_complex = context.fft_complex;
     let spectrum = context.spectrum;
     let unique_c3_lags = context.unique_c3_lags;
@@ -132,7 +135,23 @@ pub fn eval_transform(
                         0.0
                     }
                 }
-        _ => return None,
+
+            Feature::Mfcc(idx) => {
+                if !mfcc.is_empty() && (*idx as usize) < mfcc.len() {
+                    mfcc[*idx as usize]
+                } else {
+                    0.0
+                }
+            }
+            Feature::WaveletEnergy(idx) => {
+                if !cwt_energy.is_empty() && (*idx as usize) < cwt_energy.len() {
+                    cwt_energy[*idx as usize]
+                } else {
+                    0.0
+                }
+            }
+            Feature::WaveletEntropy => cwt_entropy,
+            _ => return None,
     };
     Some(res)
 }
