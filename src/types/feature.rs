@@ -54,6 +54,7 @@ pub enum Feature {
     TimeReversalAsymmetry(u16),
     FftCoefficient(u16, FftAttr),
     ApproxEntropy(u8, u32), // r is encoded as u32 (fixed point or bitcast)
+    LinearTrend(AggAttr),
     AggLinearTrend(AggAttr, u16, AggFunc),
     Quantile(u32),          // q encoded as u32 bits
     IndexMassQuantile(u32), // q encoded as u32 bits
@@ -201,6 +202,7 @@ impl Feature {
             Self::TimeReversalAsymmetry(_) => C::TRA | C::NEEDS_SORT,
             Self::FftCoefficient(_, _) => C::FFT_COEFF | C::NEEDS_SORT,
             Self::ApproxEntropy(_, _) => C::APPROX_ENT | C::NEEDS_SORT,
+            Self::LinearTrend(_) => C::SUM | C::MEAN | C::SLOPE | C::VARIANCE | C::ENERGY,
             Self::AggLinearTrend(_, _, _) => C::AGG_LIN_TREND | C::NEEDS_SORT,
             Self::Quantile(_) => C::QUANTILE | C::NEEDS_SORT,
             Self::IndexMassQuantile(_) => C::ABS_SUM | C::IDX_MASS_Q | C::NEEDS_SORT,

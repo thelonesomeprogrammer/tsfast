@@ -165,6 +165,10 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let r: f32 = r_s.parse().ok()?;
         return Some(Feature::ApproxEntropy(m, r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("linear_trend-") {
+        let attr = parse_agg_attr(arg)?;
+        return Some(Feature::LinearTrend(attr));
+    }
     if let Some(arg) = s.strip_prefix("agg_linear_trend-") {
         let parts: Vec<&str> = arg.split('-').collect();
         if parts.len() != 3 {
@@ -251,6 +255,22 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         let pos = s.find("lag_")?;
         let n: u16 = s[pos + 4..].parse().ok()?;
         return Some(Feature::TimeReversalAsymmetry(n));
+    }
+    if s.contains("linear_trend__attr_") && !s.contains("agg_linear_trend__attr_") {
+        let attr = if s.contains("attr_\"slope\"") {
+            AggAttr::Slope
+        } else if s.contains("attr_\"intercept\"") {
+            AggAttr::Intercept
+        } else if s.contains("attr_\"stderr\"") {
+            AggAttr::Stderr
+        } else if s.contains("attr_\"rvalue\"") {
+            AggAttr::RValue
+        } else if s.contains("attr_\"pvalue\"") {
+            AggAttr::PValue
+        } else {
+            AggAttr::Slope
+        };
+        return Some(Feature::LinearTrend(attr));
     }
     if s.contains("agg_linear_trend__attr_") {
         let attr = if s.contains("attr_\"slope\"") {
@@ -446,6 +466,16 @@ impl Feature {
             Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
+            }
+            Feature::LinearTrend(attr) => {
+                let attr_str = match attr {
+                    AggAttr::Slope => "slope",
+                    AggAttr::Intercept => "intercept",
+                    AggAttr::Stderr => "stderr",
+                    AggAttr::RValue => "rvalue",
+                    AggAttr::PValue => "pvalue",
+                };
+                format!("linear_trend-{}", attr_str)
             }
             Feature::AggLinearTrend(attr, chunk_len, func) => {
                 let attr_str = match attr {

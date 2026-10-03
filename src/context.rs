@@ -51,6 +51,7 @@ pub struct FeatureContext<'a> {
 
     // Complexity Arrays (from engine)
     pub unique_c3_lags: &'a [u16],
+    pub unique_tra_lags: &'a [u16],
     pub unique_paa_totals: &'a [u16],
     pub paa_boundaries: &'a [Vec<usize>],
 }
@@ -68,6 +69,7 @@ impl<'a> FeatureContext<'a> {
         zc: crate::metrics::ZcMetrics,
         fft: &'a crate::metrics::FftResult,
         unique_c3_lags: &'a [u16],
+        unique_tra_lags: &'a [u16],
         unique_paa_totals: &'a [u16],
         paa_boundaries: &'a [Vec<usize>],
     ) -> Self {
@@ -109,6 +111,7 @@ impl<'a> FeatureContext<'a> {
             fft_complex: &fft.fft_complex,
             spectrum: &fft.spectrum,
             unique_c3_lags,
+            unique_tra_lags,
             unique_paa_totals,
             paa_boundaries,
             state,

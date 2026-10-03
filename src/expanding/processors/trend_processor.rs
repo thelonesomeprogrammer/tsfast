@@ -38,6 +38,7 @@ impl TrendProcessor {
         values: &[f32],
         unique_c3_lags: &[u16],
         unique_autocorr_lags: &[u16],
+        unique_tra_lags: &[u16],
     ) {
         if compute.contains(Compute::PEAKS) {
             if state.prev_val > state.prev_prev_val && state.prev_val > val {
@@ -62,6 +63,25 @@ impl TrendProcessor {
                         values[global_idx - 2 * l - global_start_idx]
                     };
                     state.c3_sums[l_idx] += val * v_l * v_2l;
+                }
+            }
+        }
+
+        if compute.contains(Compute::TRA) {
+            for (l_idx, &lag) in unique_tra_lags.iter().enumerate() {
+                let l = lag as usize;
+                if global_idx >= 2 * l {
+                    let v_l = if global_idx - l < global_start_idx {
+                        full_series[global_idx - l]
+                    } else {
+                        values[global_idx - l - global_start_idx]
+                    };
+                    let v_2l = if global_idx - 2 * l < global_start_idx {
+                        full_series[global_idx - 2 * l]
+                    } else {
+                        values[global_idx - 2 * l - global_start_idx]
+                    };
+                    state.tra_sums[l_idx] += v_2l * v_2l * v_l - v_l * val * val;
                 }
             }
         }
