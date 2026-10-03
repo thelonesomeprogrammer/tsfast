@@ -26,7 +26,8 @@ def full_30_features():
         "abs_sum_change", "count_above_mean", "count_below_mean",
         "longest_strike_above_mean", "longest_strike_below_mean",
         "abs_max", "first_loc_max", "last_loc_max", "first_loc_min", "last_loc_min",
-        "length", "variance_larger_than_standard_deviation", "percentage_of_reoccurring_datapoints_to_all_datapoints", "percentage_of_reoccurring_values_to_all_values", "ratio_value_number_to_time_series_length"
+        "length", "variance_larger_than_standard_deviation", "percentage_of_reoccurring_datapoints_to_all_datapoints", "percentage_of_reoccurring_values_to_all_values", "ratio_value_number_to_time_series_length",
+        "ratio_beyond_r_sigma-2.0", "index_mass_quantile-0.5", "c3-2"
     ]
 
 @pytest.fixture(scope="session")
