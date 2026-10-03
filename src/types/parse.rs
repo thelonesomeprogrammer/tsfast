@@ -91,6 +91,8 @@ impl std::str::FromStr for Feature {
                 return Ok(Feature::SpectralDecrease);
             }
             "spectral_slope" | "torque_Spectral slope" => return Ok(Feature::SpectralSlope),
+            "spectral_roll_on" | "torque_Spectral roll-on" => return Ok(Feature::SpectralRollOn),
+            "spectral_roll_off" | "torque_Spectral roll-off" => return Ok(Feature::SpectralRollOff),
             "signal_distance" | "torque_Signal distance" => return Ok(Feature::SignalDistance),
             "human_range_energy" | "torque_Human range energy" => {
                 return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
@@ -446,6 +448,8 @@ impl Feature {
             Feature::SpectralDistance => "spectral_distance".to_string(),
             Feature::SpectralDecrease => "spectral_decrease".to_string(),
             Feature::SpectralSlope => "spectral_slope".to_string(),
+            Feature::SpectralRollOn => "spectral_roll_on".to_string(),
+            Feature::SpectralRollOff => "spectral_roll_off".to_string(),
             Feature::SignalDistance => "signal_distance".to_string(),
             Feature::WaveletFeatures(w_bits, f) => {
                 format!("wavelet-{}-{}", f32::from_bits(*w_bits), f)
