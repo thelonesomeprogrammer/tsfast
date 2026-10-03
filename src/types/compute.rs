@@ -100,6 +100,8 @@ bitflags! {
         const CWT                  = 1 << 81;
         const WELCH                = 1 << 82;
         const SPEC_ENTROPY         = 1 << 83;
+        const MFCC                 = 1 << 84;
+        const CWT_MEXH             = 1 << 85;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()
@@ -108,6 +110,8 @@ bitflags! {
             | Self::SPEC_DISTANCE.bits()
             | Self::SPEC_DECREASE.bits()
             | Self::SPEC_SLOPE.bits()
+            | Self::SPECTROGRAM.bits()
+            | Self::MFCC.bits()
             | Self::SPEC_SPREAD.bits()
             | Self::SPEC_ENTROPY.bits()
             | Self::SPECTROGRAM.bits()

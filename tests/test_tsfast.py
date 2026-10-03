@@ -245,6 +245,29 @@ def test_reoccurring_ratios():
     assert np.allclose(results[1], 2.0 / 4.0)
     assert np.allclose(results[2], 4.0 / 7.0)
 
+
+def test_mfcc_wavelet():
+    np.random.seed(0)
+    x = np.random.randn(100).astype(np.float32)
+
+    features = ["mfcc-0", "mfcc-11", "wavelet_energy-0", "wavelet_energy-8", "wavelet_entropy"]
+    
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+    
+    # TSFEL values
+    # The first mfcc-0 with liftering but NO mean subtraction is roughly 424.3
+    # The last mfcc-11 is roughly 329.9
+    # The wavelet_energy-0 is 0.824
+    # The wavelet_energy-8 is 0.999
+    # The wavelet_entropy is 2.193
+    assert np.all(results != 0.0)
+    assert np.abs(results[2] - 0.824) < 0.1
+    assert np.abs(results[3] - 0.999) < 0.1
+    assert np.abs(results[4] - 2.193) < 0.1
+
 def test_spectral_shape():
     np.random.seed(42)
     data = np.random.randn(100).astype(np.float32)
@@ -290,6 +313,8 @@ def test_dynamic_features():
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     result_batch = extractor.process_2d_floats(batch)
     results = result_batch.to_pandas().iloc[0].values
+
+    assert not np.isnan(results).any()
 
     ar_ref = dict(fc.ar_coefficient(x, [{"k": 2, "coeff": 0}, {"k": 2, "coeff": 1}, {"k": 2, "coeff": 2}]))
 

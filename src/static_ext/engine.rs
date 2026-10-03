@@ -149,6 +149,9 @@ impl<'a> StaticEngine<'a> {
             spectral_skewness: 0.0,
             spectral_kurtosis: 0.0,
             fft_autocorr: Vec::new(),
+            mfcc: Vec::new(),
+            cwt_energy: Vec::new(),
+            cwt_entropy: 0.0,
             cwt_peaks: 0,
             welch_density: Vec::new(),
         });
