@@ -36,5 +36,10 @@ pub struct FftResult {
     pub freq_centroid: f32,
     pub spectral_decrease: f32,
     pub spectral_slope: f32,
+    pub spectral_roll_on: f32,
+    pub spectral_roll_off: f32,
+    pub spectral_spread: f32,
+    pub spectral_skewness: f32,
+    pub spectral_kurtosis: f32,
     pub fft_autocorr: Vec<f32>,
 }

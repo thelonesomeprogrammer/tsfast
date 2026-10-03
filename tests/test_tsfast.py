@@ -5,7 +5,7 @@ import pytest
 
 def test_extract():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
-    features = ["mean", "std", "energy", "min", "max", "autocorr_lag1", "length", "variance_larger_than_standard_deviation", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
+    features = ["mean", "std", "energy", "min", "max", "autocorr_lag1", "length", "variance_larger_than_standard_deviation", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05', "ratio_beyond_r_sigma-1.0", "index_mass_quantile-0.5", "c3-1"]
     
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
@@ -27,11 +27,37 @@ def test_extract():
     assert results[6] == 5.0 # length
     # var of [1,2,3,4,5] is 2.5. 2.5 > 1.0, so 1.0
     assert results[7] == 1.0 # variance_larger_than_standard_deviation
+
+    assert np.allclose(results[11], 0.4)
+    assert np.allclose(results[12], 0.8)
+    assert np.allclose(results[13], 30.0)
+
     print("test_extract passed!")
+
+def test_spectral_roll_on_off():
+    x = np.random.RandomState(42).randn(100).astype(np.float32)
+    features = ["spectral_roll_on", "spectral_roll_off", "spectral_slope"]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    import tsfel
+    fs = 100.0
+    ro = tsfel.feature_extraction.features.spectral_roll_on(x, fs)
+    rf = tsfel.feature_extraction.features.spectral_roll_off(x, fs)
+    ss = tsfel.feature_extraction.features.spectral_slope(x, fs)
+
+    assert np.allclose(results[0], ro)
+    assert np.allclose(results[1], rf)
+    assert np.allclose(results[2], ss)
+    print("test_spectral_roll_on_off passed!")
 
 def test_new_features():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)
-    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce"]
+    import tsfresh.feature_extraction.feature_calculators as fc
+    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce", "sample_entropy", "binned_entropy__max_bins_5"]
     
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
@@ -46,6 +72,8 @@ def test_new_features():
     assert np.allclose(results[3], 1.0)
     assert np.allclose(results[4], 1.0)
     assert np.allclose(results[5], np.sqrt(5.0))
+    assert np.allclose(results[6], fc.sample_entropy(x), equal_nan=True)
+    assert np.allclose(results[7], fc.binned_entropy(x, 5), equal_nan=True)
     print("test_new_features passed!")
 
 def test_paa():
