@@ -5,7 +5,7 @@ import pytest
 
 def test_extract():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
-    features = ["mean", "std", "energy", "min", "max", "autocorr_lag1", "length", "variance_larger_than_standard_deviation", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
+    features = ["mean", "std", "energy", "min", "max", "autocorr_lag1", "length", "variance_larger_than_standard_deviation", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05', "ratio_beyond_r_sigma-1.0", "index_mass_quantile-0.5", "c3-1"]
     
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
@@ -27,11 +27,37 @@ def test_extract():
     assert results[6] == 5.0 # length
     # var of [1,2,3,4,5] is 2.5. 2.5 > 1.0, so 1.0
     assert results[7] == 1.0 # variance_larger_than_standard_deviation
+
+    assert np.allclose(results[11], 0.4)
+    assert np.allclose(results[12], 0.8)
+    assert np.allclose(results[13], 30.0)
+
     print("test_extract passed!")
+
+def test_spectral_roll_on_off():
+    x = np.random.RandomState(42).randn(100).astype(np.float32)
+    features = ["spectral_roll_on", "spectral_roll_off", "spectral_slope"]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    import tsfel
+    fs = 100.0
+    ro = tsfel.feature_extraction.features.spectral_roll_on(x, fs)
+    rf = tsfel.feature_extraction.features.spectral_roll_off(x, fs)
+    ss = tsfel.feature_extraction.features.spectral_slope(x, fs)
+
+    assert np.allclose(results[0], ro)
+    assert np.allclose(results[1], rf)
+    assert np.allclose(results[2], ss)
+    print("test_spectral_roll_on_off passed!")
 
 def test_new_features():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)
-    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce"]
+    import tsfresh.feature_extraction.feature_calculators as fc
+    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce", "sample_entropy", "binned_entropy__max_bins_5"]
     
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
@@ -46,6 +72,8 @@ def test_new_features():
     assert np.allclose(results[3], 1.0)
     assert np.allclose(results[4], 1.0)
     assert np.allclose(results[5], np.sqrt(5.0))
+    assert np.allclose(results[6], fc.sample_entropy(x), equal_nan=True)
+    assert np.allclose(results[7], fc.binned_entropy(x, 5), equal_nan=True)
     print("test_new_features passed!")
 
 def test_paa():
@@ -240,3 +268,50 @@ def test_spectral_shape():
     assert result_rust.column("spectral_centroid")[0].as_py() * freq_resolution == pytest.approx(tsfel_centroid, rel=1e-5)
     assert result_rust.column("spectral_spread")[0].as_py() * freq_resolution == pytest.approx(tsfel_spread, rel=1e-5)
     assert result_rust.column("spectral_entropy")[0].as_py() == pytest.approx(tsfel_entropy, rel=1e-5)
+
+def test_dynamic_features():
+    from tsfresh.feature_extraction import feature_calculators as fc
+    np.random.seed(42)
+    # We need a large array so tsfresh's pd.qcut doesn't fail with duplicate bin edges
+    x = np.cumsum(np.random.randn(5000)).astype(np.float32)
+
+    features = [
+        "ar_coefficient-2-0",
+        "ar_coefficient-2-1",
+        "ar_coefficient-2-2",
+        "friedrich_coefficients-3-30-0",
+        "friedrich_coefficients-3-30-1",
+        "friedrich_coefficients-3-30-2",
+        "friedrich_coefficients-3-30-3",
+        "max_langevin_fixed_point-3-30"
+    ]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    ar_ref = dict(fc.ar_coefficient(x, [{"k": 2, "coeff": 0}, {"k": 2, "coeff": 1}, {"k": 2, "coeff": 2}]))
+
+    friedrich_ref = dict(fc.friedrich_coefficients(x, [
+        {"m": 3, "r": 30, "coeff": 0},
+        {"m": 3, "r": 30, "coeff": 1},
+        {"m": 3, "r": 30, "coeff": 2},
+        {"m": 3, "r": 30, "coeff": 3}
+    ]))
+
+    mlfp_ref = fc.max_langevin_fixed_point(x, m=3, r=30)
+
+    # Check AR
+    assert np.allclose(results[0], ar_ref["coeff_0__k_2"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[1], ar_ref["coeff_1__k_2"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[2], ar_ref["coeff_2__k_2"], equal_nan=True, rtol=1e-1, atol=1e-2)
+
+    # Check Friedrich (tsfresh polyfit outputs descending order [x^m, x^m-1, ...], we should match)
+    assert np.allclose(results[3], friedrich_ref["coeff_0__m_3__r_30"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[4], friedrich_ref["coeff_1__m_3__r_30"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[5], friedrich_ref["coeff_2__m_3__r_30"], equal_nan=True, rtol=1e-1, atol=1e-2)
+    assert np.allclose(results[6], friedrich_ref["coeff_3__m_3__r_30"], equal_nan=True, rtol=1e-1, atol=1e-2)
+
+    # Check Max Langevin
+    assert np.allclose(results[7], mlfp_ref, equal_nan=True, rtol=1e-1, atol=1e-2)

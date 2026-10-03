@@ -10,3 +10,8 @@
 **Vulnerability:** Calling `.expect()` or `.unwrap()` when downcasting user-provided data types across the PyO3 FFI boundary (like PyArrow Float64 to Float32) causes a hard panic. This terminates the host Python interpreter ungracefully, leading to a critical Denial of Service vulnerability on servers accepting user data.
 **Learning:** Rust panics cannot be cleanly caught by Python unless explicitly converted into standard `PyResult` types mapped to Python Exceptions.
 **Prevention:** Never use `.unwrap()` or `.expect()` on dynamically-typed external FFI inputs like DataFrames/RecordBatches. Always map errors (`.ok_or_else()`) into `PyTypeError` or `PyValueError` to return a `Result` type up the call stack to Python.
+
+## 2024-05-25 - Denial of Service via Out Of Bounds Read in PAA Feature
+**Vulnerability:** The `Feature::Paa(total, index)` parser failed to validate that `index < total`. Passing parameters like `paa-2-2` caused an out of bounds read on the `paa_boundaries` cache (which is sized `total + 1`). Because array accesses (`b[*index as usize + 1]`) lacked bounds checking and safety limits, this caused a Rust panic across the PyO3 boundary, crashing the host Python interpreter ungracefully (DoS).
+**Learning:** Always validate indices supplied in string-parsed arguments against their expected maximum sizes immediately at the parsing layer, preventing invalid structures from entering the processing engine.
+**Prevention:** In `src/types/parse.rs`, add bounds validation (`if index >= total { return None; }`) during parsing so that invalid inputs correctly map to a Python `ValueError("Unknown feature")` rather than panicking later.
