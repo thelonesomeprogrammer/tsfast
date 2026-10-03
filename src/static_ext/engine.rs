@@ -16,6 +16,7 @@ pub(crate) struct StaticEngine<'a> {
     pub(crate) features: &'a [Feature],
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
+    pub(crate) unique_tra_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
     pub(crate) fft_size: usize,
@@ -30,7 +31,7 @@ impl<'a> StaticEngine<'a> {
         }
 
         let mut state =
-            ColumnState::new(self.unique_paa_totals, self.unique_c3_lags, &[], values[0]);
+            ColumnState::new(self.unique_paa_totals, self.unique_c3_lags, &[], self.unique_tra_lags, values[0]);
 
         let rem_start = self.process_simd_chunks(values, &mut state);
         self.process_remainder(values, rem_start, &mut state);
@@ -152,6 +153,7 @@ impl<'a> StaticEngine<'a> {
             zc_metrics,
             &fft_res,
             self.unique_c3_lags,
+            self.unique_tra_lags,
             self.unique_paa_totals,
             self.paa_boundaries,
         );

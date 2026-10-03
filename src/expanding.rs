@@ -20,6 +20,7 @@ pub struct ExpandingExtractor {
     pub unique_paa_totals: Vec<u16>,
     pub unique_c3_lags: Vec<u16>,
     pub unique_autocorr_lags: Vec<u16>,
+    pub unique_tra_lags: Vec<u16>,
     pub paa_boundaries: Vec<Vec<usize>>,
     // State per column
     pub states: Vec<ColumnState>,
@@ -44,6 +45,7 @@ impl ExpandingExtractor {
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
         let mut unique_autocorr_lags = std::collections::BTreeSet::new();
+        let mut unique_tra_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
             let feat = std::str::FromStr::from_str(&i)
@@ -64,6 +66,9 @@ impl ExpandingExtractor {
                         unique_autocorr_lags.insert(l);
                     }
                 }
+                Feature::TimeReversalAsymmetry(lag) => {
+                    unique_tra_lags.insert(lag);
+                }
                 _ => {}
             }
             features.push(feat);
@@ -72,6 +77,7 @@ impl ExpandingExtractor {
         let unique_paa_totals: Vec<u16> = unique_paa_totals.into_iter().collect();
         let unique_c3_lags: Vec<u16> = unique_c3_lags.into_iter().collect();
         let unique_autocorr_lags: Vec<u16> = unique_autocorr_lags.into_iter().collect();
+        let unique_tra_lags: Vec<u16> = unique_tra_lags.into_iter().collect();
 
         let planned_size = max_size.map(next_good_fft_size);
         let planner = RealFftPlanner::<f32>::new();
@@ -90,6 +96,7 @@ impl ExpandingExtractor {
             unique_paa_totals: unique_paa_totals.clone(),
             unique_c3_lags: unique_c3_lags.clone(),
             unique_autocorr_lags: unique_autocorr_lags.clone(),
+            unique_tra_lags: unique_tra_lags.clone(),
             paa_boundaries: Vec::new(),
             states: (0..n_cols)
                 .map(|_| {
@@ -97,6 +104,7 @@ impl ExpandingExtractor {
                         &unique_paa_totals,
                         &unique_c3_lags,
                         &unique_autocorr_lags,
+                        &unique_tra_lags,
                         0.0,
                     )
                 })
@@ -127,6 +135,7 @@ impl ExpandingExtractor {
                     &self.unique_paa_totals,
                     &self.unique_c3_lags,
                     &self.unique_autocorr_lags,
+                    &self.unique_tra_lags,
                     0.0,
                 ));
                 self.histories.push(Vec::new());
@@ -182,6 +191,7 @@ impl ExpandingExtractor {
                         &self.unique_paa_totals,
                         &self.unique_c3_lags,
                         &self.unique_autocorr_lags,
+                        &self.unique_tra_lags,
                         values[0],
                     );
                 }
@@ -192,6 +202,7 @@ impl ExpandingExtractor {
                     unique_paa_totals: &self.unique_paa_totals,
                     unique_c3_lags: &self.unique_c3_lags,
                     unique_autocorr_lags: &self.unique_autocorr_lags,
+                    unique_tra_lags: &self.unique_tra_lags,
                     paa_boundaries: &current_paa_boundaries,
                     r2c: r2c.as_ref().cloned(),
                     fft_size,

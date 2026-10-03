@@ -15,24 +15,24 @@ TSFast is a high-performance time-series feature extraction library written in R
 ![Benchmark Trends](.jules/benchmark_trends.png)
 
 ## Latest Results
-| Date                | CommitHash   | Benchmark_Name                       |   Metric_Value | Unit   |   Delta_From_Last | Direction   |
-|:--------------------|:-------------|:-------------------------------------|---------------:|:-------|------------------:|:------------|
-| 2026-10-03 14:02:30 | c224b58      | tsfast_sliding_first_window          |       1.61147  | ms     |            -70.96 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfast_sliding_avg_next_50           |       0.440021 | ms     |            -66.11 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfast_expanding_first_window        |       0.312805 | ms     |            -11.65 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfast_expanding_avg_next_50         |       0.984726 | ms     |            -60.97 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfast_static_sliding_first_window   |       0.55933  | ms     |             11.18 | 🔴          |
-| 2026-10-03 14:02:30 | c224b58      | tsfast_static_sliding_avg_next_50    |       0.402722 | ms     |            -69.97 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfast_static_expanding_first_window |       0.389338 | ms     |            -68.81 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfast_static_expanding_avg_next_50  |       1.80089  | ms     |            -52.46 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfresh_sliding_first_window         |      61.2752   | ms     |             -5.62 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfresh_sliding_avg_next_50          |      55.4476   | ms     |             -5.1  | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfresh_expanding_first_window       |      54.6131   | ms     |             -6.41 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfresh_expanding_avg_next_50        |     271.194    | ms     |             -7.09 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfel_sliding_first_window           |      83.693    | ms     |            -19.01 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfel_sliding_avg_next_50            |      81.613    | ms     |             -8.99 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfel_expanding_first_window         |      81.573    | ms     |            -11.68 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfel_expanding_avg_next_50          |      94.1946   | ms     |             -8.29 | 🟢          |
-| 2026-10-03 14:02:30 | c224b58      | tsfast_compatible_features           |      46        | count  |              0    | ⚪          |
-| 2026-10-03 14:02:30 | c224b58      | tsfresh_compatible_features          |      40        | count  |              0    | ⚪          |
-| 2026-10-03 14:02:30 | c224b58      | tsfel_compatible_features            |      17        | count  |              0    | ⚪          |
+| Date                |   CommitHash | Benchmark_Name                       |   Metric_Value | Unit   |   Delta_From_Last | Direction   |
+|:--------------------|-------------:|:-------------------------------------|---------------:|:-------|------------------:|:------------|
+| 2026-10-03 19:50:13 |      7848612 | tsfast_sliding_first_window          |       15.6658  | ms     |            -39.52 | 🟢          |
+| 2026-10-03 19:50:13 |      7848612 | tsfast_sliding_avg_next_50           |        9.07289 | ms     |             28.11 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfast_expanding_first_window        |        4.13704 | ms     |             38.72 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfast_expanding_avg_next_50         |       15.2012  | ms     |             16.69 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfast_static_sliding_first_window   |        7.57575 | ms     |             37.19 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfast_static_sliding_avg_next_50    |        6.14693 | ms     |             14.23 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfast_static_expanding_first_window |        7.37262 | ms     |             40.58 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfast_static_expanding_avg_next_50  |       69.3775  | ms     |             48.33 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfresh_sliding_first_window         |      261.893   | ms     |            103.95 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfresh_sliding_avg_next_50          |      124.532   | ms     |              5.26 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfresh_expanding_first_window       |      118.016   | ms     |              0.65 | ⚪          |
+| 2026-10-03 19:50:13 |      7848612 | tsfresh_expanding_avg_next_50        |      495.838   | ms     |             -0.11 | ⚪          |
+| 2026-10-03 19:50:13 |      7848612 | tsfel_sliding_first_window           |      211.906   | ms     |              0.49 | ⚪          |
+| 2026-10-03 19:50:13 |      7848612 | tsfel_sliding_avg_next_50            |      230.422   | ms     |             10.55 | 🔴          |
+| 2026-10-03 19:50:13 |      7848612 | tsfel_expanding_first_window         |      213.06    | ms     |              2.72 | ⚪          |
+| 2026-10-03 19:50:13 |      7848612 | tsfel_expanding_avg_next_50          |      250.69    | ms     |              4.3  | ⚪          |
+| 2026-10-03 19:50:13 |      7848612 | tsfast_compatible_features           |       46       | count  |              0    | ⚪          |
+| 2026-10-03 19:50:13 |      7848612 | tsfresh_compatible_features          |       40       | count  |              0    | ⚪          |
+| 2026-10-03 19:50:13 |      7848612 | tsfel_compatible_features            |       17       | count  |              0    | ⚪          |

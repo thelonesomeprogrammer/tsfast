@@ -18,6 +18,7 @@ pub(crate) struct ExpandingEngine<'a> {
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
     pub(crate) unique_autocorr_lags: &'a [u16],
+    pub(crate) unique_tra_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
     pub(crate) fft_size: usize,
@@ -111,6 +112,7 @@ impl<'a> ExpandingEngine<'a> {
                 values,
                 self.unique_c3_lags,
                 self.unique_autocorr_lags,
+                self.unique_tra_lags,
             );
         }
         rem_start
@@ -150,6 +152,7 @@ impl<'a> ExpandingEngine<'a> {
                 values,
                 self.unique_c3_lags,
                 self.unique_autocorr_lags,
+                self.unique_tra_lags,
             );
 
             state.prev_last = val;
@@ -215,6 +218,7 @@ impl<'a> ExpandingEngine<'a> {
             zc_metrics,
             &fft_res,
             &self.unique_c3_lags,
+            &self.unique_tra_lags,
             &self.unique_paa_totals,
             &self.paa_boundaries,
         );

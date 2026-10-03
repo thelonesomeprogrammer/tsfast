@@ -83,6 +83,8 @@ pub struct ColumnState {
     pub c3_sums: Vec<f32>,
     pub c3_sums_vec: Vec<f32x4>,
     pub autocorr_sums: Vec<f32>,
+    pub tra_sums: Vec<f32>,
+    pub tra_sums_vec: Vec<f32x4>,
     pub prefix_sums: Vec<f32>,
     pub prev_last: f32,
     pub prev_val: f32,
@@ -156,6 +158,7 @@ impl ColumnState {
         unique_paa_totals: &[u16],
         unique_c3_lags: &[u16],
         unique_autocorr_lags: &[u16],
+        unique_tra_lags: &[u16],
         first_val: f32,
     ) -> Self {
         Self {
@@ -196,6 +199,8 @@ impl ColumnState {
             c3_sums: vec![0.0; unique_c3_lags.len()],
             c3_sums_vec: vec![f32x4::splat(0.0); unique_c3_lags.len()],
             autocorr_sums: vec![0.0; unique_autocorr_lags.len()],
+            tra_sums: vec![0.0; unique_tra_lags.len()],
+            tra_sums_vec: vec![f32x4::splat(0.0); unique_tra_lags.len()],
             prefix_sums: Vec::new(),
             prev_last: first_val,
             prev_val: first_val,

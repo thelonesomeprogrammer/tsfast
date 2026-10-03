@@ -17,6 +17,9 @@ impl ComplexityProcessor {
         for s in &mut state.c3_sums {
             *s = 0.0;
         }
+        for s in &mut state.tra_sums {
+            *s = 0.0;
+        }
     }
 
     #[inline(always)]
@@ -28,6 +31,7 @@ impl ComplexityProcessor {
         unique_paa_totals: &[u16],
         paa_boundaries: &[Vec<usize>],
         unique_c3_lags: &[u16],
+        unique_tra_lags: &[u16],
         state: &mut ColumnState,
     ) {
         if compute.contains(Compute::PAA) {
@@ -45,6 +49,25 @@ impl ComplexityProcessor {
                             *seg_idx += 1;
                         }
                         state.paa_sums[t_idx][*seg_idx] += v;
+                    }
+                }
+            }
+        }
+
+        if compute.contains(Compute::TRA) {
+            for (l_idx, &lag) in unique_tra_lags.iter().enumerate() {
+                let l = lag as usize;
+                if global_idx >= 2 * l {
+                    let chunk_il = f32x4::from_slice(&values[global_idx - l..global_idx - l + 4]);
+                    let chunk_i2l = f32x4::from_slice(&values[global_idx - 2 * l..global_idx - 2 * l + 4]);
+                    state.tra_sums_vec[l_idx] += chunk_i2l * chunk_i2l * chunk_il - chunk_il * chunk * chunk;
+                } else {
+                    for j in 0..LANES {
+                        let idx = global_idx + j;
+                        if idx >= 2 * l {
+                            state.tra_sums[l_idx] += values[idx - 2 * l] * values[idx - 2 * l] * values[idx - l]
+                                - values[idx - l] * values[idx] * values[idx];
+                        }
                     }
                 }
             }
@@ -80,6 +103,12 @@ impl ComplexityProcessor {
                 state.c3_sums_vec[l_idx] = f32x4::splat(0.0);
             }
         }
+        if compute.contains(Compute::TRA) {
+            for l_idx in 0..state.tra_sums.len() {
+                state.tra_sums[l_idx] += state.tra_sums_vec[l_idx].reduce_sum();
+                state.tra_sums_vec[l_idx] = f32x4::splat(0.0);
+            }
+        }
     }
 
     #[inline(always)]
@@ -91,6 +120,7 @@ impl ComplexityProcessor {
         unique_paa_totals: &[u16],
         paa_boundaries: &[Vec<usize>],
         unique_c3_lags: &[u16],
+        unique_tra_lags: &[u16],
         state: &mut ColumnState,
     ) {
         if compute.contains(Compute::PAA) {
@@ -109,6 +139,16 @@ impl ComplexityProcessor {
                 let l = lag as usize;
                 if global_idx >= 2 * l {
                     state.c3_sums[l_idx] += val * values[global_idx - l] * values[global_idx - 2 * l];
+                }
+            }
+        }
+
+        if compute.contains(Compute::TRA) {
+            for (l_idx, &lag) in unique_tra_lags.iter().enumerate() {
+                let l = lag as usize;
+                if global_idx >= 2 * l {
+                    state.tra_sums[l_idx] += values[global_idx - 2 * l] * values[global_idx - 2 * l] * values[global_idx - l]
+                        - values[global_idx - l] * val * val;
                 }
             }
         }
