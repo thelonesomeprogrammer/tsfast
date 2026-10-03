@@ -83,7 +83,11 @@ pub struct ColumnState {
     pub c3_sums: Vec<f32>,
     pub c3_sums_vec: Vec<f32x4>,
     pub autocorr_sums: Vec<f32>,
+    pub tra_sums: Vec<f32>,
+    pub tra_sums_vec: Vec<f32x4>,
     pub prefix_sums: Vec<f32>,
+    pub mass_pointer: usize,
+    pub mass_cum_sum: f64,
     pub prev_last: f32,
     pub prev_val: f32,
     pub prev_prev_val: f32,
@@ -103,6 +107,7 @@ pub struct ColumnState {
     pub max_q_tail: usize,
     pub max_q_len: usize,
     pub approx_entropy_buffer: Vec<usize>,
+    pub binned_entropy_buffer: Vec<f32>,
     pub agg_linear_trend_buffer: Vec<f32>,
     pub sort_buffer: Vec<f32>,
     pub pacf_buffer: Vec<f32>,
@@ -115,6 +120,14 @@ pub struct ColumnState {
     pub value_counts: rustc_hash::FxHashMap<u32, u32>,
     pub reoccurring_datapoints: u32,
     pub reoccurring_values: u32,
+    pub ar_coeffs: rustc_hash::FxHashMap<u16, Vec<f32>>,
+    pub ar_xtx: rustc_hash::FxHashMap<u16, ndarray::Array2<f64>>,
+    pub ar_xty: rustc_hash::FxHashMap<u16, ndarray::Array1<f64>>,
+    pub friedrich_coeffs: rustc_hash::FxHashMap<(u8, u32), Vec<f32>>,
+    pub max_langevin_fixed_point_cache: rustc_hash::FxHashMap<(u8, u32), f32>,
+    pub last_dynamic_n: usize,
+    pub last_dynamic_ptr: usize,
+    pub dynamic_val_cache: Vec<f32>,
 
     // Incremental moments (Welford's or similar)
     pub n: f32,
@@ -127,7 +140,13 @@ pub struct ColumnState {
     pub last_fft_complex: Vec<num_complex::Complex<f32>>,
     pub fft_in_buffer: Vec<f32>,
     pub fft_out_buffer: Vec<num_complex::Complex<f32>>,
+    pub fft_inv_buffer: Vec<f32>,
     pub sliding_dft: Option<SlidingDFT>,
+    pub cwt_peaks: u16,
+    pub welch_density: Vec<f32>,
+    pub welch_planner: Option<std::sync::Arc<std::sync::Mutex<realfft::RealFftPlanner<f32>>>>,
+    pub cwt_wavelets: rustc_hash::FxHashMap<u16, Vec<f32>>,
+    pub spectrum_buffer: Vec<f32>,
 }
 
 pub fn next_good_fft_size(n: usize) -> usize {
@@ -162,6 +181,7 @@ impl ColumnState {
         unique_paa_totals: &[u16],
         unique_c3_lags: &[u16],
         unique_autocorr_lags: &[u16],
+        unique_tra_lags: &[u16],
         first_val: f32,
     ) -> Self {
         Self {
@@ -202,7 +222,11 @@ impl ColumnState {
             c3_sums: vec![0.0; unique_c3_lags.len()],
             c3_sums_vec: vec![f32x4::splat(0.0); unique_c3_lags.len()],
             autocorr_sums: vec![0.0; unique_autocorr_lags.len()],
+            tra_sums: vec![0.0; unique_tra_lags.len()],
+            tra_sums_vec: vec![f32x4::splat(0.0); unique_tra_lags.len()],
             prefix_sums: Vec::new(),
+            mass_pointer: 0,
+            mass_cum_sum: 0.0,
             prev_last: first_val,
             prev_val: first_val,
             prev_prev_val: first_val,
@@ -222,6 +246,7 @@ impl ColumnState {
             max_q_tail: 0,
             max_q_len: 0,
             approx_entropy_buffer: Vec::new(),
+            binned_entropy_buffer: Vec::new(),
             agg_linear_trend_buffer: Vec::new(),
             sort_buffer: Vec::new(),
             pacf_buffer: Vec::new(),
@@ -234,6 +259,14 @@ impl ColumnState {
             value_counts: rustc_hash::FxHashMap::default(),
             reoccurring_datapoints: 0,
             reoccurring_values: 0,
+            ar_coeffs: rustc_hash::FxHashMap::default(),
+            ar_xtx: rustc_hash::FxHashMap::default(),
+            ar_xty: rustc_hash::FxHashMap::default(),
+            friedrich_coeffs: rustc_hash::FxHashMap::default(),
+            max_langevin_fixed_point_cache: rustc_hash::FxHashMap::default(),
+            last_dynamic_n: 0,
+            last_dynamic_ptr: 0,
+            dynamic_val_cache: Vec::new(),
             n: 0.0,
             mean: 0.0,
             m2: 0.0,
@@ -244,7 +277,13 @@ impl ColumnState {
             last_fft_complex: Vec::new(),
             fft_in_buffer: Vec::new(),
             fft_out_buffer: Vec::new(),
+            fft_inv_buffer: Vec::new(),
             sliding_dft: None,
+            cwt_peaks: 0,
+            welch_density: Vec::new(),
+            welch_planner: None,
+            cwt_wavelets: rustc_hash::FxHashMap::default(),
+            spectrum_buffer: Vec::new(),
         }
     }
 }
@@ -257,34 +296,111 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> Compute {
         .fold(Compute::empty(), |acc, f| acc | f.required_compute())
 }
 
-pub fn approx_entropy_phi(m: usize, r: f32, data: &[f32], sorted_idx: &mut Vec<usize>) -> f32 {
+use std::simd::cmp::SimdPartialOrd;
+use std::simd::num::SimdFloat;
+
+pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
     let n = data.len();
+    if n <= 2 {
+        return f32::NAN;
+    }
+    let m = 2;
+    let r = 0.2 * std_dev;
+    let r_vec = f32x4::splat(r);
+
+    let mut b_count = 0;
+    let mut a_count = 0;
+    let end_m = n - m; // Number of templates of length m+1 is end_m.
+
+    // We only need to check i < j and then multiply by 2 because distance is symmetric!
+    for i in 0..end_m {
+        // We broadcast data[i..i+m+1]
+        let v_i0 = f32x4::splat(data[i]);
+        let v_i1 = f32x4::splat(data[i + 1]);
+        let v_i2 = f32x4::splat(data[i + 2]);
+
+        let mut j = i + 1; // only check j > i
+        while j + 4 <= end_m {
+            let v_j0 = f32x4::from_slice(&data[j..j + 4]);
+            let v_j1 = f32x4::from_slice(&data[j + 1..j + 5]);
+            let v_j2 = f32x4::from_slice(&data[j + 2..j + 6]);
+
+            let diff0 = (v_j0 - v_i0).abs();
+            let diff1 = (v_j1 - v_i1).abs();
+            let max_m = diff0.simd_max(diff1);
+            let mask_m = max_m.simd_le(r_vec);
+            b_count += mask_m.to_bitmask().count_ones();
+
+            let diff2 = (v_j2 - v_i2).abs();
+            let max_mp1 = max_m.simd_max(diff2);
+            let mask_mp1 = max_mp1.simd_le(r_vec);
+            a_count += mask_mp1.to_bitmask().count_ones();
+
+            j += 4;
+        }
+        // Remainder
+        for j_rem in j..end_m {
+            let max_m = (data[j_rem] - data[i])
+                .abs()
+                .max((data[j_rem + 1] - data[i + 1]).abs());
+            if max_m <= r {
+                b_count += 1;
+                let max_mp1 = max_m.max((data[j_rem + 2] - data[i + 2]).abs());
+                if max_mp1 <= r {
+                    a_count += 1;
+                }
+            }
+        }
+    }
+
+    // TSFresh counts both (i, j) and (j, i) but excludes i == j.
+    b_count *= 2;
+    a_count *= 2;
+
+    if b_count == 0 || a_count == 0 {
+        return f32::NAN;
+    }
+
+    -(a_count as f32 / b_count as f32).ln()
+}
+
+pub fn approx_entropy_simd(m: usize, r: f32, data: &[f32]) -> f32 {
+    let n = data.len();
+    if n <= m {
+        return 0.0;
+    }
+    let r_vec = f32x4::splat(r);
+
     let mut result = 0.0;
-
-    sorted_idx.clear();
-    sorted_idx.extend(0..n - m + 1);
-    sorted_idx.sort_unstable_by(|&a, &b| {
-        data[a]
-            .partial_cmp(&data[b])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    for i in 0..n - m + 1 {
+    let end = n - m + 1;
+    for i in 0..end {
         let mut count = 0;
-        let target = data[i];
-        let start_pos = sorted_idx.partition_point(|&idx| data[idx] < target - r);
-        let end_pos = sorted_idx.partition_point(|&idx| data[idx] <= target + r);
 
-        for &j in &sorted_idx[start_pos..end_pos] {
-            let mut max_diff: f32 = 0.0;
+        let mut j = 0;
+        while j + 4 <= end {
+            let mut max_diff = f32x4::splat(0.0);
             for k in 0..m {
-                max_diff = max_diff.max((data[i + k] - data[j + k]).abs());
+                let v_i = f32x4::splat(data[i + k]);
+                let v_j = f32x4::from_slice(&data[j + k..j + k + 4]);
+                let diff = (v_j - v_i).abs();
+                max_diff = max_diff.simd_max(diff);
+            }
+            let mask = max_diff.simd_le(r_vec);
+            count += mask.to_bitmask().count_ones();
+            j += 4;
+        }
+        for j_rem in j..end {
+            let mut max_diff = 0.0_f32;
+            for k in 0..m {
+                max_diff = max_diff.max((data[j_rem + k] - data[i + k]).abs());
             }
             if max_diff <= r {
                 count += 1;
             }
         }
-        result += (count as f32 / (n - m + 1) as f32).ln();
+
+        result += (count as f32 / end as f32).ln();
     }
-    result / (n - m + 1) as f32
+
+    result / end as f32
 }
