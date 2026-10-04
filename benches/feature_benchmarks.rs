@@ -57,6 +57,7 @@ const FEATURES: &[&str] = &[
     "c3-1",
     "paa-2-0",
     "autocorr-1",
+    "agg_autocorrelation-mean-50",
     "partial_autocorr-1",
     "time_reversal_asymmetry-1",
     "fft_coeff-1-real",
@@ -66,6 +67,7 @@ const FEATURES: &[&str] = &[
     "approx_entropy-2-0.7",
     "agg_linear_trend-slope-50-mean",
     "quantile-0.5",
+    "change_quantiles-0.2-0.8-True-mean",
     "index_mass_quantile-0.5",
     "mean_n_absolute_max-5",
 ];

@@ -157,6 +157,15 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("autocorr-") {
         return Some(Feature::Autocorr(arg.parse().ok()?));
     }
+    if let Some(arg) = s.strip_prefix("agg_autocorrelation-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+        let func = parse_agg_func(parts[0])?;
+        let maxlag: u16 = parts[1].parse().ok()?;
+        return Some(Feature::AggAutocorrelation(func, maxlag));
+    }
     if let Some(arg) = s.strip_prefix("partial_autocorr-") {
         return Some(Feature::PartialAutocorr(arg.parse().ok()?));
     }
@@ -321,6 +330,16 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
             AggFunc::Mean
         };
         return Some(Feature::AggLinearTrend(attr, chunk_len, func));
+    }
+    if s.starts_with("change_quantiles-") {
+        let parts: Vec<&str> = s.split('-').collect();
+        if parts.len() == 5 {
+            let ql = parts[1].parse::<f32>().unwrap_or(0.0).to_bits();
+            let qh = parts[2].parse::<f32>().unwrap_or(1.0).to_bits();
+            let isabs = parts[3].to_lowercase() == "true";
+            let func = parse_agg_func(parts[4]).unwrap_or(AggFunc::Mean);
+            return Some(Feature::ChangeQuantiles(ql, qh, isabs, func));
+        }
     }
     if s.contains("value__quantile__q_") {
         let pos = s.find("q_")?;
@@ -501,6 +520,15 @@ impl Feature {
             Feature::FirstLocMin => "first_loc_min".to_string(),
             Feature::LastLocMin => "last_loc_min".to_string(),
             Feature::Autocorr(lag) => format!("autocorr-{}", lag),
+            Feature::AggAutocorrelation(func, maxlag) => {
+                let func_str = match func {
+                    AggFunc::Max => "max",
+                    AggFunc::Min => "min",
+                    AggFunc::Mean => "mean",
+                    AggFunc::Var => "var",
+                };
+                format!("agg_autocorrelation-{}-{}", func_str, maxlag)
+            }
             Feature::PartialAutocorr(lag) => format!("partial_autocorr-{}", lag),
             Feature::TimeReversalAsymmetry(lag) => format!("time_reversal_asymmetry-{}", lag),
             Feature::FftCoefficient(coeff, attr) => {
@@ -542,6 +570,21 @@ impl Feature {
                     AggFunc::Var => "var",
                 };
                 format!("agg_linear_trend-{}-{}-{}", attr_str, chunk_len, func_str)
+            }
+            Feature::ChangeQuantiles(ql_bits, qh_bits, isabs, func) => {
+                let func_str = match func {
+                    AggFunc::Max => "max",
+                    AggFunc::Min => "min",
+                    AggFunc::Mean => "mean",
+                    AggFunc::Var => "var",
+                };
+                format!(
+                    "change_quantiles-{}-{}-{}-{}",
+                    f32::from_bits(*ql_bits),
+                    f32::from_bits(*qh_bits),
+                    if *isabs { "True" } else { "False" },
+                    func_str
+                )
             }
             Feature::Quantile(q_bits) => format!("quantile-{}", f32::from_bits(*q_bits)),
             Feature::IndexMassQuantile(q_bits) => {
