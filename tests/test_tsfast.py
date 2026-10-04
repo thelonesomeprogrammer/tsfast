@@ -340,3 +340,33 @@ def test_dynamic_features():
 
     # Check Max Langevin
     assert np.allclose(results[7], mlfp_ref, equal_nan=True, rtol=1e-1, atol=1e-2)
+
+def test_change_quantiles():
+    from tsfresh.feature_extraction.feature_calculators import change_quantiles
+    import tsfast
+    import numpy as np
+    import pyarrow as pa
+
+    x = np.array([3.0, 1.0, 4.0, 1.5, 9.0, 2.0, 6.0, 5.0, 3.5, 8.0, 9.0], dtype=np.float32)
+
+    features = [
+        "change_quantiles-0.2-0.8-True-mean",
+        "change_quantiles-0.2-0.8-False-var",
+        "change_quantiles-0.0-1.0-True-max",
+        "change_quantiles-0.1-0.9-False-min",
+    ]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    expected_1 = change_quantiles(x, 0.2, 0.8, True, "mean")
+    expected_2 = change_quantiles(x, 0.2, 0.8, False, "var")
+    expected_3 = change_quantiles(x, 0.0, 1.0, True, "max")
+    expected_4 = change_quantiles(x, 0.1, 0.9, False, "min")
+
+    assert np.allclose(results[0], expected_1)
+    assert np.allclose(results[1], expected_2)
+    assert np.allclose(results[2], expected_3)
+    assert np.allclose(results[3], expected_4)

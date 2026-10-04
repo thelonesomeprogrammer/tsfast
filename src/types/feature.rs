@@ -57,6 +57,7 @@ pub enum Feature {
     LinearTrend(AggAttr),
     AggLinearTrend(AggAttr, u16, AggFunc),
     Quantile(u32),          // q encoded as u32 bits
+    ChangeQuantiles(u32, u32, bool, AggFunc), // ql, qh, isabs, f_agg
     IndexMassQuantile(u32), // q encoded as u32 bits
     BenfordCorrelation,
     MaxLangevinFixedPoint(u8, u32), // m, r as bits
@@ -212,6 +213,7 @@ impl Feature {
             Self::LinearTrend(_) => C::SUM | C::MEAN | C::SLOPE | C::VARIANCE | C::ENERGY,
             Self::AggLinearTrend(_, _, _) => C::AGG_LIN_TREND | C::NEEDS_SORT,
             Self::Quantile(_) => C::QUANTILE | C::NEEDS_SORT,
+            Self::ChangeQuantiles(_, _, _, _) => C::QUANTILE | C::NEEDS_SORT,
             Self::IndexMassQuantile(_) => C::ABS_SUM | C::IDX_MASS_Q | C::NEEDS_SORT,
             Self::BenfordCorrelation => C::BENFORD | C::NEEDS_SORT,
             Self::MaxLangevinFixedPoint(_, _) => C::LANGEVIN | C::NEEDS_SORT,
