@@ -154,6 +154,7 @@ impl<'a> ExpandingEngine<'a> {
                 self.unique_autocorr_lags,
                 self.unique_tra_lags,
             );
+            TrendProcessor::process_remainder(self.compute, val, global_idx, state);
 
             state.prev_last = val;
         }
@@ -180,8 +181,8 @@ impl<'a> ExpandingEngine<'a> {
 
         let base_metrics = StatsProcessor::finalize_base_metrics(state, n);
 
-        let (median, iqr) =
-            SortProcessor::process_running_sorted(self.compute, full_series, running_sorted);
+        let (median, iqr, median_abs_dev) =
+            SortProcessor::process_running_sorted(self.compute, full_series, running_sorted, state);
 
         let mut fft_res = FftProcessor::finalize(
             self.compute,
@@ -203,6 +204,7 @@ impl<'a> ExpandingEngine<'a> {
             first_min_idx: 0,
             last_min_idx: 0,
             median,
+            median_abs_dev,
             iqr,
             entropy,
         };

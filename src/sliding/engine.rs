@@ -116,7 +116,7 @@ impl<'a> SlidingEngine<'a> {
             state,
         );
 
-        TrendProcessor::update_incremental(self.compute, new_val, window_size, state);
+        TrendProcessor::update_incremental(self.compute, old_val, new_val, window_size, state);
 
         if self
             .compute

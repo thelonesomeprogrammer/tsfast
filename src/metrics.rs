@@ -13,6 +13,7 @@ pub struct SortMetrics {
     pub first_min_idx: usize,
     pub last_min_idx: usize,
     pub median: f32,
+    pub median_abs_dev: f32,
     pub iqr: f32,
     pub entropy: f32,
 }

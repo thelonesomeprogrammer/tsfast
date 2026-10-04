@@ -20,7 +20,8 @@ impl std::str::FromStr for Feature {
                 return Ok(Feature::UnbiasedFisherKurtosis);
             }
             "biased_fisher_kurtosis" => return Ok(Feature::BiasedFisherKurtosis),
-            "mad" => return Ok(Feature::Mad),
+            "mad" | "mean_abs_deviation" => return Ok(Feature::Mad),
+            "median_abs_deviation" => return Ok(Feature::MedianAbsDeviation),
             "iqr" => return Ok(Feature::Iqr),
             "entropy" => return Ok(Feature::Entropy),
             "energy" | "torque_Absolute energy" => return Ok(Feature::Energy),
@@ -34,6 +35,8 @@ impl std::str::FromStr for Feature {
             "autocorr_lag1" | "centered_autocorr_lag1" => return Ok(Feature::AutocorrLag1),
             "autocorrelation" | "autocorr_first_1e" => return Ok(Feature::AutocorrFirst1e),
             "mean_abs_change" => return Ok(Feature::MeanAbsChange),
+            "median_diff" => return Ok(Feature::MedianDiff),
+            "median_abs_diff" => return Ok(Feature::MedianAbsDiff),
             "mean_change" | "mean_diff" | "torque_Mean diff" => return Ok(Feature::MeanChange),
             "cid_ce" => return Ok(Feature::CidCe),
             "slope" | "torque_Slope" => return Ok(Feature::Slope),
@@ -173,6 +176,15 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("autocorr-") {
         return Some(Feature::Autocorr(arg.parse().ok()?));
     }
+    if let Some(arg) = s.strip_prefix("agg_autocorrelation-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+        let func = parse_agg_func(parts[0])?;
+        let maxlag: u16 = parts[1].parse().ok()?;
+        return Some(Feature::AggAutocorrelation(func, maxlag));
+    }
     if let Some(arg) = s.strip_prefix("partial_autocorr-") {
         return Some(Feature::PartialAutocorr(arg.parse().ok()?));
     }
@@ -263,6 +275,14 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("ecdf-") {
+        let d: u32 = arg.parse().ok()?;
+        return Some(Feature::Ecdf(d));
+    }
+    if let Some(arg) = s.strip_prefix("calc_centroid-") {
+        let fs: f32 = arg.parse().ok()?;
+        return Some(Feature::CalcCentroid(fs.to_bits()));
+    }
     if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
         && let Ok(bins) = arg.parse::<u32>()
     {
@@ -337,6 +357,16 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
             AggFunc::Mean
         };
         return Some(Feature::AggLinearTrend(attr, chunk_len, func));
+    }
+    if s.starts_with("change_quantiles-") {
+        let parts: Vec<&str> = s.split('-').collect();
+        if parts.len() == 5 {
+            let ql = parts[1].parse::<f32>().unwrap_or(0.0).to_bits();
+            let qh = parts[2].parse::<f32>().unwrap_or(1.0).to_bits();
+            let isabs = parts[3].to_lowercase() == "true";
+            let func = parse_agg_func(parts[4]).unwrap_or(AggFunc::Mean);
+            return Some(Feature::ChangeQuantiles(ql, qh, isabs, func));
+        }
     }
     if s.contains("value__quantile__q_") {
         let pos = s.find("q_")?;
@@ -478,6 +508,7 @@ impl Feature {
             Feature::Min => "min_value".to_string(),
             Feature::Max => "max_value".to_string(),
             Feature::Median => "median".to_string(),
+            Feature::MedianAbsDeviation => "median_abs_deviation".to_string(),
             Feature::Skew => "skewness".to_string(),
             Feature::UnbiasedFisherKurtosis => "kurtosis".to_string(),
             Feature::BiasedFisherKurtosis => "biased_fisher_kurtosis".to_string(),
@@ -492,6 +523,8 @@ impl Feature {
             Feature::AutocorrLag1 => "autocorr_lag1".to_string(),
             Feature::AutocorrFirst1e => "autocorrelation".to_string(),
             Feature::MeanAbsChange => "mean_abs_change".to_string(),
+            Feature::MedianDiff => "median_diff".to_string(),
+            Feature::MedianAbsDiff => "median_abs_diff".to_string(),
             Feature::MeanChange => "mean_change".to_string(),
             Feature::CidCe => "cid_ce".to_string(),
             Feature::Slope => "slope".to_string(),
@@ -515,6 +548,15 @@ impl Feature {
             Feature::FirstLocMin => "first_loc_min".to_string(),
             Feature::LastLocMin => "last_loc_min".to_string(),
             Feature::Autocorr(lag) => format!("autocorr-{}", lag),
+            Feature::AggAutocorrelation(func, maxlag) => {
+                let func_str = match func {
+                    AggFunc::Max => "max",
+                    AggFunc::Min => "min",
+                    AggFunc::Mean => "mean",
+                    AggFunc::Var => "var",
+                };
+                format!("agg_autocorrelation-{}-{}", func_str, maxlag)
+            }
             Feature::PartialAutocorr(lag) => format!("partial_autocorr-{}", lag),
             Feature::TimeReversalAsymmetry(lag) => format!("time_reversal_asymmetry-{}", lag),
             Feature::FftCoefficient(coeff, attr) => {
@@ -556,6 +598,21 @@ impl Feature {
                     AggFunc::Var => "var",
                 };
                 format!("agg_linear_trend-{}-{}-{}", attr_str, chunk_len, func_str)
+            }
+            Feature::ChangeQuantiles(ql_bits, qh_bits, isabs, func) => {
+                let func_str = match func {
+                    AggFunc::Max => "max",
+                    AggFunc::Min => "min",
+                    AggFunc::Mean => "mean",
+                    AggFunc::Var => "var",
+                };
+                format!(
+                    "change_quantiles-{}-{}-{}-{}",
+                    f32::from_bits(*ql_bits),
+                    f32::from_bits(*qh_bits),
+                    if *isabs { "True" } else { "False" },
+                    func_str
+                )
             }
             Feature::Quantile(q_bits) => format!("quantile-{}", f32::from_bits(*q_bits)),
             Feature::IndexMassQuantile(q_bits) => {
@@ -630,6 +687,8 @@ impl Feature {
             Feature::PkPkDistance => "pk_pk_distance".to_string(),
             Feature::ZeroCross => "zero_cross".to_string(),
             Feature::MaxPowerSpectrum => "max_power_spectrum".to_string(),
+            Feature::Ecdf(d) => format!("ecdf-{}", d),
+            Feature::CalcCentroid(fs) => format!("calc_centroid-{}", f32::from_bits(*fs)),
             Feature::Mfcc(idx) => format!("mfcc-{}", idx),
             Feature::WaveletEnergy(idx) => format!("wavelet_energy-{}", idx),
             Feature::WaveletEntropy => "wavelet_entropy".to_string(),
