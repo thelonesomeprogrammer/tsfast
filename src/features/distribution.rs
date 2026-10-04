@@ -65,6 +65,10 @@ pub fn eval_distribution(
     let res = match feat {
         Feature::Median => median,
         Feature::Entropy => entropy,
+        Feature::Ecdf(d) => {
+            let d_idx = *d as f32;
+            if d_idx >= n { 1.0 } else { d_idx / n }
+        }
         Feature::BinnedEntropy(max_bins) => {
             let max_bins = *max_bins as usize;
             if max_bins == 0 || n == 0.0 {
@@ -219,9 +223,7 @@ pub fn eval_distribution(
             }
 
             let res = match f_agg {
-                crate::types::AggFunc::Mean => {
-                    diffs.iter().sum::<f32>() / diffs.len() as f32
-                }
+                crate::types::AggFunc::Mean => diffs.iter().sum::<f32>() / diffs.len() as f32,
                 crate::types::AggFunc::Var => {
                     let n = diffs.len() as f32;
                     if n < 2.0 {
@@ -235,9 +237,7 @@ pub fn eval_distribution(
                 crate::types::AggFunc::Max => {
                     diffs.iter().cloned().fold(f32::NEG_INFINITY, f32::max)
                 }
-                crate::types::AggFunc::Min => {
-                    diffs.iter().cloned().fold(f32::INFINITY, f32::min)
-                }
+                crate::types::AggFunc::Min => diffs.iter().cloned().fold(f32::INFINITY, f32::min),
             };
             res
         }
@@ -248,7 +248,6 @@ pub fn eval_distribution(
             if let Some(sorted) = context.running_sorted {
                 compute_quantile(sorted, q)
             } else {
-                // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
                 let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
                 copy.clear();
                 copy.extend_from_slice(values);

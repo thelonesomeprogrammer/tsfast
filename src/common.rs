@@ -58,6 +58,7 @@ pub struct ColumnState {
     pub sum_prod: f32,
     pub sum_ix: f32,
     pub auc_sum: f32,
+    pub t_energy: f32,
     pub mac_sum_vec: f32x4,
     pub mc_sum_vec: f32x4,
 
@@ -74,6 +75,7 @@ pub struct ColumnState {
     pub sum_prod_vec: f32x4,
     pub auc_sum_vec: f32x4,
     pub sum_ix_vec: f32x4,
+    pub t_energy_vec: f32x4,
 
     pub zcr_count: u32,
     pub peaks: u32,
@@ -208,10 +210,12 @@ impl ColumnState {
             max_vec: f32x4::splat(f32::NEG_INFINITY),
             abs_sum_vec: f32x4::splat(0.0),
             abs_max_vec: f32x4::splat(0.0),
+            t_energy: 0.0,
             sum_sq_diff_vec: f32x4::splat(0.0),
             sum_prod_vec: f32x4::splat(0.0),
             auc_sum_vec: f32x4::splat(0.0),
             sum_ix_vec: f32x4::splat(0.0),
+            t_energy_vec: f32x4::splat(0.0),
             zcr_count: 0,
             peaks: 0,
             zc_indices: SmallVec::new(),

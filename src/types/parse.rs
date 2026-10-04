@@ -256,6 +256,14 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::SymmetryLooking(r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("ecdf-") {
+        let d: u32 = arg.parse().ok()?;
+        return Some(Feature::Ecdf(d));
+    }
+    if let Some(arg) = s.strip_prefix("calc_centroid-") {
+        let fs: f32 = arg.parse().ok()?;
+        return Some(Feature::CalcCentroid(fs.to_bits()));
+    }
     if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
         && let Ok(bins) = arg.parse::<u32>()
     {
@@ -647,6 +655,8 @@ impl Feature {
             Feature::PkPkDistance => "pk_pk_distance".to_string(),
             Feature::ZeroCross => "zero_cross".to_string(),
             Feature::MaxPowerSpectrum => "max_power_spectrum".to_string(),
+            Feature::Ecdf(d) => format!("ecdf-{}", d),
+            Feature::CalcCentroid(fs) => format!("calc_centroid-{}", f32::from_bits(*fs)),
             Feature::Mfcc(idx) => format!("mfcc-{}", idx),
             Feature::WaveletEnergy(idx) => format!("wavelet_energy-{}", idx),
             Feature::WaveletEntropy => "wavelet_entropy".to_string(),

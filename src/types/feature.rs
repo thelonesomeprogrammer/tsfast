@@ -59,9 +59,9 @@ pub enum Feature {
     ApproxEntropy(u8, u32), // r is encoded as u32 (fixed point or bitcast)
     LinearTrend(AggAttr),
     AggLinearTrend(AggAttr, u16, AggFunc),
-    Quantile(u32),          // q encoded as u32 bits
+    Quantile(u32),                            // q encoded as u32 bits
     ChangeQuantiles(u32, u32, bool, AggFunc), // ql, qh, isabs, f_agg
-    IndexMassQuantile(u32), // q encoded as u32 bits
+    IndexMassQuantile(u32),                   // q encoded as u32 bits
     BenfordCorrelation,
     MaxLangevinFixedPoint(u8, u32), // m, r as bits
     ArCoefficient(u16, u16),
@@ -98,6 +98,8 @@ pub enum Feature {
     HasDuplicateMax,
     HasDuplicateMin,
     HasDuplicate,
+    Ecdf(u32),
+    CalcCentroid(u32),
     Mfcc(u16),
     WaveletEnergy(u16),
     WaveletEntropy,
@@ -270,6 +272,8 @@ impl Feature {
             Self::PkPkDistance => C::MIN | C::MAX,
             Self::ZeroCross => C::ZERO_CROSS,
             Self::MaxPowerSpectrum => C::ANY_FFT,
+            Self::Ecdf(_) => C::LENGTH,
+            Self::CalcCentroid(_) => C::ENERGY | C::CALC_CENTROID,
             Self::Mfcc(_) => C::MFCC,
             Self::WaveletEnergy(_) => C::CWT_MEXH,
             Self::WaveletEntropy => C::CWT_MEXH,
