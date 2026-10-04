@@ -66,6 +66,8 @@ const FEATURES: &[&str] = &[
     "quantile-0.5",
     "index_mass_quantile-0.5",
     "mean_n_absolute_max-5",
+    "augmented_dickey_fuller-teststat",
+    "augmented_dickey_fuller-pvalue",
 ];
 
 fn create_batch(data: &[f32]) -> RecordBatch {

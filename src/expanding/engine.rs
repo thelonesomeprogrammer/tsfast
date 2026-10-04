@@ -258,6 +258,8 @@ impl<'a> ExpandingEngine<'a> {
                     v
                 } else if let Some(v) = crate::features::dynamic::eval_dynamic(feat, &mut context) {
                     v
+                } else if let Some(v) = crate::features::stationarity::eval_stationarity(feat, &mut context) {
+                    v
                 } else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) {
                     v
                 } else {

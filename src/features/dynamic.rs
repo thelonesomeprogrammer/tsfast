@@ -298,7 +298,7 @@ fn compute_ar_matrices_full(values: &[f32], k: usize) -> (Array2<f64>, Array1<f6
     (xtx, xty)
 }
 
-fn solve_ols_f64(xtx: &Array2<f64>, xty: &Array1<f64>) -> Option<Vec<f32>> {
+pub(crate) fn solve_ols_f64(xtx: &Array2<f64>, xty: &Array1<f64>) -> Option<Vec<f32>> {
     let n = xtx.nrows();
     let mut a = xtx.clone();
     let mut b = xty.clone();

@@ -100,6 +100,7 @@ pub enum Feature {
     SpktWelchDensity(u16),
     CwtCoefficients([u16; 8], u8, u16, u16),
     NumberCwtPeaks(u16),
+    AugmentedDickeyFuller(AdfAttr),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -108,6 +109,13 @@ pub enum FftAttr {
     Imag,
     Abs,
     Angle,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+pub enum AdfAttr {
+    TestStat,
+    PValue,
+    UsedLag,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -266,6 +274,7 @@ impl Feature {
             Self::SpktWelchDensity(_) => C::WELCH,
             Self::CwtCoefficients(_, _, _, _) => C::CWT,
             Self::NumberCwtPeaks(_) => C::CWT,
+            Self::AugmentedDickeyFuller(_) => C::ADF | C::NEEDS_SORT,
         }
     }
 }

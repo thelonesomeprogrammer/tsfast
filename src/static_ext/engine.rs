@@ -208,7 +208,7 @@ impl<'a> StaticEngine<'a> {
                 {
                     v
                 } else {
-                    crate::features::dynamic::eval_dynamic(feat, &mut context).unwrap_or_else(
+                    crate::features::dynamic::eval_dynamic(feat, &mut context).or_else(|| crate::features::stationarity::eval_stationarity(feat, &mut context)).unwrap_or_else(
                         || crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0),
                     )
                 }
