@@ -20,7 +20,8 @@ impl std::str::FromStr for Feature {
                 return Ok(Feature::UnbiasedFisherKurtosis);
             }
             "biased_fisher_kurtosis" => return Ok(Feature::BiasedFisherKurtosis),
-            "mad" => return Ok(Feature::Mad),
+            "mad" | "mean_abs_deviation" => return Ok(Feature::Mad),
+            "median_abs_deviation" => return Ok(Feature::MedianAbsDeviation),
             "iqr" => return Ok(Feature::Iqr),
             "entropy" => return Ok(Feature::Entropy),
             "energy" | "torque_Absolute energy" => return Ok(Feature::Energy),
@@ -489,6 +490,7 @@ impl Feature {
             Feature::Min => "min_value".to_string(),
             Feature::Max => "max_value".to_string(),
             Feature::Median => "median".to_string(),
+            Feature::MedianAbsDeviation => "median_abs_deviation".to_string(),
             Feature::Skew => "skewness".to_string(),
             Feature::UnbiasedFisherKurtosis => "kurtosis".to_string(),
             Feature::BiasedFisherKurtosis => "biased_fisher_kurtosis".to_string(),

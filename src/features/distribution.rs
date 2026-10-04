@@ -64,6 +64,7 @@ pub fn eval_distribution(
 
     let res = match feat {
         Feature::Median => median,
+        Feature::MedianAbsDeviation => context.median_abs_dev,
         Feature::Entropy => entropy,
         Feature::Ecdf(d) => {
             let d_idx = *d as f32;

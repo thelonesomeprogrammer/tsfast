@@ -14,6 +14,7 @@ const FEATURES: &[&str] = &[
     "min_value",
     "max_value",
     "median",
+    "median_abs_deviation",
     "skewness",
     "kurtosis",
     "biased_fisher_kurtosis",

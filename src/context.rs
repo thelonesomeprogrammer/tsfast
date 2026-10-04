@@ -22,6 +22,7 @@ pub struct FeatureContext<'a> {
     pub first_min_idx: usize,
     pub last_min_idx: usize,
     pub median: f32,
+    pub median_abs_dev: f32,
     pub iqr: f32,
     pub entropy: f32,
 
@@ -96,6 +97,7 @@ impl<'a> FeatureContext<'a> {
             first_min_idx: sort.first_min_idx,
             last_min_idx: sort.last_min_idx,
             median: sort.median,
+            median_abs_dev: sort.median_abs_dev,
             iqr: sort.iqr,
             entropy: sort.entropy,
             mad_sum: mean.mad_sum,
