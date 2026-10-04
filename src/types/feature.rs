@@ -82,6 +82,8 @@ pub enum Feature {
     HasDuplicateMax,
     HasDuplicateMin,
     HasDuplicate,
+    Ecdf(u32),
+    CalcCentroid(u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -225,6 +227,8 @@ impl Feature {
             Self::PkPkDistance => C::MIN | C::MAX,
             Self::ZeroCross => C::ZERO_CROSS,
             Self::MaxPowerSpectrum => C::ANY_FFT,
+            Self::Ecdf(_) => C::LENGTH,
+            Self::CalcCentroid(_) => C::ENERGY | C::CALC_CENTROID,
         }
     }
 }

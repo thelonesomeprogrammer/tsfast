@@ -233,3 +233,56 @@ def test_reoccurring_ratios_sliding():
     # len=5, values={2,3,4} (3 unique), reoccur_dp=3 (three 3s), reoccur_val=1 (3)
     # res: [3/5, 1/3, 3/5]
     assert np.allclose(results.iloc[2].values, [3.0/5.0, 1.0/3.0, 3.0/5.0])
+
+def test_ecdf_pk_centroid_sliding():
+    import tsfel
+    import tsfast
+    import pyarrow as pa
+    x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0, 5.0, -1.0, 3.0], dtype=np.float32)
+    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50"]
+    window_size = 7
+    extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=window_size)
+
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    df = extractor.update(batch).to_pandas()
+    results = df.iloc[-1].values
+
+    windowed_x = x[-window_size:]
+    tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(windowed_x, d=10)
+    tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(windowed_x, d=3)
+    tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(windowed_x)
+    tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(windowed_x, fs=100)
+    tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(windowed_x, fs=50)
+
+    assert np.allclose(results[0], min(10.0 / window_size, 1.0))
+    assert np.allclose(results[1], min(3.0 / window_size, 1.0))
+    assert np.allclose(results[2], tsfel_pk)
+    assert np.allclose(results[3], tsfel_centroid)
+    assert np.allclose(results[4], tsfel_centroid_50)
+
+
+def test_ecdf_pk_centroid_sliding():
+    import tsfel
+    import tsfast
+    import pyarrow as pa
+    x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0, 5.0, -1.0, 3.0], dtype=np.float32)
+    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50"]
+    window_size = 7
+    extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=window_size)
+
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    df = extractor.update(batch).to_pandas()
+    results = df.iloc[-1].values
+
+    windowed_x = x[-window_size:]
+    tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(windowed_x, d=10)
+    tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(windowed_x, d=3)
+    tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(windowed_x)
+    tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(windowed_x, fs=100)
+    tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(windowed_x, fs=50)
+
+    assert np.allclose(results[0], min(10.0 / window_size, 1.0))
+    assert np.allclose(results[1], min(3.0 / window_size, 1.0))
+    assert np.allclose(results[2], tsfel_pk)
+    assert np.allclose(results[3], tsfel_centroid)
+    assert np.allclose(results[4], tsfel_centroid_50)

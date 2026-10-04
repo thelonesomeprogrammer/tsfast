@@ -43,6 +43,14 @@ pub fn eval_distribution(
     let res = match feat {
                 Feature::Median => median,
                 Feature::Entropy => entropy,
+        Feature::Ecdf(d) => {
+            let d_idx = *d as f32;
+            if d_idx >= _n {
+                1.0
+            } else {
+                d_idx / _n
+            }
+        },
                 Feature::Quantile(q_bits) => {
                     let q = f32::from_bits(*q_bits);
 

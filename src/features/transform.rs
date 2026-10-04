@@ -86,6 +86,14 @@ pub fn eval_transform(
                     }
                 }
                 Feature::SpectralCentroid => freq_centroid,
+        Feature::CalcCentroid(fs_bits) => {
+            let fs = f32::from_bits(*fs_bits);
+            if state.energy == 0.0 || fs == 0.0 {
+                0.0
+            } else {
+                (state.t_energy / fs) / state.energy
+            }
+        },
                 Feature::SpectralDistance => {
                     if !spectrum.is_empty() {
                         let m = spectrum.iter().sum::<f32>() / spectrum.len() as f32;

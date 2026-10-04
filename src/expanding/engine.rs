@@ -151,6 +151,7 @@ impl<'a> ExpandingEngine<'a> {
                 self.unique_c3_lags,
                 self.unique_autocorr_lags,
             );
+            TrendProcessor::process_remainder(self.compute, val, global_idx, state);
 
             state.prev_last = val;
         }
