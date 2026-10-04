@@ -26,6 +26,7 @@ pub struct Extractor {
     pub c3_args: Vec<u16>,
     pub unique_paa_totals: Vec<u16>,
     pub unique_c3_lags: Vec<u16>,
+    pub unique_tra_lags: Vec<u16>,
     pub planner: Arc<Mutex<RealFftPlanner<f32>>>,
     pub max_size: Option<usize>,
 }
@@ -40,6 +41,7 @@ impl Extractor {
         let mut c3_args = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
+        let mut unique_tra_lags = std::collections::BTreeSet::new();
 
         for i in feature_str {
             let feat = std::str::FromStr::from_str(&i)
@@ -73,6 +75,7 @@ impl Extractor {
             c3_args,
             unique_paa_totals: unique_paa_totals.into_iter().collect(),
             unique_c3_lags: unique_c3_lags.into_iter().collect(),
+            unique_tra_lags: unique_tra_lags.into_iter().collect(),
             planner: planner_arc,
             max_size,
         })
@@ -89,6 +92,7 @@ impl Extractor {
         let features = &self.features;
         let unique_paa_totals = &self.unique_paa_totals;
         let unique_c3_lags = &self.unique_c3_lags;
+        let unique_tra_lags = &self.unique_tra_lags;
 
         let paa_boundaries: Vec<Vec<usize>> = unique_paa_totals
             .iter()
@@ -127,6 +131,7 @@ impl Extractor {
                     features,
                     unique_paa_totals,
                     unique_c3_lags,
+                    unique_tra_lags,
                     paa_boundaries: &paa_boundaries,
                     r2c: r2c.as_ref().cloned(),
                     fft_size,

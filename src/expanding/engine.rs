@@ -18,6 +18,7 @@ pub(crate) struct ExpandingEngine<'a> {
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
     pub(crate) unique_autocorr_lags: &'a [u16],
+    pub(crate) unique_tra_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
     pub(crate) fft_size: usize,
@@ -111,6 +112,7 @@ impl<'a> ExpandingEngine<'a> {
                 values,
                 self.unique_c3_lags,
                 self.unique_autocorr_lags,
+                self.unique_tra_lags,
             );
         }
         rem_start
@@ -150,6 +152,7 @@ impl<'a> ExpandingEngine<'a> {
                 values,
                 self.unique_c3_lags,
                 self.unique_autocorr_lags,
+                self.unique_tra_lags,
             );
             TrendProcessor::process_remainder(self.compute, val, global_idx, state);
 
@@ -181,7 +184,7 @@ impl<'a> ExpandingEngine<'a> {
         let (median, iqr) =
             SortProcessor::process_running_sorted(self.compute, full_series, running_sorted);
 
-        let fft_res = FftProcessor::finalize(
+        let mut fft_res = FftProcessor::finalize(
             self.compute,
             full_series,
             &self.r2c,
@@ -216,6 +219,7 @@ impl<'a> ExpandingEngine<'a> {
             zc_metrics,
             &fft_res,
             &self.unique_c3_lags,
+            &self.unique_tra_lags,
             &self.unique_paa_totals,
             &self.paa_boundaries,
         );
@@ -253,6 +257,8 @@ impl<'a> ExpandingEngine<'a> {
                     crate::features::complexity::eval_complexity(feat, &mut context)
                 {
                     v
+                } else if let Some(v) = crate::features::dynamic::eval_dynamic(feat, &mut context) {
+                    v
                 } else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) {
                     v
                 } else {
@@ -261,6 +267,11 @@ impl<'a> ExpandingEngine<'a> {
             };
             feats.push(val);
         }
+
+        if self.compute.intersects(Compute::ANY_FFT) {
+            state.spectrum_buffer = std::mem::take(&mut fft_res.spectrum);
+        }
+
         feats
     }
 }

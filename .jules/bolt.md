@@ -8,3 +8,10 @@
 ## 2026-10-02 - Expanding Engine FFT Allocation Fix
 Learning: The expanding engine was allocating a full_series.to_vec() every column in the FFT calculation loop for realfft, as well as making duplicate allocations with to_vec on fft_complex.
 Action: Reused fft_in_buffer and fft_out_buffer for realfft processing and removed unneeded to_vec() by building the spectrum from the pre-sized output buffer, then cloning it safely at the end.
+## 2026-10-03 - Avoiding to_vec() and fill() on reused buffers
+**Learning:** When reusing buffers in  (like  via ), calling  to satisfy an ownership requirement (e.g., ) triggers a deep copy allocation anyway, causing a massive performance regression. Furthermore, calling  on a fully expanded buffer size is slower than zeroing only the required padding.
+**Action:** Use careful slicing  to interact with processing functions and only explicitly zero-fill the padding index ranges to maintain true zero-allocation pooling.
+
+## 2026-10-03 - Avoiding to_vec() and fill() on reused buffers
+**Learning:** When reusing buffers in `ColumnState` (like `fft_out_buffer` via `std::mem::take`), calling `.to_vec()` to satisfy an ownership requirement (e.g., `SlidingDFT::from_fft()`) triggers a deep copy allocation anyway, causing a massive performance regression. Furthermore, calling `.fill(0.0)` on a fully expanded buffer size is slower than zeroing only the required padding.
+**Action:** Use careful slicing `[..len]` to interact with processing functions and only explicitly zero-fill the padding index ranges to maintain true zero-allocation pooling.

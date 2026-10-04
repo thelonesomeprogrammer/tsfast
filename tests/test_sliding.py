@@ -4,7 +4,7 @@ import numpy as np
 from tsfast._tsfast import SlidingExtractor
 
 def test_sliding_multiple_columns():
-    features = ["mean", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05']
+    features = ["mean", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05', 'ratio_beyond_r_sigma-1.0', 'index_mass_quantile-0.5', 'c3-1']
     n_cols = 2
     window_size = 2
     stride = 1
@@ -286,3 +286,33 @@ def test_ecdf_pk_centroid_sliding():
     assert np.allclose(results[2], tsfel_pk)
     assert np.allclose(results[3], tsfel_centroid)
     assert np.allclose(results[4], tsfel_centroid_50)
+
+def test_sliding_invalid_type():
+    # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
+    x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
+    features = ["mean", "std_dev"]
+    extractor = SlidingExtractor(features, 1, 2, 1)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    with pytest.raises(TypeError, match="Expected Float32Array"):
+        extractor.update(batch)
+
+def test_median_diff_sliding():
+    import tsfast
+    data = np.random.randn(200).astype(np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(data)], names=["col"])
+
+    features = ["median_diff", "median_abs_diff"]
+    extractor = tsfast.SlidingExtractor(features, 1, 100, 50)
+
+    import tsfel
+    res = extractor.update(batch).to_pandas()
+
+    # First window
+    w1 = data[:100]
+    assert np.allclose(res.iloc[0].values[0], tsfel.feature_extraction.features.median_diff(w1))
+    assert np.allclose(res.iloc[0].values[1], tsfel.feature_extraction.features.median_abs_diff(w1))
+
+    # Second window
+    w2 = data[50:150]
+    assert np.allclose(res.iloc[1].values[0], tsfel.feature_extraction.features.median_diff(w2))
+    assert np.allclose(res.iloc[1].values[1], tsfel.feature_extraction.features.median_abs_diff(w2))

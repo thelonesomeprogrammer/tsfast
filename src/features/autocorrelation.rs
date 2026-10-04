@@ -1,4 +1,5 @@
 use crate::types::Feature;
+use std::simd::num::SimdFloat;
 
 #[inline(always)]
 pub fn eval_autocorrelation(
@@ -37,6 +38,7 @@ pub fn eval_autocorrelation(
     let _fft_complex = context.fft_complex;
     let _spectrum = context.spectrum;
     let _unique_c3_lags = context.unique_c3_lags;
+    let unique_tra_lags = context.unique_tra_lags;
     let _unique_paa_totals = context.unique_paa_totals;
     let _paa_boundaries = context.paa_boundaries;
 
@@ -65,6 +67,35 @@ pub fn eval_autocorrelation(
                 0.0
             }
         }
+        Feature::AggAutocorrelation(func, maxlag) => {
+            if fft_autocorr.is_empty() || *maxlag == 0 || var <= 1e-9 {
+                0.0
+            } else {
+                let max_l = (*maxlag as usize).min(fft_autocorr.len().saturating_sub(1));
+                if max_l == 0 {
+                    0.0
+                } else {
+                    let slice = &fft_autocorr[1..=max_l];
+                    match func {
+                        crate::types::AggFunc::Mean => {
+                            let sum: f32 = slice.iter().sum();
+                            sum / max_l as f32
+                        }
+                        crate::types::AggFunc::Var => {
+                            let mean = slice.iter().sum::<f32>() / max_l as f32;
+                            let var_sum: f32 = slice.iter().map(|&v| (v - mean) * (v - mean)).sum();
+                            var_sum / max_l as f32 // ddof=0 for population variance
+                        }
+                        crate::types::AggFunc::Max => {
+                            slice.iter().copied().fold(f32::NEG_INFINITY, f32::max)
+                        }
+                        crate::types::AggFunc::Min => {
+                            slice.iter().copied().fold(f32::INFINITY, f32::min)
+                        }
+                    }
+                }
+            }
+        }
         Feature::Autocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
             let l = *lag as usize;
             if !fft_autocorr.is_empty() && l < fft_autocorr.len() {
@@ -75,12 +106,33 @@ pub fn eval_autocorrelation(
         }
         Feature::TimeReversalAsymmetry(lag) if values.len() > 2 * *lag as usize => {
             let l = *lag as usize;
-            let mut sum = 0.0;
-            for i in 0..values.len() - 2 * l {
-                sum +=
-                    values[i + 2 * l].powi(2) * values[i + l] - values[i + l] * values[i].powi(2);
+            let l_idx = unique_tra_lags.iter().position(|&l| l == *lag);
+            if let Some(idx) = l_idx {
+                let n_iters = values.len() - 2 * l;
+                state.tra_sums[idx] / n_iters as f32
+            } else {
+                let mut sum = 0.0;
+                let n_iters = values.len() - 2 * l;
+
+                // SIMD optimization
+                let mut i = 0;
+                let mut sum_simd = std::simd::f32x4::splat(0.0);
+                while i + 3 < n_iters {
+                    let v_i = std::simd::f32x4::from_slice(&values[i..i + 4]);
+                    let v_il = std::simd::f32x4::from_slice(&values[i + l..i + l + 4]);
+                    let v_i2l = std::simd::f32x4::from_slice(&values[i + 2 * l..i + 2 * l + 4]);
+                    sum_simd += v_i2l * v_i2l * v_il - v_il * v_i * v_i;
+                    i += 4;
+                }
+                sum += sum_simd.reduce_sum();
+
+                // Remainder
+                for j in i..n_iters {
+                    sum += values[j + 2 * l].powi(2) * values[j + l] - values[j + l] * values[j].powi(2);
+                }
+
+                sum / n_iters as f32
             }
-            sum / (values.len() - 2 * l) as f32
         }
         Feature::PartialAutocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
             let l = *lag as usize;
