@@ -7,6 +7,7 @@ pub mod autocorrelation;
 pub mod changes;
 pub mod runs;
 pub mod transform;
+pub mod lpc;
 pub mod complexity;
 pub mod misc;
 

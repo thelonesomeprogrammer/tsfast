@@ -134,6 +134,9 @@ impl std::str::FromStr for Feature {
 // ─── Parameterized parsers ──────────────────────────────────────────────────
 
 fn parse_parameterized(s: &str) -> Option<Feature> {
+    if let Some(arg) = s.strip_prefix("lpcc-") {
+        return Some(Feature::Lpcc(arg.trim().parse().ok()?));
+    }
     if let Some(arg) = s.strip_prefix("mfcc-") {
         return Some(Feature::Mfcc(arg.trim().parse().ok()?));
     }
@@ -600,6 +603,7 @@ impl Feature {
             Feature::PkPkDistance => "pk_pk_distance".to_string(),
             Feature::ZeroCross => "zero_cross".to_string(),
             Feature::MaxPowerSpectrum => "max_power_spectrum".to_string(),
+            Feature::Lpcc(idx) => format!("lpcc-{}", idx),
             Feature::Mfcc(idx) => format!("mfcc-{}", idx),
             Feature::WaveletEnergy(idx) => format!("wavelet_energy-{}", idx),
             Feature::WaveletEntropy => "wavelet_entropy".to_string(),

@@ -66,6 +66,7 @@ const FEATURES: &[&str] = &[
     "quantile-0.5",
     "index_mass_quantile-0.5",
     "mean_n_absolute_max-5",
+    "lpcc-0", "lpcc-1", "lpcc-2", "lpcc-3",
 ];
 
 fn create_batch(data: &[f32]) -> RecordBatch {
