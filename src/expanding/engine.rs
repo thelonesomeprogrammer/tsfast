@@ -250,6 +250,8 @@ impl<'a> ExpandingEngine<'a> {
                     v
                 } else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) {
                     v
+                } else if let Some(v) = crate::features::subsequence::eval_subsequence(feat, &mut context) {
+                    v
                 } else if let Some(v) =
                     crate::features::transform::eval_transform(feat, &mut context)
                 {

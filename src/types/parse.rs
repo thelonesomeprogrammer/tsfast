@@ -130,6 +130,24 @@ impl std::str::FromStr for Feature {
             return Ok(f);
         }
 
+        if s.starts_with("query_similarity_count-") {
+            let parts: Vec<&str> = s.split("-").collect();
+            if parts.len() == 3 {
+                if let (Ok(l), Ok(t)) = (parts[1].parse::<u16>(), parts[2].parse::<f32>()) {
+                    return Ok(Feature::QuerySimilarityCount(l, t.to_bits()));
+                }
+            }
+        }
+        if s.starts_with("matrix_profile-") {
+            let parts: Vec<&str> = s.split("-").collect();
+            if parts.len() == 3 {
+                if let Ok(l) = parts[1].parse::<u16>() {
+                    if let Some(agg) = parse_agg_func(parts[2]) {
+                        return Ok(Feature::MatrixProfile(l, agg));
+                    }
+                }
+            }
+        }
         Err(format!("Unknown feature: {}", s))
     }
 }
@@ -618,6 +636,18 @@ impl Feature {
             Feature::Length => "length".to_string(),
             Feature::VarianceLargerThanStandardDeviation => {
                 "variance_larger_than_standard_deviation".to_string()
+            }
+            Feature::QuerySimilarityCount(l, t) => {
+                format!("query_similarity_count-{}-{}", l, f32::from_bits(*t))
+            }
+            Feature::MatrixProfile(l, agg) => {
+                let agg_str = match agg {
+                    AggFunc::Min => "min",
+                    AggFunc::Max => "max",
+                    AggFunc::Mean => "mean",
+                    AggFunc::Var => "var",
+                };
+                format!("matrix_profile-{}-{}", l, agg_str)
             }
             Feature::MeanNAbsoluteMax(n) => format!("mean_n_absolute_max-{}", n),
             Feature::HumanRangeEnergy(fs_bits) => {

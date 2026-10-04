@@ -11,3 +11,5 @@ pub mod complexity;
 pub mod misc;
 
 pub mod dynamic;
+
+pub mod subsequence;
