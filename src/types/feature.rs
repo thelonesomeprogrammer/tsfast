@@ -70,6 +70,8 @@ pub enum Feature {
     MeanNAbsoluteMax(u16),
     Length,
     VarianceLargerThanStandardDeviation,
+    QuerySimilarityCount(u16, u32),
+    MatrixProfile(u16, crate::types::AggFunc),
     HumanRangeEnergy(u32), // fs as bits
     SpectralCentroid,
     SpectralDistance,
@@ -243,6 +245,8 @@ impl Feature {
             Self::SpectralKurtosis => C::SPEC_KURTOSIS | C::NEEDS_SORT,
             Self::SignalDistance => C::SIG_DISTANCE | C::NEEDS_SORT,
             Self::WaveletFeatures(_, _) => C::WAVELET | C::NEEDS_SORT,
+            Self::QuerySimilarityCount(_, _) => C::QUERY_SIMILARITY | C::NEEDS_SORT,
+            Self::MatrixProfile(_, _) => C::MATRIX_PROFILE | C::NEEDS_SORT,
             Self::SpectrogramCoefficients(_, _) => C::SPECTROGRAM | C::NEEDS_SORT,
             Self::MeanSecondDerivativeCentral => C::LENGTH | C::NEEDS_SORT,
             Self::LargeStandardDeviation(_) => {
