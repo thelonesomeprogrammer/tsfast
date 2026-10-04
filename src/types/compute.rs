@@ -103,6 +103,7 @@ bitflags! {
         const MFCC                 = 1 << 84;
         const CWT_MEXH             = 1 << 85;
         const MEDIAN_ABS_DEV       = 1 << 86;
+        const CALC_CENTROID        = 1 << 87;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()

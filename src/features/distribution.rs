@@ -1,6 +1,26 @@
 use crate::types::Feature;
 
 #[inline(always)]
+
+fn compute_quantile(sorted: &[f32], q: f32) -> f32 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    if sorted.len() == 1 {
+        return sorted[0];
+    }
+    let n_len = sorted.len();
+    let idx = q * (n_len as f32 - 1.0);
+    let i = idx.floor() as usize;
+    let f = idx - i as f32;
+    if i >= n_len - 1 {
+        sorted[n_len - 1]
+    } else {
+        (1.0 - f) * sorted[i] + f * sorted[i + 1]
+    }
+}
+
+#[inline(always)]
 pub fn eval_distribution(
     feat: &Feature,
     context: &mut crate::context::FeatureContext,
@@ -46,6 +66,10 @@ pub fn eval_distribution(
         Feature::Median => median,
         Feature::MedianAbsDeviation => context.median_abs_dev,
         Feature::Entropy => entropy,
+        Feature::Ecdf(d) => {
+            let d_idx = *d as f32;
+            if d_idx >= n { 1.0 } else { d_idx / n }
+        }
         Feature::BinnedEntropy(max_bins) => {
             let max_bins = *max_bins as usize;
             if max_bins == 0 || n == 0.0 {
@@ -157,63 +181,79 @@ pub fn eval_distribution(
                 }
             }
         }
+
+        Feature::ChangeQuantiles(ql_bits, qh_bits, isabs, f_agg) => {
+            let ql = f32::from_bits(*ql_bits);
+            let qh = f32::from_bits(*qh_bits);
+
+            if ql >= qh || values.len() < 2 {
+                return Some(0.0);
+            }
+
+            let (ql_val, qh_val) = if let Some(sorted) = context.running_sorted {
+                (compute_quantile(sorted, ql), compute_quantile(sorted, qh))
+            } else {
+                let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
+                copy.clear();
+                copy.extend_from_slice(values);
+                copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let vals = (compute_quantile(&copy, ql), compute_quantile(&copy, qh));
+                state.sort_buffer = copy;
+                vals
+            };
+
+            let mut diffs = Vec::with_capacity(values.len());
+            let mut prev_in = false;
+            let mut prev_val = 0.0;
+
+            for (i, &v) in values.iter().enumerate() {
+                let in_corridor = v >= ql_val && v <= qh_val;
+
+                if in_corridor {
+                    if prev_in {
+                        let diff = v - prev_val;
+                        diffs.push(if *isabs { diff.abs() } else { diff });
+                    }
+                }
+                prev_in = in_corridor;
+                prev_val = v;
+            }
+
+            if diffs.is_empty() {
+                return Some(0.0);
+            }
+
+            let res = match f_agg {
+                crate::types::AggFunc::Mean => diffs.iter().sum::<f32>() / diffs.len() as f32,
+                crate::types::AggFunc::Var => {
+                    let n = diffs.len() as f32;
+                    if n < 2.0 {
+                        0.0
+                    } else {
+                        let mean = diffs.iter().sum::<f32>() / n;
+                        let var: f32 = diffs.iter().map(|&x| (x - mean).powi(2)).sum();
+                        var / n
+                    }
+                }
+                crate::types::AggFunc::Max => {
+                    diffs.iter().cloned().fold(f32::NEG_INFINITY, f32::max)
+                }
+                crate::types::AggFunc::Min => diffs.iter().cloned().fold(f32::INFINITY, f32::min),
+            };
+            res
+        }
+
         Feature::Quantile(q_bits) => {
             let q = f32::from_bits(*q_bits);
 
             if let Some(sorted) = context.running_sorted {
-                let res = if sorted.is_empty() {
-                    0.0
-                } else if sorted.len() == 1 {
-                    sorted[0]
-                } else {
-                    let n_len = sorted.len();
-                    let idx = q * (n_len as f32 - 1.0);
-                    let i = idx.floor() as usize;
-                    let f = idx - i as f32;
-                    if i >= n_len - 1 {
-                        sorted[n_len - 1]
-                    } else {
-                        (1.0 - f) * sorted[i] + f * sorted[i + 1]
-                    }
-                };
-                res
+                compute_quantile(sorted, q)
             } else {
-                // ⚡ Bolt Optimization: Reuse sort_buffer to prevent inner loop memory allocations
                 let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
                 copy.clear();
                 copy.extend_from_slice(values);
-                let res = if copy.is_empty() {
-                    0.0
-                } else if copy.len() == 1 {
-                    copy[0]
-                } else {
-                    let n_len = copy.len();
-                    let idx = q * (n_len as f32 - 1.0);
-                    let i = idx.floor() as usize;
-                    let f = idx - i as f32;
-
-                    let (val_i, val_i_plus_1) = if i >= n_len - 1 {
-                        let (_, &mut val, _) = copy.select_nth_unstable_by(n_len - 1, |a, b| {
-                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                        });
-                        (val, val)
-                    } else {
-                        let (_, &mut val1, _) = copy.select_nth_unstable_by(i + 1, |a, b| {
-                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                        });
-                        let val0 = *copy[..=i]
-                            .iter()
-                            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                            .unwrap();
-                        (val0, val1)
-                    };
-
-                    if i >= n_len - 1 {
-                        val_i
-                    } else {
-                        (1.0 - f) * val_i + f * val_i_plus_1
-                    }
-                };
+                copy.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let res = compute_quantile(&copy, q);
                 state.sort_buffer = copy;
                 res
             }
