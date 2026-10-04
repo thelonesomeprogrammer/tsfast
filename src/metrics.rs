@@ -45,6 +45,7 @@ pub struct FftResult {
     pub spectral_kurtosis: f32,
     pub fft_autocorr: Vec<f32>,
     pub mfcc: Vec<f32>,
+    pub lpcc: Vec<f32>,
     pub cwt_energy: Vec<f32>,
     pub cwt_entropy: f32,
     pub cwt_peaks: u16,

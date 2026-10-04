@@ -39,6 +39,7 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
     let spectral_kurtosis = context.spectral_kurtosis;
     let _fft_autocorr = context.fft_autocorr;
     let mfcc = context.mfcc;
+    let lpcc = context.lpcc;
     let cwt_energy = context.cwt_energy;
     let cwt_entropy = context.cwt_entropy;
     let fft_complex = context.fft_complex;
@@ -394,6 +395,13 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
         Feature::Mfcc(idx) => {
             if !mfcc.is_empty() && (*idx as usize) < mfcc.len() {
                 mfcc[*idx as usize]
+            } else {
+                0.0
+            }
+        }
+        Feature::Lpcc(idx) => {
+            if !lpcc.is_empty() && (*idx as usize) < lpcc.len() {
+                lpcc[*idx as usize]
             } else {
                 0.0
             }

@@ -263,9 +263,83 @@ impl FftProcessor {
             }
         }
 
+
+        let mut fft_autocorr = Vec::new();
+        let n = full_series.len() as f32;
+        let mean = state.total_sum / n;
+        let m2 = state.sum_sq_diff;
+
+        if compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF | Compute::LPCC) && n > 1.0 {
+            let n2 = full_series.len() * 2;
+            let fft_size_ac = crate::common::next_good_fft_size(n2);
+            let mut planner = realfft::RealFftPlanner::<f32>::new();
+            let r2c_ac = planner.plan_fft_forward(fft_size_ac);
+            let c2r_ac = planner.plan_fft_inverse(fft_size_ac);
+
+            let mut indata = std::mem::take(&mut state.fft_in_buffer);
+            if indata.len() < fft_size_ac {
+                indata.resize(fft_size_ac, 0.0);
+            }
+            if fft_size_ac > full_series.len() {
+                indata[full_series.len()..fft_size_ac].fill(0.0);
+            }
+            for (i, &v) in full_series.iter().enumerate() {
+                indata[i] = v - mean;
+            }
+
+            let mut outdata = std::mem::take(&mut state.fft_out_buffer);
+            let complex_len = r2c_ac.complex_len();
+            if outdata.len() < complex_len {
+                outdata.resize(complex_len, realfft::num_complex::Complex::new(0.0, 0.0));
+            }
+
+            if r2c_ac
+                .process(&mut indata[..fft_size_ac], &mut outdata[..complex_len])
+                .is_ok()
+            {
+                for c in &mut outdata[..complex_len] {
+                    *c = realfft::num_complex::Complex::new(c.norm_sqr(), 0.0);
+                }
+
+                let mut outdata_inv = std::mem::take(&mut state.fft_inv_buffer);
+                if outdata_inv.len() < fft_size_ac {
+                    outdata_inv.resize(fft_size_ac, 0.0);
+                }
+
+                if c2r_ac
+                    .process(&mut outdata[..complex_len], &mut outdata_inv[..fft_size_ac])
+                    .is_ok()
+                {
+                    let var_ac = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
+                    let m2_val = var_ac * (n - 1.0);
+                    if m2_val.abs() > 1e-9 {
+                        let scale = 1.0 / (fft_size_ac as f32);
+                        fft_autocorr = outdata_inv[..full_series.len()]
+                            .iter()
+                            .map(|&v| (v * scale) / m2_val)
+                            .collect();
+                    } else {
+                        let scale = 1.0 / (fft_size_ac as f32);
+                        fft_autocorr = outdata_inv[..full_series.len()]
+                            .iter()
+                            .map(|&v| (v * scale))
+                            .collect();
+                    }
+                }
+                state.fft_inv_buffer = outdata_inv;
+            }
+            state.fft_in_buffer = indata;
+            state.fft_out_buffer = outdata;
+        }
+
         let mut mfcc = Vec::new();
+        let mut lpcc = Vec::new();
         let mut cwt_energy = Vec::new();
         let mut cwt_entropy = 0.0;
+
+        if compute.intersects(Compute::LPCC) {
+            lpcc = crate::features::lpc::compute_lpcc(&fft_autocorr, full_series.len());
+        }
 
         if compute.intersects(Compute::MFCC) {
             let nfilt = 40;
@@ -628,8 +702,9 @@ impl FftProcessor {
             spectral_roll_off,
             spectral_skewness,
             spectral_kurtosis,
-            fft_autocorr: Vec::new(),
+            fft_autocorr,
             mfcc,
+            lpcc,
             cwt_energy,
             cwt_entropy,
         }

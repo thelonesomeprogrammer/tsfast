@@ -5,6 +5,7 @@ pub mod crossings_peaks;
 pub mod distribution;
 pub mod dynamic;
 pub mod energy;
+pub mod lpc;
 pub mod min_max;
 pub mod misc;
 pub mod moments;

@@ -107,6 +107,7 @@ bitflags! {
         const MEDIAN_ABS_DEV       = 1 << 88;
         const CALC_CENTROID        = 1 << 89;
         const ADF                  = 1 << 90;
+        const LPCC                 = 1 << 91;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()
@@ -117,6 +118,7 @@ bitflags! {
             | Self::SPEC_SLOPE.bits()
             | Self::SPECTROGRAM.bits()
             | Self::MFCC.bits()
+            | Self::LPCC.bits()
             | Self::SPEC_SPREAD.bits()
             | Self::SPEC_ENTROPY.bits()
             | Self::SPECTROGRAM.bits()

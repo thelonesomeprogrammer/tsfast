@@ -83,9 +83,15 @@ impl std::str::FromStr for Feature {
                 return Ok(Feature::RatioValueNumberToTimeSeriesLength);
             }
             "length" | "value__length" => return Ok(Feature::Length),
-            "augmented_dickey_fuller-teststat" => return Ok(Feature::AugmentedDickeyFuller(AdfAttr::TestStat)),
-            "augmented_dickey_fuller-pvalue" => return Ok(Feature::AugmentedDickeyFuller(AdfAttr::PValue)),
-            "augmented_dickey_fuller-usedlag" => return Ok(Feature::AugmentedDickeyFuller(AdfAttr::UsedLag)),
+            "augmented_dickey_fuller-teststat" => {
+                return Ok(Feature::AugmentedDickeyFuller(AdfAttr::TestStat));
+            }
+            "augmented_dickey_fuller-pvalue" => {
+                return Ok(Feature::AugmentedDickeyFuller(AdfAttr::PValue));
+            }
+            "augmented_dickey_fuller-usedlag" => {
+                return Ok(Feature::AugmentedDickeyFuller(AdfAttr::UsedLag));
+            }
             "variance_larger_than_standard_deviation"
             | "value__variance_larger_than_standard_deviation" => {
                 return Ok(Feature::VarianceLargerThanStandardDeviation);
@@ -158,6 +164,9 @@ impl std::str::FromStr for Feature {
 // ─── Parameterized parsers ──────────────────────────────────────────────────
 
 fn parse_parameterized(s: &str) -> Option<Feature> {
+    if let Some(arg) = s.strip_prefix("lpcc-") {
+        return Some(Feature::Lpcc(arg.trim().parse().ok()?));
+    }
     if let Some(arg) = s.strip_prefix("mfcc-") {
         return Some(Feature::Mfcc(arg.trim().parse().ok()?));
     }
@@ -673,7 +682,6 @@ impl Feature {
             Feature::SpectralEntropy => "spectral_entropy".to_string(),
             Feature::SpectralRollOn => "spectral_roll_on".to_string(),
             Feature::SpectralRollOff => "spectral_roll_off".to_string(),
-            Feature::SpectralSpread => "spectral_spread".to_string(),
             Feature::SpectralSkewness => "spectral_skewness".to_string(),
             Feature::SpectralKurtosis => "spectral_kurtosis".to_string(),
             Feature::SignalDistance => "signal_distance".to_string(),
@@ -699,6 +707,7 @@ impl Feature {
             Feature::PkPkDistance => "pk_pk_distance".to_string(),
             Feature::ZeroCross => "zero_cross".to_string(),
             Feature::MaxPowerSpectrum => "max_power_spectrum".to_string(),
+            Feature::Lpcc(idx) => format!("lpcc-{}", idx),
             Feature::Ecdf(d) => format!("ecdf-{}", d),
             Feature::CalcCentroid(fs) => format!("calc_centroid-{}", f32::from_bits(*fs)),
             Feature::Mfcc(idx) => format!("mfcc-{}", idx),

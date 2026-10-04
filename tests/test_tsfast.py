@@ -348,6 +348,11 @@ def test_dynamic_features():
     # Check Max Langevin
     assert np.allclose(results[7], mlfp_ref, equal_nan=True, rtol=1e-1, atol=1e-2)
 
+
+def test_lpcc():
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0, 2.0, 1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
+    features = [f"lpcc-{i}" for i in range(12)]
+
 def test_augmented_dickey_fuller():
     import numpy as np
     import tsfast
@@ -450,6 +455,10 @@ def test_change_quantiles():
     result_batch = extractor.process_2d_floats(batch)
     results = result_batch.to_pandas().iloc[0].values
 
+    expected = tsfel.feature_extraction.features.lpcc(x, 12)
+
+    for i in range(12):
+        assert np.isclose(results[i], expected[i], rtol=1e-5, atol=1e-5), f"LPCC coeff {i} differs. Expected {expected[i]}, got {results[i]}"
     expected_1 = change_quantiles(x, 0.2, 0.8, True, "mean")
     expected_2 = change_quantiles(x, 0.2, 0.8, False, "var")
     expected_3 = change_quantiles(x, 0.0, 1.0, True, "max")
