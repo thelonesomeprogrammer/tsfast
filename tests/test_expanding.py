@@ -193,6 +193,7 @@ def test_reoccurring_ratios_expanding():
         "ratio_value_number_to_time_series_length"
     ]
 
+    import tsfast
     extractor = tsfast.ExpandingExtractor(features, 1)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     result_batch = extractor.update(batch)
@@ -212,3 +213,24 @@ def test_expanding_invalid_type():
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     with pytest.raises(TypeError, match="Expected Float32Array"):
         extractor.update(batch)
+
+def test_median_diff_expanding():
+    data = np.random.randn(200).astype(np.float32)
+    chunk1 = data[:100]
+    chunk2 = data[100:]
+
+    batch1 = pa.RecordBatch.from_arrays([pa.array(chunk1)], names=["col"])
+    batch2 = pa.RecordBatch.from_arrays([pa.array(chunk2)], names=["col"])
+
+    features = ["median_diff", "median_abs_diff"]
+    import tsfast
+    extractor = tsfast.ExpandingExtractor(features, 1)
+
+    import tsfel
+    res1 = extractor.update(batch1).to_pandas().iloc[0].values
+    assert np.allclose(res1[0], tsfel.feature_extraction.features.median_diff(chunk1))
+    assert np.allclose(res1[1], tsfel.feature_extraction.features.median_abs_diff(chunk1))
+
+    res2 = extractor.update(batch2).to_pandas().iloc[0].values
+    assert np.allclose(res2[0], tsfel.feature_extraction.features.median_diff(data))
+    assert np.allclose(res2[1], tsfel.feature_extraction.features.median_abs_diff(data))

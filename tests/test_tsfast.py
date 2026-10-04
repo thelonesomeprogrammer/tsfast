@@ -345,6 +345,9 @@ def test_dynamic_features():
     # Check Max Langevin
     assert np.allclose(results[7], mlfp_ref, equal_nan=True, rtol=1e-1, atol=1e-2)
 
+def test_median_diff_features():
+    x = np.random.RandomState(42).randn(100).astype(np.float32)
+    features = ["median_diff", "median_abs_diff"]
 def test_agg_autocorrelation():
     np.random.seed(42)
     x = np.random.randn(100).astype(np.float32)
