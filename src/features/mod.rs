@@ -1,14 +1,14 @@
-pub mod moments;
-pub mod min_max;
-pub mod distribution;
-pub mod energy;
-pub mod crossings_peaks;
 pub mod autocorrelation;
 pub mod changes;
-pub mod runs;
-pub mod transform;
 pub mod complexity;
-pub mod misc;
-
+pub mod crossings_peaks;
+pub mod distribution;
 pub mod dynamic;
+pub mod energy;
+pub mod min_max;
+pub mod misc;
+pub mod moments;
+pub mod runs;
 pub mod stationarity;
+pub mod subsequence;
+pub mod transform;

@@ -43,6 +43,50 @@ pub fn eval_changes(
     let res = match feat {
                 Feature::MeanAbsChange => if n > 1.0 { (mac_sum / (n - 1.0)) as f32 } else { 0.0 },
                 Feature::MeanChange => if n > 1.0 { (mc_sum / (n - 1.0)) as f32 } else { 0.0 },
+                Feature::MedianDiff | Feature::MedianAbsDiff => {
+                    let mut diffs: Vec<f32> = std::mem::take(&mut state.diff_buffer);
+                    diffs.clear();
+
+                    if values.len() > 1 {
+                        let is_abs = matches!(feat, Feature::MedianAbsDiff);
+                        for i in 0..values.len() - 1 {
+                            let mut d = values[i + 1] - values[i];
+                            if is_abs {
+                                d = d.abs();
+                            }
+                            diffs.push(d);
+                        }
+
+                        let n_len = diffs.len();
+                        let res = if n_len % 2 == 1 {
+                            *diffs
+                                .select_nth_unstable_by(n_len / 2, |a: &f32, b: &f32| {
+                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                                .1
+                        } else {
+                            let mid = n_len / 2;
+                            let m1 = *diffs
+                                .select_nth_unstable_by(mid, |a: &f32, b: &f32| {
+                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                                .1;
+                            let m2 = *diffs[..mid]
+                                .iter()
+                                .max_by(|a: &&f32, b: &&f32| {
+                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                                .unwrap();
+                            (m1 + m2) / 2.0
+                        };
+                        state.diff_buffer = diffs;
+                        res
+                    } else {
+                        state.diff_buffer = diffs;
+                        0.0
+                    }
+                }
+
                 Feature::CidCe => state.sum_sq_diff.sqrt() as f32,
                 Feature::Slope => {
                     let mean_i = (n - 1.0) * 0.5;

@@ -102,7 +102,11 @@ bitflags! {
         const SPEC_ENTROPY         = 1 << 83;
         const MFCC                 = 1 << 84;
         const CWT_MEXH             = 1 << 85;
-        const ADF                  = 1 << 86;
+        const QUERY_SIMILARITY     = 1 << 86;
+        const MATRIX_PROFILE       = 1 << 87;
+        const MEDIAN_ABS_DEV       = 1 << 88;
+        const CALC_CENTROID        = 1 << 89;
+        const ADF                  = 1 << 90;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()
