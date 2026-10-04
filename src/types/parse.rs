@@ -329,6 +329,16 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         };
         return Some(Feature::AggLinearTrend(attr, chunk_len, func));
     }
+    if s.starts_with("change_quantiles-") {
+        let parts: Vec<&str> = s.split('-').collect();
+        if parts.len() == 5 {
+            let ql = parts[1].parse::<f32>().unwrap_or(0.0).to_bits();
+            let qh = parts[2].parse::<f32>().unwrap_or(1.0).to_bits();
+            let isabs = parts[3].to_lowercase() == "true";
+            let func = parse_agg_func(parts[4]).unwrap_or(AggFunc::Mean);
+            return Some(Feature::ChangeQuantiles(ql, qh, isabs, func));
+        }
+    }
     if s.contains("value__quantile__q_") {
         let pos = s.find("q_")?;
         let q: f32 = s[pos + 2..].parse().ok()?;
@@ -556,6 +566,21 @@ impl Feature {
                     AggFunc::Var => "var",
                 };
                 format!("agg_linear_trend-{}-{}-{}", attr_str, chunk_len, func_str)
+            }
+            Feature::ChangeQuantiles(ql_bits, qh_bits, isabs, func) => {
+                let func_str = match func {
+                    AggFunc::Max => "max",
+                    AggFunc::Min => "min",
+                    AggFunc::Mean => "mean",
+                    AggFunc::Var => "var",
+                };
+                format!(
+                    "change_quantiles-{}-{}-{}-{}",
+                    f32::from_bits(*ql_bits),
+                    f32::from_bits(*qh_bits),
+                    if *isabs { "True" } else { "False" },
+                    func_str
+                )
             }
             Feature::Quantile(q_bits) => format!("quantile-{}", f32::from_bits(*q_bits)),
             Feature::IndexMassQuantile(q_bits) => {
