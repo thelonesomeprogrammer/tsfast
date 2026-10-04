@@ -11,6 +11,7 @@ pub enum Feature {
     Min,
     Max,
     Median,
+    MedianAbsDeviation,
     Skew,
     UnbiasedFisherKurtosis, // tsfresh default
     BiasedFisherKurtosis,   // tsfel default
@@ -141,6 +142,7 @@ impl Feature {
             Self::Min => C::MIN,
             Self::Max => C::MAX,
             Self::Median => C::MEDIAN | C::NEEDS_SORT,
+            Self::MedianAbsDeviation => C::MEDIAN | C::MEDIAN_ABS_DEV | C::NEEDS_SORT,
             Self::Skew => C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT,
             Self::UnbiasedFisherKurtosis | Self::BiasedFisherKurtosis => {
                 C::SUM | C::MEAN | C::VARIANCE | C::KURTOSIS | C::ENERGY | C::NEEDS_SORT

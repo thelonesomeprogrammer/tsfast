@@ -44,6 +44,7 @@ pub fn eval_distribution(
 
     let res = match feat {
         Feature::Median => median,
+        Feature::MedianAbsDeviation => context.median_abs_dev,
         Feature::Entropy => entropy,
         Feature::BinnedEntropy(max_bins) => {
             let max_bins = *max_bins as usize;

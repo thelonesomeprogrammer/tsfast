@@ -2,6 +2,8 @@ use crate::common::ColumnState;
 use crate::types::Compute;
 
 use crate::metrics::SortMetrics;
+use std::simd::f32x4;
+use std::simd::num::SimdFloat;
 
 pub struct SortProcessor;
 
@@ -19,6 +21,7 @@ impl SortProcessor {
         let mut median = 0.0;
         let mut iqr = 0.0;
         let mut entropy = 0.0;
+        let mut median_abs_dev = 0.0;
 
         if compute.contains(Compute::NEEDS_SORT) {
             if compute.intersects(
@@ -46,7 +49,7 @@ impl SortProcessor {
                     }
                 }
             }
-            if compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::ENTROPY) {
+            if compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::ENTROPY | Compute::MEDIAN_ABS_DEV) {
                 let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
                 copy.clear();
                 copy.extend_from_slice(values);
@@ -139,6 +142,51 @@ impl SortProcessor {
                         }
                     }
                 }
+
+                if compute.contains(Compute::MEDIAN_ABS_DEV) {
+                    let med_vec = f32x4::splat(median);
+                    let mut abs_devs: Vec<f32> = std::mem::take(&mut state.mad_buffer);
+                    abs_devs.clear();
+                    abs_devs.resize(values.len(), 0.0);
+
+                    let mut i = 0;
+                    while i + 4 <= values.len() {
+                        let chunk = f32x4::from_slice(&values[i..i+4]);
+                        let diff = (chunk - med_vec).abs();
+                        diff.copy_to_slice(&mut abs_devs[i..i+4]);
+                        i += 4;
+                    }
+                    for j in i..values.len() {
+                        abs_devs[j] = (values[j] - median).abs();
+                    }
+
+                    let n_len = abs_devs.len();
+                    if n_len > 0 {
+                        if n_len % 2 == 1 {
+                            median_abs_dev = *abs_devs
+                                .select_nth_unstable_by(n_len / 2, |a: &f32, b: &f32| {
+                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                                .1;
+                        } else {
+                            let mid = n_len / 2;
+                            let m1 = *abs_devs
+                                .select_nth_unstable_by(mid, |a: &f32, b: &f32| {
+                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                                .1;
+                            let m2 = *abs_devs[..mid]
+                                .iter()
+                                .max_by(|a: &&f32, b: &&f32| {
+                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                                .unwrap();
+                            median_abs_dev = (m1 + m2) / 2.0;
+                        }
+                    }
+                    state.mad_buffer = abs_devs;
+                }
+
                 state.sort_buffer = copy;
             }
         }
@@ -149,6 +197,7 @@ impl SortProcessor {
             first_min_idx,
             last_min_idx,
             median,
+            median_abs_dev,
             iqr,
             entropy,
         }
