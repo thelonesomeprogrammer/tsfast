@@ -155,6 +155,15 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("autocorr-") {
         return Some(Feature::Autocorr(arg.parse().ok()?));
     }
+    if let Some(arg) = s.strip_prefix("agg_autocorrelation-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+        let func = parse_agg_func(parts[0])?;
+        let maxlag: u16 = parts[1].parse().ok()?;
+        return Some(Feature::AggAutocorrelation(func, maxlag));
+    }
     if let Some(arg) = s.strip_prefix("partial_autocorr-") {
         return Some(Feature::PartialAutocorr(arg.parse().ok()?));
     }
@@ -507,6 +516,15 @@ impl Feature {
             Feature::FirstLocMin => "first_loc_min".to_string(),
             Feature::LastLocMin => "last_loc_min".to_string(),
             Feature::Autocorr(lag) => format!("autocorr-{}", lag),
+            Feature::AggAutocorrelation(func, maxlag) => {
+                let func_str = match func {
+                    AggFunc::Max => "max",
+                    AggFunc::Min => "min",
+                    AggFunc::Mean => "mean",
+                    AggFunc::Var => "var",
+                };
+                format!("agg_autocorrelation-{}-{}", func_str, maxlag)
+            }
             Feature::PartialAutocorr(lag) => format!("partial_autocorr-{}", lag),
             Feature::TimeReversalAsymmetry(lag) => format!("time_reversal_asymmetry-{}", lag),
             Feature::FftCoefficient(coeff, attr) => {

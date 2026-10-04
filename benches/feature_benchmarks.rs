@@ -55,6 +55,7 @@ const FEATURES: &[&str] = &[
     "c3-1",
     "paa-2-0",
     "autocorr-1",
+    "agg_autocorrelation-mean-50",
     "partial_autocorr-1",
     "time_reversal_asymmetry-1",
     "fft_coeff-1-real",

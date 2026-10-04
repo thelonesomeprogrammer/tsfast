@@ -50,6 +50,7 @@ pub enum Feature {
     FirstLocMin,
     LastLocMin,
     Autocorr(u16),
+    AggAutocorrelation(AggFunc, u16),
     PartialAutocorr(u16),
     TimeReversalAsymmetry(u16),
     FftCoefficient(u16, FftAttr),
@@ -203,6 +204,9 @@ impl Feature {
                 } else {
                     C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
                 }
+            }
+            Self::AggAutocorrelation(_, _) => {
+                C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
             }
             Self::PartialAutocorr(_) => {
                 C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::PACF | C::NEEDS_SORT
