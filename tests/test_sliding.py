@@ -242,3 +242,24 @@ def test_sliding_invalid_type():
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     with pytest.raises(TypeError, match="Expected Float32Array"):
         extractor.update(batch)
+
+def test_median_diff_sliding():
+    import tsfast
+    data = np.random.randn(200).astype(np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(data)], names=["col"])
+
+    features = ["median_diff", "median_abs_diff"]
+    extractor = tsfast.SlidingExtractor(features, 1, 100, 50)
+
+    import tsfel
+    res = extractor.update(batch).to_pandas()
+
+    # First window
+    w1 = data[:100]
+    assert np.allclose(res.iloc[0].values[0], tsfel.feature_extraction.features.median_diff(w1))
+    assert np.allclose(res.iloc[0].values[1], tsfel.feature_extraction.features.median_abs_diff(w1))
+
+    # Second window
+    w2 = data[50:150]
+    assert np.allclose(res.iloc[1].values[0], tsfel.feature_extraction.features.median_diff(w2))
+    assert np.allclose(res.iloc[1].values[1], tsfel.feature_extraction.features.median_abs_diff(w2))

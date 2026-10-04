@@ -29,6 +29,8 @@ const FEATURES: &[&str] = &[
     "autocorrelation",
     "mean_abs_change",
     "mean_change",
+    "median_diff",
+    "median_abs_diff",
     "cid_ce",
     "slope",
     "intercept",

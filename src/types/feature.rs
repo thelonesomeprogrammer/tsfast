@@ -28,6 +28,8 @@ pub enum Feature {
     AutocorrFirst1e, // tsfel 'Autocorrelation' feature
     MeanAbsChange,
     MeanChange,
+    MedianDiff,
+    MedianAbsDiff,
     CidCe,
     Slope,
     Intercept,
@@ -163,6 +165,8 @@ impl Feature {
             }
             Self::MeanAbsChange => C::SUM | C::MEAN | C::MAC,
             Self::MeanChange => C::SUM | C::MEAN | C::MC,
+            Self::MedianDiff => C::empty(),
+            Self::MedianAbsDiff => C::empty(),
             Self::CidCe => C::SUM | C::MEAN | C::CID_CE,
             Self::Slope => C::SUM | C::MEAN | C::SLOPE,
             Self::Intercept => C::SUM | C::MEAN | C::SLOPE | C::INTERCEPT,

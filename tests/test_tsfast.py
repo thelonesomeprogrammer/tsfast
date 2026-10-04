@@ -340,3 +340,19 @@ def test_dynamic_features():
 
     # Check Max Langevin
     assert np.allclose(results[7], mlfp_ref, equal_nan=True, rtol=1e-1, atol=1e-2)
+
+def test_median_diff_features():
+    x = np.random.RandomState(42).randn(100).astype(np.float32)
+    features = ["median_diff", "median_abs_diff"]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    import tsfel
+    md = tsfel.feature_extraction.features.median_diff(x)
+    mad = tsfel.feature_extraction.features.median_abs_diff(x)
+
+    assert np.allclose(results[0], md)
+    assert np.allclose(results[1], mad)
