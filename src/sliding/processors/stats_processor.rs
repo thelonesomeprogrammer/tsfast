@@ -27,6 +27,7 @@ impl StatsProcessor {
         }
         state.abs_max = 0.0;
         state.abs_sum = 0.0;
+        state.t_energy = 0.0;
     }
 
     #[inline(always)]

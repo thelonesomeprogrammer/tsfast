@@ -98,7 +98,7 @@ def test_expanding_higher_moments():
     data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
     res = extractor.update(data).to_pandas().iloc[0]
     
-    from scipy.stats import skew, kurtosis
+    from scipy.stats import kurtosis
     assert np.allclose(res['mean'], np.mean(x))
     assert np.allclose(res['std_dev'], np.std(x, ddof=1))
     # scipy skew/kurtosis might have different bias corrections, but let's check values are reasonable
@@ -204,6 +204,53 @@ def test_reoccurring_ratios_expanding():
     assert np.allclose(results.iloc[0].values, [4.0/5.0, 2.0/3.0, 3.0/5.0])
 
 
+def test_ecdf_pk_centroid_expanding():
+    import tsfel
+    import tsfast
+    import pyarrow as pa
+    x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0], dtype=np.float32)
+    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50"]
+    extractor = tsfast.ExpandingExtractor(features, n_cols=1)
+
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    results = extractor.update(batch).to_pandas().iloc[-1].values
+
+    tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(x, d=10)
+    tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(x, d=3)
+    tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(x)
+    tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(x, fs=100)
+    tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(x, fs=50)
+
+    assert np.allclose(results[0], min(10.0 / len(x), 1.0))
+    assert np.allclose(results[1], min(3.0 / len(x), 1.0))
+    assert np.allclose(results[2], tsfel_pk)
+    assert np.allclose(results[3], tsfel_centroid)
+    assert np.allclose(results[4], tsfel_centroid_50)
+
+
+def test_ecdf_pk_centroid_expanding():
+    import tsfel
+    import tsfast
+    import pyarrow as pa
+    x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0], dtype=np.float32)
+    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50"]
+    extractor = tsfast.ExpandingExtractor(features, n_cols=1)
+
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    results = extractor.update(batch).to_pandas().iloc[-1].values
+
+    tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(x, d=10)
+    tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(x, d=3)
+    tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(x)
+    tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(x, fs=100)
+    tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(x, fs=50)
+
+    assert np.allclose(results[0], min(10.0 / len(x), 1.0))
+    assert np.allclose(results[1], min(3.0 / len(x), 1.0))
+    assert np.allclose(results[2], tsfel_pk)
+    assert np.allclose(results[3], tsfel_centroid)
+    assert np.allclose(results[4], tsfel_centroid_50)
+
 def test_expanding_invalid_type():
     # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
     x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
@@ -212,3 +259,24 @@ def test_expanding_invalid_type():
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     with pytest.raises(TypeError, match="Expected Float32Array"):
         extractor.update(batch)
+
+def test_median_diff_expanding():
+    data = np.random.randn(200).astype(np.float32)
+    chunk1 = data[:100]
+    chunk2 = data[100:]
+
+    batch1 = pa.RecordBatch.from_arrays([pa.array(chunk1)], names=["col"])
+    batch2 = pa.RecordBatch.from_arrays([pa.array(chunk2)], names=["col"])
+
+    features = ["median_diff", "median_abs_diff"]
+    import tsfast
+    extractor = tsfast.ExpandingExtractor(features, 1)
+
+    import tsfel
+    res1 = extractor.update(batch1).to_pandas().iloc[0].values
+    assert np.allclose(res1[0], tsfel.feature_extraction.features.median_diff(chunk1))
+    assert np.allclose(res1[1], tsfel.feature_extraction.features.median_abs_diff(chunk1))
+
+    res2 = extractor.update(batch2).to_pandas().iloc[0].values
+    assert np.allclose(res2[0], tsfel.feature_extraction.features.median_diff(data))
+    assert np.allclose(res2[1], tsfel.feature_extraction.features.median_abs_diff(data))

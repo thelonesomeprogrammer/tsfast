@@ -50,6 +50,11 @@ impl TrendProcessor {
             state.sum_ix_vec += indices * chunk;
         }
 
+        if compute.contains(Compute::CALC_CENTROID) {
+            let indices = f32x4::from_array([offset, offset + 1.0, offset + 2.0, offset + 3.0]);
+            state.t_energy_vec += indices * (chunk * chunk);
+        }
+
         if compute.contains(Compute::PAA) {
             for (t_idx, _total) in unique_paa_totals.iter().enumerate() {
                 let b = &paa_boundaries[t_idx];
@@ -98,6 +103,10 @@ impl TrendProcessor {
             state.sum_ix += state.sum_ix_vec.reduce_sum();
             state.sum_ix_vec = f32x4::splat(0.0);
         }
+        if compute.contains(Compute::CALC_CENTROID) {
+            state.t_energy += state.t_energy_vec.reduce_sum();
+            state.t_energy_vec = f32x4::splat(0.0);
+        }
         if compute.contains(Compute::C3) {
             for l_idx in 0..state.c3_sums.len() {
                 state.c3_sums[l_idx] += state.c3_sums_vec[l_idx].reduce_sum();
@@ -127,6 +136,9 @@ impl TrendProcessor {
         }
         if compute.contains(Compute::SLOPE) {
             state.sum_ix += (global_idx as f32) * val;
+        }
+        if compute.contains(Compute::CALC_CENTROID) {
+            state.t_energy += (global_idx as f32) * val * val;
         }
         if compute.contains(Compute::PAA) {
             for (t_idx, _total) in unique_paa_totals.iter().enumerate() {

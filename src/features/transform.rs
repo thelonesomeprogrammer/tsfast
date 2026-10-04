@@ -336,6 +336,61 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
                 0.0
             }
         }
+        Feature::SpectralCentroid => freq_centroid,
+        Feature::CalcCentroid(fs_bits) => {
+            let fs = f32::from_bits(*fs_bits);
+            if state.energy == 0.0 || fs == 0.0 {
+                0.0
+            } else {
+                (state.t_energy / fs) / state.energy
+            }
+        }
+        Feature::SpectralDistance => {
+            if !spectrum.is_empty() {
+                let m = spectrum.iter().sum::<f32>() / spectrum.len() as f32;
+                spectrum
+                    .iter()
+                    .map(|&s| (s - m).powi(2))
+                    .sum::<f32>()
+                    .sqrt()
+            } else {
+                0.0
+            }
+        }
+        Feature::SpectralDecrease => spectral_decrease,
+        Feature::SpectralSlope => spectral_slope,
+        Feature::SpectrogramCoefficients(_, f_bits) => {
+            if !spectrum.is_empty() {
+                let target_freq = f32::from_bits(*f_bits);
+                let fs = 100.0;
+                let n_fft = (spectrum.len() - 1) * 2;
+                let freq_step = fs / n_fft as f32;
+                let idx = (target_freq / freq_step).round() as usize;
+                let idx = idx.min(spectrum.len() - 1);
+                spectrum[idx]
+            } else {
+                0.0
+            }
+        }
+        Feature::WaveletFeatures(_w_bits, f_type) => {
+            if values.len() >= 2 {
+                let mut sum = 0.0;
+                for i in (0..values.len() - 1).step_by(2) {
+                    if *f_type == 0 {
+                        sum += (values[i] - values[i + 1]).abs();
+                    } else {
+                        sum += (values[i] - values[i + 1]).powi(2);
+                    }
+                }
+                if *f_type == 0 {
+                    sum / (values.len() / 2) as f32
+                } else {
+                    (sum / (values.len() / 2) as f32).sqrt()
+                }
+            } else {
+                0.0
+            }
+        }
 
         Feature::Mfcc(idx) => {
             if !mfcc.is_empty() && (*idx as usize) < mfcc.len() {

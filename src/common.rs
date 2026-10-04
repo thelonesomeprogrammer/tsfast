@@ -58,6 +58,7 @@ pub struct ColumnState {
     pub sum_prod: f32,
     pub sum_ix: f32,
     pub auc_sum: f32,
+    pub t_energy: f32,
     pub mac_sum_vec: f32x4,
     pub mc_sum_vec: f32x4,
 
@@ -74,6 +75,7 @@ pub struct ColumnState {
     pub sum_prod_vec: f32x4,
     pub auc_sum_vec: f32x4,
     pub sum_ix_vec: f32x4,
+    pub t_energy_vec: f32x4,
 
     pub zcr_count: u32,
     pub peaks: u32,
@@ -110,6 +112,8 @@ pub struct ColumnState {
     pub binned_entropy_buffer: Vec<f32>,
     pub agg_linear_trend_buffer: Vec<f32>,
     pub sort_buffer: Vec<f32>,
+    pub mad_buffer: Vec<f32>,
+    pub diff_buffer: Vec<f32>,
     pub pacf_buffer: Vec<f32>,
     pub cwt_final_energy: Vec<f32>,
     pub cwt_final_sum_abs: Vec<f32>,
@@ -147,6 +151,11 @@ pub struct ColumnState {
     pub welch_planner: Option<std::sync::Arc<std::sync::Mutex<realfft::RealFftPlanner<f32>>>>,
     pub cwt_wavelets: rustc_hash::FxHashMap<u16, Vec<f32>>,
     pub spectrum_buffer: Vec<f32>,
+    pub adf_cache_n: usize,
+    pub adf_cache_ptr: usize,
+    pub adf_test_stat: f32,
+    pub adf_p_value: f32,
+    pub adf_used_lag: f32,
 }
 
 pub fn next_good_fft_size(n: usize) -> usize {
@@ -207,10 +216,12 @@ impl ColumnState {
             max_vec: f32x4::splat(f32::NEG_INFINITY),
             abs_sum_vec: f32x4::splat(0.0),
             abs_max_vec: f32x4::splat(0.0),
+            t_energy: 0.0,
             sum_sq_diff_vec: f32x4::splat(0.0),
             sum_prod_vec: f32x4::splat(0.0),
             auc_sum_vec: f32x4::splat(0.0),
             sum_ix_vec: f32x4::splat(0.0),
+            t_energy_vec: f32x4::splat(0.0),
             zcr_count: 0,
             peaks: 0,
             zc_indices: SmallVec::new(),
@@ -249,6 +260,8 @@ impl ColumnState {
             binned_entropy_buffer: Vec::new(),
             agg_linear_trend_buffer: Vec::new(),
             sort_buffer: Vec::new(),
+            mad_buffer: Vec::new(),
+            diff_buffer: Vec::new(),
             pacf_buffer: Vec::new(),
             cwt_final_energy: Vec::new(),
             cwt_final_sum_abs: Vec::new(),
@@ -284,6 +297,11 @@ impl ColumnState {
             welch_planner: None,
             cwt_wavelets: rustc_hash::FxHashMap::default(),
             spectrum_buffer: Vec::new(),
+            adf_cache_n: 0,
+            adf_cache_ptr: 0,
+            adf_test_stat: std::f32::NAN,
+            adf_p_value: std::f32::NAN,
+            adf_used_lag: std::f32::NAN,
         }
     }
 }

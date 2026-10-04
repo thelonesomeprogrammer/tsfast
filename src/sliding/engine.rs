@@ -116,7 +116,7 @@ impl<'a> SlidingEngine<'a> {
             state,
         );
 
-        TrendProcessor::update_incremental(self.compute, new_val, window_size, state);
+        TrendProcessor::update_incremental(self.compute, old_val, new_val, window_size, state);
 
         if self
             .compute
@@ -387,6 +387,8 @@ impl<'a> SlidingEngine<'a> {
                     v
                 } else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) {
                     v
+                } else if let Some(v) = crate::features::subsequence::eval_subsequence(feat, &mut context) {
+                    v
                 } else if let Some(v) =
                     crate::features::transform::eval_transform(feat, &mut context)
                 {
@@ -396,7 +398,7 @@ impl<'a> SlidingEngine<'a> {
                 {
                     v
                 } else {
-                    crate::features::dynamic::eval_dynamic(feat, &mut context).unwrap_or_else(|| crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0))
+                    crate::features::dynamic::eval_dynamic(feat, &mut context).or_else(|| crate::features::stationarity::eval_stationarity(feat, &mut context)).unwrap_or_else(|| crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0))
                 }
             };
             feats.push(val);

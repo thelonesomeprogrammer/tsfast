@@ -154,6 +154,7 @@ impl<'a> ExpandingEngine<'a> {
                 self.unique_autocorr_lags,
                 self.unique_tra_lags,
             );
+            TrendProcessor::process_remainder(self.compute, val, global_idx, state);
 
             state.prev_last = val;
         }
@@ -180,8 +181,8 @@ impl<'a> ExpandingEngine<'a> {
 
         let base_metrics = StatsProcessor::finalize_base_metrics(state, n);
 
-        let (median, iqr) =
-            SortProcessor::process_running_sorted(self.compute, full_series, running_sorted);
+        let (median, iqr, median_abs_dev) =
+            SortProcessor::process_running_sorted(self.compute, full_series, running_sorted, state);
 
         let mut fft_res = FftProcessor::finalize(
             self.compute,
@@ -203,6 +204,7 @@ impl<'a> ExpandingEngine<'a> {
             first_min_idx: 0,
             last_min_idx: 0,
             median,
+            median_abs_dev,
             iqr,
             entropy,
         };
@@ -248,6 +250,8 @@ impl<'a> ExpandingEngine<'a> {
                     v
                 } else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) {
                     v
+                } else if let Some(v) = crate::features::subsequence::eval_subsequence(feat, &mut context) {
+                    v
                 } else if let Some(v) =
                     crate::features::transform::eval_transform(feat, &mut context)
                 {
@@ -257,6 +261,8 @@ impl<'a> ExpandingEngine<'a> {
                 {
                     v
                 } else if let Some(v) = crate::features::dynamic::eval_dynamic(feat, &mut context) {
+                    v
+                } else if let Some(v) = crate::features::stationarity::eval_stationarity(feat, &mut context) {
                     v
                 } else if let Some(v) = crate::features::misc::eval_misc(feat, &mut context) {
                     v
