@@ -151,6 +151,11 @@ pub struct ColumnState {
     pub welch_planner: Option<std::sync::Arc<std::sync::Mutex<realfft::RealFftPlanner<f32>>>>,
     pub cwt_wavelets: rustc_hash::FxHashMap<u16, Vec<f32>>,
     pub spectrum_buffer: Vec<f32>,
+    pub adf_cache_n: usize,
+    pub adf_cache_ptr: usize,
+    pub adf_test_stat: f32,
+    pub adf_p_value: f32,
+    pub adf_used_lag: f32,
 }
 
 pub fn next_good_fft_size(n: usize) -> usize {
@@ -292,6 +297,11 @@ impl ColumnState {
             welch_planner: None,
             cwt_wavelets: rustc_hash::FxHashMap::default(),
             spectrum_buffer: Vec::new(),
+            adf_cache_n: 0,
+            adf_cache_ptr: 0,
+            adf_test_stat: std::f32::NAN,
+            adf_p_value: std::f32::NAN,
+            adf_used_lag: std::f32::NAN,
         }
     }
 }

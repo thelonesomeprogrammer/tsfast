@@ -348,9 +348,46 @@ def test_dynamic_features():
     # Check Max Langevin
     assert np.allclose(results[7], mlfp_ref, equal_nan=True, rtol=1e-1, atol=1e-2)
 
+def test_augmented_dickey_fuller():
+    import numpy as np
+    import tsfast
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    np.random.seed(42)
+    # Test vector 1: Random noise
+    x1 = np.random.randn(100).astype(np.float32)
+
+    # Test vector 2: Random walk
+    x2 = np.cumsum(np.random.randn(100)).astype(np.float32)
+
+    # Test vector 3: Linear trend
+    x3 = (np.arange(100) * 0.1 + np.random.randn(100)).astype(np.float32)
+
+    features = [
+        "augmented_dickey_fuller-teststat",
+        "augmented_dickey_fuller-pvalue",
+        "augmented_dickey_fuller-usedlag"
+    ]
+
+    for x in [x1, x2, x3]:
+        tsfresh_teststat = fc.augmented_dickey_fuller(x, [{"attr": "teststat"}])[0][1]
+        tsfresh_pvalue = fc.augmented_dickey_fuller(x, [{"attr": "pvalue"}])[0][1]
+        tsfresh_usedlag = fc.augmented_dickey_fuller(x, [{"attr": "usedlag"}])[0][1]
+
+        batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['x'])
+        res = tsfast.Extractor(features).process_2d_floats(batch)
+
+        # Teststat
+        assert np.isclose(res[0][0].as_py(), tsfresh_teststat, rtol=1e-2, atol=1e-2)
+        # P-value (MacKinnon interpolation might differ slightly)
+        assert np.isclose(res[1][0].as_py(), tsfresh_pvalue, rtol=1e-2, atol=1e-2)
+        # Used lag
+        assert res[2][0].as_py() == tsfresh_usedlag
+
 def test_median_diff_features():
     x = np.random.RandomState(42).randn(100).astype(np.float32)
     features = ["median_diff", "median_abs_diff"]
+
 def test_agg_autocorrelation():
     np.random.seed(42)
     x = np.random.randn(100).astype(np.float32)

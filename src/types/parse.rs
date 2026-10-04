@@ -1,4 +1,4 @@
-use super::feature::{AggAttr, AggFunc, Feature, FftAttr};
+use super::feature::{AdfAttr, AggAttr, AggFunc, Feature, FftAttr};
 
 // ─── FromStr ────────────────────────────────────────────────────────────────
 
@@ -83,6 +83,9 @@ impl std::str::FromStr for Feature {
                 return Ok(Feature::RatioValueNumberToTimeSeriesLength);
             }
             "length" | "value__length" => return Ok(Feature::Length),
+            "augmented_dickey_fuller-teststat" => return Ok(Feature::AugmentedDickeyFuller(AdfAttr::TestStat)),
+            "augmented_dickey_fuller-pvalue" => return Ok(Feature::AugmentedDickeyFuller(AdfAttr::PValue)),
+            "augmented_dickey_fuller-usedlag" => return Ok(Feature::AugmentedDickeyFuller(AdfAttr::UsedLag)),
             "variance_larger_than_standard_deviation"
             | "value__variance_larger_than_standard_deviation" => {
                 return Ok(Feature::VarianceLargerThanStandardDeviation);
@@ -424,6 +427,15 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         let coeff: u16 = arg.parse().ok()?;
         return Some(Feature::SpktWelchDensity(coeff));
     }
+    if let Some(attr_str) = s.strip_prefix("augmented_dickey_fuller-") {
+        return match attr_str {
+            "teststat" => Some(Feature::AugmentedDickeyFuller(AdfAttr::TestStat)),
+            "pvalue" => Some(Feature::AugmentedDickeyFuller(AdfAttr::PValue)),
+            "usedlag" => Some(Feature::AugmentedDickeyFuller(AdfAttr::UsedLag)),
+            _ => None,
+        };
+    }
+
     if let Some(arg) = s.strip_prefix("number_cwt_peaks__n_") {
         let n: u16 = arg.parse().ok()?;
         return Some(Feature::NumberCwtPeaks(n));
@@ -709,6 +721,11 @@ impl Feature {
                 )
             }
             Feature::NumberCwtPeaks(n) => format!("number_cwt_peaks__n_{}", n),
+            Feature::AugmentedDickeyFuller(attr) => match attr {
+                AdfAttr::TestStat => "augmented_dickey_fuller-teststat".to_string(),
+                AdfAttr::PValue => "augmented_dickey_fuller-pvalue".to_string(),
+                AdfAttr::UsedLag => "augmented_dickey_fuller-usedlag".to_string(),
+            },
             Feature::ArCoefficient(k, p) => format!("ar_coefficient-{}-{}", k, p),
             Feature::FriedrichCoefficients(m, r_bits, coeff) => {
                 format!(
