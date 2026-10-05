@@ -1,5 +1,7 @@
 # Missing Features in tsfast
 
+> **Agents:** this is the backlog. Pick tasks from here, and delete a row in the same PR that implements it.
+
 Based on a comprehensive audit of **TSFresh** (76 features) and **TSFEL** (68 features), here are the features that are **NOT yet implemented** in `tsfast` (excluding WIP features `ecdf`, `pk_pk_distance`, and `calc_centroid`). The estimated complexity indicates the effort and algorithmic difficulty of implementing these optimally in Rust using SIMD.
 
 ---
@@ -9,7 +11,6 @@ These features are heavily used in Python but suffer from extreme performance bo
 
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
-| **`permutation_entropy`** | TSFresh | **High** | Requires computing the Shannon entropy of ordinal rank permutations. In Rust: use branchless sorting networks for small $D \in [3, 7]$ and map permutations to integer Lehmer codes without heap allocations. |
 | **`lempel_ziv_complexity`** | TSFresh/TSFEL | **High** | LZ78 complexity of discretized series. In Rust: binarize via SIMD `_mm256_movemask_pd`, then parse using a zero-allocation array-based trie or flat hash set. |
 
 ---
@@ -25,7 +26,6 @@ Features summarizing signal amplitude distribution, central tendency, and disper
 | **`ecdf_slope`** | TSFEL | **Medium** | Slope between two ECDF percentiles. Quickselect + division. |
 | **`count_above` / `count_below`** | TSFresh | **Low** | Count values above/below an arbitrary threshold $t$. SIMD compare + popcount. |
 | **`range_count`** | TSFresh | **Low** | Count points inside interval $[min, max)$. Double SIMD compare + AND mask + popcount. |
-| **`value_count`** | TSFresh | **Low** | Exact count of specific value. SIMD exact match + popcount. |
 
 ---
 
@@ -34,12 +34,7 @@ Features sensitive to the temporal order, differences, and zero crossings.
 
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
-| **`negative_turning`** | TSFEL | **Low** | Local minima count. 3-way SIMD vector compare (`x[i-1] > x[i] < x[i+1]`) + popcount. |
-| **`positive_turning`** | TSFEL | **Low** | Local maxima count. 3-way SIMD vector compare + popcount. |
-| **`number_crossing_m`** | TSFresh | **Low** | Number of crossings of value $m$. Shifted vector XOR of sign bits of $(x - m)$. |
-| **`number_peaks(n)`** | TSFresh | **Medium** | Number of peaks with dynamic support parameter $n$. Vectorized sliding window maximum filter. |
 | **`neighbourhood_peaks`**| TSFEL | **Medium** | Peaks that dominate window neighbourhood. Vectorized sliding window maximum. |
-| **`energy_ratio_by_chunks`** | TSFresh | **Low** | SIMD chunked energy ratio. Chunked sum of squares using FMA. |
 | **`abs_percentage_sum_of_changes`**| TSFresh | **Low** | Total absolute change divided by mean/sum. |
 
 ---
@@ -71,7 +66,6 @@ Features measuring signal non-linearity, self-similarity, and fractal dimension.
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
 | **`petrosian_fractal_dimension`**| TSFEL | **Low** | Relies on derivative sign changes. SIMD adjacent diff + sign mask + popcount (extremely fast). |
-| **`higuchi_fractal_dimension`** | TSFEL | **High** | Log-log slope of curve lengths across subsampled strides. Outer loop unrolling & SIMD. |
 | **`maximum_fractal_length`** | TSFEL | **High** | Shared computation with HFD; vectorized max reduction. |
 | **`dfa`** (Detrended Fluct.) | TSFEL | **High** | Cumulative sum + chunked linear regressions and residual sum of squares. |
 | **`hurst_exponent`** | TSFEL | **High** | Parallelized multi-scale chunking, vectorized prefix sum and Rescaled Range (R/S). |

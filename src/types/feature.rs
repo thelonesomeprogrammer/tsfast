@@ -276,7 +276,6 @@ impl Feature {
             Self::SpectralEntropy => C::SPEC_ENTROPY | C::NEEDS_SORT,
             Self::SpectralRollOn => C::SPEC_ROLLON | C::NEEDS_SORT,
             Self::SpectralRollOff => C::SPEC_ROLLOFF | C::NEEDS_SORT,
-            Self::SpectralSpread => C::SPEC_SPREAD | C::NEEDS_SORT,
             Self::SpectralSkewness => C::SPEC_SKEWNESS | C::NEEDS_SORT,
             Self::SpectralKurtosis => C::SPEC_KURTOSIS | C::NEEDS_SORT,
             Self::SignalDistance => C::SIG_DISTANCE | C::NEEDS_SORT,
