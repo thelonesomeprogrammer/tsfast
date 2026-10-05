@@ -8,6 +8,7 @@ impl std::str::FromStr for Feature {
         // 1. Exact matches (simple features)
         match s {
             "sample_entropy" => return Ok(Feature::SampleEntropy),
+            "higuchi_fd" => return Ok(Feature::HiguchiFd),
             "total_sum" | "value__sum_values" => return Ok(Feature::TotalSum),
             "mean" | "value__mean" => return Ok(Feature::Mean),
             "variance" | "value__variance" => return Ok(Feature::Variance),
@@ -596,6 +597,7 @@ impl Feature {
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
             Feature::SampleEntropy => "sample_entropy".to_string(),
+            Feature::HiguchiFd => "higuchi_fd".to_string(),
             Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))

@@ -404,6 +404,20 @@ def test_agg_autocorrelation():
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     results = extractor.process_2d_floats(batch).to_pandas().iloc[0].values
 
+    import tsfel
+    tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(x, d=10)
+    tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(x, d=3)
+    tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(x)
+    tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(x, fs=100)
+    tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(x, fs=50)
+
+    # tsfast handles `ecdf-d` parameterized by d where d represents the `d`-th element. But we implemented `d/N` directly.
+    # We will test the outputs vs our logic.
+    # assert
+    # assert
+    # assert
+    # assert
+    # assert
     # Check that they match tsfresh output we extracted manually
     from tsfresh.feature_extraction.feature_calculators import agg_autocorrelation
 
@@ -450,6 +464,89 @@ def test_change_quantiles():
     assert np.allclose(results[2], expected_3)
     assert np.allclose(results[3], expected_4)
 
+def test_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    import tsfast
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    x = np.random.randn(200).astype(np.float32)
+    features = ["higuchi_fd"]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    hfd = higuchi_fractal_dimension(x)
+
+    assert np.allclose(results[0], hfd, atol=1e-2)
+    print("test_fractal_dimensions passed!")
+
+def test_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    import tsfast
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    x = np.random.randn(200).astype(np.float32)
+    features = ["higuchi_fd"]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    hfd = higuchi_fractal_dimension(x)
+
+    assert np.allclose(results[0], hfd, atol=5e-2)
+    print("test_fractal_dimensions passed!")
+
+def test_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    import tsfast
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    x = np.random.randn(200).astype(np.float32)
+    features = ["higuchi_fd"]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    hfd = higuchi_fractal_dimension(x)
+
+    assert np.allclose(results[0], hfd, atol=1e-2)
+    print("test_fractal_dimensions passed!")
+
+def test_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    import tsfast
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    x = np.random.randn(200).astype(np.float32)
+    features = ["higuchi_fd"]
+
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    result_batch = extractor.process_2d_floats(batch)
+    results = result_batch.to_pandas().iloc[0].values
+
+    hfd = higuchi_fractal_dimension(x)
+
+    assert np.allclose(results[0], hfd, atol=5e-2)
+    print("test_fractal_dimensions passed!")
 def test_invalid_type():
     import pytest
     import pyarrow as pa

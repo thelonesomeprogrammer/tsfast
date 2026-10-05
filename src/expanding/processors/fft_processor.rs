@@ -48,7 +48,7 @@ impl FftProcessor {
                             .resize(complex_len, num_complex::Complex::new(0.0, 0.0));
                     }
                     r2c.process(
-                        &mut state.fft_in_buffer,
+                        &mut state.fft_in_buffer[..r2c.len()],
                         &mut state.fft_out_buffer[..complex_len],
                     )
                     .unwrap();
@@ -77,7 +77,7 @@ impl FftProcessor {
                             .resize(complex_len, num_complex::Complex::new(0.0, 0.0));
                     }
                     r2c.process(
-                        &mut state.fft_in_buffer,
+                        &mut state.fft_in_buffer[..r2c.len()],
                         &mut state.fft_out_buffer[..complex_len],
                     )
                     .unwrap();
