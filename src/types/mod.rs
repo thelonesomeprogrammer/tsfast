@@ -1,6 +1,8 @@
 mod compute;
 mod feature;
 mod parse;
+#[cfg(test)]
+mod tests;
 
 // Flat re-exports: every existing `use crate::types::{…}` compiles unchanged.
 pub use compute::Compute;

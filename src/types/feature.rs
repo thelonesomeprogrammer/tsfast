@@ -2,7 +2,8 @@ use super::compute::Compute;
 
 // ─── Feature enum ───────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy, strum::EnumDiscriminants)]
+#[strum_discriminants(derive(Hash, strum::EnumIter))]
 pub enum Feature {
     TotalSum,
     Mean,

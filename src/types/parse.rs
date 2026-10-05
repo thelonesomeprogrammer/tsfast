@@ -1,31 +1,126 @@
 use super::feature::{AdfAttr, AggAttr, AggFunc, Feature, FftAttr};
 
+// ─── Unit features: one line each ──────────────────────────────────────────
+//
+// `Variant => "canonical_name", ["alias", ...];`
+// The canonical name is the output column name and is always accepted when
+// parsing; aliases are additionally accepted (tsfresh/TSFEL/torque spellings).
+// Features with parameters are parsed in `from_str` / named in `name()` below.
+
+macro_rules! unit_features {
+    ($($variant:ident => $name:literal $(, [$($alias:literal),* $(,)?])?;)*) => {
+        fn parse_unit(s: &str) -> Option<Feature> {
+            match s {
+                $($name $($(| $alias)*)? => Some(Feature::$variant),)*
+                _ => None,
+            }
+        }
+
+        /// Every unit variant, for the coverage/round-trip tests.
+        #[cfg(test)]
+        pub(crate) const UNIT_FEATURES: &[Feature] = &[$(Feature::$variant),*];
+
+        impl Feature {
+            fn unit_name(&self) -> Option<&'static str> {
+                match self {
+                    $(Feature::$variant => Some($name),)*
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
+unit_features! {
+    TotalSum => "total_sum", ["value__sum_values"];
+    Mean => "mean", ["value__mean"];
+    Variance => "variance", ["value__variance"];
+    Std => "std_dev", ["std", "value__standard_deviation"];
+    Min => "min_value", ["min", "value__minimum"];
+    Max => "max_value", ["max", "value__maximum"];
+    Median => "median", ["value__median"];
+    MedianAbsDeviation => "median_abs_deviation";
+    Skew => "skewness", ["skew", "value__skewness"];
+    UnbiasedFisherKurtosis => "kurtosis", ["value__kurtosis", "unbiased_fisher_kurtosis"];
+    BiasedFisherKurtosis => "biased_fisher_kurtosis";
+    Mad => "mad", ["mean_abs_deviation"];
+    Iqr => "iqr";
+    Entropy => "entropy";
+    SampleEntropy => "sample_entropy";
+    HiguchiFd => "higuchi_fd";
+    Energy => "energy", ["torque_Absolute energy"];
+    Rms => "rms";
+    RootMeanSquare => "root_mean_square";
+    ZeroCrossingRate => "zero_crossing_rate";
+    PeakCount => "peak_count";
+    NegativeTurning => "negative_turning";
+    PositiveTurning => "positive_turning";
+    AutocorrLag1 => "autocorr_lag1", ["centered_autocorr_lag1"];
+    AutocorrFirst1e => "autocorrelation", ["autocorr_first_1e"];
+    MeanAbsChange => "mean_abs_change";
+    MeanChange => "mean_change", ["mean_diff", "torque_Mean diff"];
+    MedianDiff => "median_diff";
+    MedianAbsDiff => "median_abs_diff";
+    CidCe => "cid_ce";
+    Slope => "slope", ["torque_Slope"];
+    Intercept => "intercept";
+    AbsSumChange => "abs_sum_change";
+    CountAboveMean => "count_above_mean";
+    CountBelowMean => "count_below_mean";
+    LongestStrikeAboveMean => "longest_strike_above_mean";
+    LongestStrikeBelowMean => "longest_strike_below_mean";
+    VariationCoefficient => "variation_coefficient";
+    Auc => "auc";
+    SlopeSignChange => "slope_sign_change";
+    TurningPoints => "turning_points";
+    ZeroCrossingMean => "zero_crossing_mean";
+    ZeroCrossingStd => "zero_crossing_std";
+    AbsMax => "abs_max", ["value__absolute_maximum"];
+    FirstLocMax => "first_loc_max", ["value__first_location_of_maximum"];
+    LastLocMax => "last_loc_max", ["value__last_location_of_maximum"];
+    FirstLocMin => "first_loc_min", ["value__first_location_of_minimum"];
+    LastLocMin => "last_loc_min", ["value__last_location_of_minimum"];
+    BenfordCorrelation => "benford_correlation", ["value__benford_correlation"];
+    SumOfReoccurringValues => "sum_of_reoccurring_values", ["value__sum_of_reoccurring_values"];
+    SumOfReoccurringDataPoints => "sum_of_reoccurring_data_points", ["value__sum_of_reoccurring_data_points"];
+    PercentageOfReoccurringDatapointsToAllDatapoints => "percentage_of_reoccurring_datapoints_to_all_datapoints", ["value__percentage_of_reoccurring_datapoints_to_all_datapoints"];
+    PercentageOfReoccurringValuesToAllValues => "percentage_of_reoccurring_values_to_all_values", ["value__percentage_of_reoccurring_values_to_all_values"];
+    RatioValueNumberToTimeSeriesLength => "ratio_value_number_to_time_series_length", ["value__ratio_value_number_to_time_series_length"];
+    Length => "length", ["value__length"];
+    VarianceLargerThanStandardDeviation => "variance_larger_than_standard_deviation", ["value__variance_larger_than_standard_deviation"];
+    SpectralCentroid => "spectral_centroid", ["torque_Centroid"];
+    SpectralDistance => "spectral_distance", ["torque_Spectral distance"];
+    SpectralDecrease => "spectral_decrease", ["torque_Spectral decrease"];
+    SpectralSlope => "spectral_slope", ["torque_Spectral slope"];
+    SpectralSpread => "spectral_spread", ["torque_Spectral spread"];
+    SpectralEntropy => "spectral_entropy", ["torque_Spectral entropy"];
+    SpectralRollOn => "spectral_roll_on", ["torque_Spectral roll-on"];
+    SpectralRollOff => "spectral_roll_off", ["torque_Spectral roll-off"];
+    SpectralSkewness => "spectral_skewness", ["torque_Spectral skewness"];
+    SpectralKurtosis => "spectral_kurtosis", ["torque_Spectral kurtosis"];
+    SignalDistance => "signal_distance", ["torque_Signal distance"];
+    PkPkDistance => "pk_pk_distance";
+    ZeroCross => "zero_cross", ["torque_Zero_crossing_rate"];
+    MaxPowerSpectrum => "max_power_spectrum";
+    MeanSecondDerivativeCentral => "mean_second_derivative_central";
+    HasDuplicateMax => "has_duplicate_max";
+    HasDuplicateMin => "has_duplicate_min";
+    HasDuplicate => "has_duplicate";
+    WaveletEntropy => "wavelet_entropy";
+}
+
 // ─── FromStr ────────────────────────────────────────────────────────────────
 
 impl std::str::FromStr for Feature {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // 1. Exact matches (simple features)
+        // 1. Unit features (table below)
+        if let Some(f) = parse_unit(s) {
+            return Ok(f);
+        }
+
+        // 2. Exact matches with fixed parameters
         match s {
-            "sample_entropy" => return Ok(Feature::SampleEntropy),
-            "higuchi_fd" => return Ok(Feature::HiguchiFd),
-            "total_sum" | "value__sum_values" => return Ok(Feature::TotalSum),
-            "mean" | "value__mean" => return Ok(Feature::Mean),
-            "variance" | "value__variance" => return Ok(Feature::Variance),
-            "std" | "std_dev" | "value__standard_deviation" => return Ok(Feature::Std),
-            "min" | "min_value" | "value__minimum" => return Ok(Feature::Min),
-            "max" | "max_value" | "value__maximum" => return Ok(Feature::Max),
-            "median" | "value__median" => return Ok(Feature::Median),
-            "skew" | "skewness" | "value__skewness" => return Ok(Feature::Skew),
-            "kurtosis" | "value__kurtosis" | "unbiased_fisher_kurtosis" => {
-                return Ok(Feature::UnbiasedFisherKurtosis);
-            }
-            "biased_fisher_kurtosis" => return Ok(Feature::BiasedFisherKurtosis),
-            "mad" | "mean_abs_deviation" => return Ok(Feature::Mad),
-            "median_abs_deviation" => return Ok(Feature::MedianAbsDeviation),
-            "iqr" => return Ok(Feature::Iqr),
-            "entropy" => return Ok(Feature::Entropy),
-            "energy" | "torque_Absolute energy" => return Ok(Feature::Energy),
             name if name.starts_with("energy_ratio_by_chunks_num_segments_") => {
                 let parts: Vec<&str> = name.split("__").collect();
                 if parts.len() == 2 {
@@ -41,66 +136,6 @@ impl std::str::FromStr for Feature {
                     }
                 }
             }
-            "rms" => return Ok(Feature::Rms),
-            "root_mean_square" => return Ok(Feature::RootMeanSquare),
-            "zero_crossing_rate" => return Ok(Feature::ZeroCrossingRate),
-            "has_duplicate_max" => return Ok(Feature::HasDuplicateMax),
-            "has_duplicate_min" => return Ok(Feature::HasDuplicateMin),
-            "has_duplicate" => return Ok(Feature::HasDuplicate),
-            "peak_count" => return Ok(Feature::PeakCount),
-            "negative_turning" => return Ok(Feature::NegativeTurning),
-            "positive_turning" => return Ok(Feature::PositiveTurning),
-            "autocorr_lag1" | "centered_autocorr_lag1" => return Ok(Feature::AutocorrLag1),
-            "autocorrelation" | "autocorr_first_1e" => return Ok(Feature::AutocorrFirst1e),
-            "mean_abs_change" => return Ok(Feature::MeanAbsChange),
-            "median_diff" => return Ok(Feature::MedianDiff),
-            "median_abs_diff" => return Ok(Feature::MedianAbsDiff),
-            "mean_change" | "mean_diff" | "torque_Mean diff" => return Ok(Feature::MeanChange),
-            "cid_ce" => return Ok(Feature::CidCe),
-            "slope" | "torque_Slope" => return Ok(Feature::Slope),
-            "intercept" => return Ok(Feature::Intercept),
-            "abs_sum_change" => return Ok(Feature::AbsSumChange),
-            "count_above_mean" => return Ok(Feature::CountAboveMean),
-            "count_below_mean" => return Ok(Feature::CountBelowMean),
-            "longest_strike_above_mean" => return Ok(Feature::LongestStrikeAboveMean),
-            "longest_strike_below_mean" => return Ok(Feature::LongestStrikeBelowMean),
-            "variation_coefficient" => return Ok(Feature::VariationCoefficient),
-            "auc" => return Ok(Feature::Auc),
-            "slope_sign_change" => return Ok(Feature::SlopeSignChange),
-            "turning_points" => return Ok(Feature::TurningPoints),
-            "zero_crossing_mean" => return Ok(Feature::ZeroCrossingMean),
-            "zero_crossing_std" => return Ok(Feature::ZeroCrossingStd),
-            "abs_max" | "value__absolute_maximum" => return Ok(Feature::AbsMax),
-            "first_loc_max" | "value__first_location_of_maximum" => {
-                return Ok(Feature::FirstLocMax);
-            }
-            "last_loc_max" | "value__last_location_of_maximum" => return Ok(Feature::LastLocMax),
-            "first_loc_min" | "value__first_location_of_minimum" => {
-                return Ok(Feature::FirstLocMin);
-            }
-            "last_loc_min" | "value__last_location_of_minimum" => return Ok(Feature::LastLocMin),
-            "benford_correlation" | "value__benford_correlation" => {
-                return Ok(Feature::BenfordCorrelation);
-            }
-            "sum_of_reoccurring_values" | "value__sum_of_reoccurring_values" => {
-                return Ok(Feature::SumOfReoccurringValues);
-            }
-            "sum_of_reoccurring_data_points" | "value__sum_of_reoccurring_data_points" => {
-                return Ok(Feature::SumOfReoccurringDataPoints);
-            }
-            "percentage_of_reoccurring_datapoints_to_all_datapoints"
-            | "value__percentage_of_reoccurring_datapoints_to_all_datapoints" => {
-                return Ok(Feature::PercentageOfReoccurringDatapointsToAllDatapoints);
-            }
-            "percentage_of_reoccurring_values_to_all_values"
-            | "value__percentage_of_reoccurring_values_to_all_values" => {
-                return Ok(Feature::PercentageOfReoccurringValuesToAllValues);
-            }
-            "ratio_value_number_to_time_series_length"
-            | "value__ratio_value_number_to_time_series_length" => {
-                return Ok(Feature::RatioValueNumberToTimeSeriesLength);
-            }
-            "length" | "value__length" => return Ok(Feature::Length),
             "augmented_dickey_fuller-teststat" => {
                 return Ok(Feature::AugmentedDickeyFuller(AdfAttr::TestStat));
             }
@@ -110,49 +145,18 @@ impl std::str::FromStr for Feature {
             "augmented_dickey_fuller-usedlag" => {
                 return Ok(Feature::AugmentedDickeyFuller(AdfAttr::UsedLag));
             }
-            "variance_larger_than_standard_deviation"
-            | "value__variance_larger_than_standard_deviation" => {
-                return Ok(Feature::VarianceLargerThanStandardDeviation);
-            }
-            "spectral_centroid" | "torque_Centroid" => return Ok(Feature::SpectralCentroid),
-            "spectral_distance" | "torque_Spectral distance" => {
-                return Ok(Feature::SpectralDistance);
-            }
-            "spectral_decrease" | "torque_Spectral decrease" => {
-                return Ok(Feature::SpectralDecrease);
-            }
-            "spectral_slope" | "torque_Spectral slope" => return Ok(Feature::SpectralSlope),
-            "spectral_spread" | "torque_Spectral spread" => return Ok(Feature::SpectralSpread),
-            "spectral_entropy" | "torque_Spectral entropy" => return Ok(Feature::SpectralEntropy),
-            "spectral_roll_on" | "torque_Spectral roll-on" => return Ok(Feature::SpectralRollOn),
-            "spectral_roll_off" | "torque_Spectral roll-off" => {
-                return Ok(Feature::SpectralRollOff);
-            }
-            "spectral_spread" | "torque_Spectral spread" => return Ok(Feature::SpectralSpread),
-            "spectral_skewness" | "torque_Spectral skewness" => {
-                return Ok(Feature::SpectralSkewness);
-            }
-            "spectral_kurtosis" | "torque_Spectral kurtosis" => {
-                return Ok(Feature::SpectralKurtosis);
-            }
-            "signal_distance" | "torque_Signal distance" => return Ok(Feature::SignalDistance),
             "human_range_energy" | "torque_Human range energy" => {
                 return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
             }
-            "pk_pk_distance" => return Ok(Feature::PkPkDistance),
-            "zero_cross" | "torque_Zero_crossing_rate" => return Ok(Feature::ZeroCross),
-            "wavelet_entropy" => return Ok(Feature::WaveletEntropy),
-            "max_power_spectrum" => return Ok(Feature::MaxPowerSpectrum),
-            "mean_second_derivative_central" => return Ok(Feature::MeanSecondDerivativeCentral),
             _ => {}
         }
 
-        // 2. Parameterized features (prefix-based)
+        // 3. Parameterized features (prefix-based)
         if let Some(f) = parse_parameterized(s) {
             return Ok(f);
         }
 
-        // 3. Legacy tsfresh / torque format
+        // 4. Legacy tsfresh / torque format
         if let Some(f) = parse_legacy_format(s) {
             return Ok(f);
         }
@@ -182,6 +186,13 @@ impl std::str::FromStr for Feature {
 // ─── Parameterized parsers ──────────────────────────────────────────────────
 
 fn parse_parameterized(s: &str) -> Option<Feature> {
+    if let Some(arg) = s.strip_prefix("human_range_energy-") {
+        let fs: f32 = arg.trim().parse().ok()?;
+        if !(fs.is_finite() && fs > 0.0) {
+            return None;
+        }
+        return Some(Feature::HumanRangeEnergy(fs.to_bits()));
+    }
     if let Some(arg) = s.strip_prefix("lpcc-") {
         return Some(Feature::Lpcc(arg.trim().parse().ok()?));
     }
@@ -332,8 +343,8 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
 
 fn parse_legacy_format(s: &str) -> Option<Feature> {
     if s.contains("number_crossing_m__m_") {
-        let pos = s.find("m_")?;
-        let m: f32 = s[pos + 2..].parse().ok()?;
+        let pos = s.rfind("__m_")?;
+        let m: f32 = s[pos + 4..].parse().ok()?;
         return Some(Feature::NumberCrossingM(m.to_bits()));
     }
     if s.contains("number_peaks__n_") {
@@ -570,61 +581,18 @@ fn parse_agg_func(s: &str) -> Option<AggFunc> {
 
 impl Feature {
     pub fn name(&self) -> String {
+        if let Some(name) = self.unit_name() {
+            return name.to_string();
+        }
         match self {
-            Feature::TotalSum => "total_sum".to_string(),
-            Feature::Mean => "mean".to_string(),
-            Feature::Variance => "variance".to_string(),
-            Feature::Std => "std_dev".to_string(),
-            Feature::Min => "min_value".to_string(),
-            Feature::Max => "max_value".to_string(),
-            Feature::Median => "median".to_string(),
-            Feature::MedianAbsDeviation => "median_abs_deviation".to_string(),
-            Feature::Skew => "skewness".to_string(),
-            Feature::UnbiasedFisherKurtosis => "kurtosis".to_string(),
-            Feature::BiasedFisherKurtosis => "biased_fisher_kurtosis".to_string(),
-            Feature::Mad => "mad".to_string(),
-            Feature::Iqr => "iqr".to_string(),
-            Feature::Entropy => "entropy".to_string(),
-            Feature::Energy => "energy".to_string(),
             Feature::EnergyRatioByChunks(num, focus) => format!(
                 "energy_ratio_by_chunks_num_segments_{}__segment_focus_{}",
                 num, focus
             ),
-            Feature::Rms => "rms".to_string(),
-            Feature::RootMeanSquare => "root_mean_square".to_string(),
-            Feature::ZeroCrossingRate => "zero_crossing_rate".to_string(),
-            Feature::PeakCount => "peak_count".to_string(),
-            Feature::NegativeTurning => "negative_turning".to_string(),
-            Feature::PositiveTurning => "positive_turning".to_string(),
             Feature::NumberCrossingM(m) => format!("number_crossing_m__m_{}", f32::from_bits(*m)),
             Feature::NumberPeaks(n) => format!("number_peaks__n_{}", n),
-            Feature::AutocorrLag1 => "autocorr_lag1".to_string(),
-            Feature::AutocorrFirst1e => "autocorrelation".to_string(),
-            Feature::MeanAbsChange => "mean_abs_change".to_string(),
-            Feature::MedianDiff => "median_diff".to_string(),
-            Feature::MedianAbsDiff => "median_abs_diff".to_string(),
-            Feature::MeanChange => "mean_change".to_string(),
-            Feature::CidCe => "cid_ce".to_string(),
-            Feature::Slope => "slope".to_string(),
-            Feature::Intercept => "intercept".to_string(),
-            Feature::AbsSumChange => "abs_sum_change".to_string(),
-            Feature::CountAboveMean => "count_above_mean".to_string(),
-            Feature::CountBelowMean => "count_below_mean".to_string(),
-            Feature::LongestStrikeAboveMean => "longest_strike_above_mean".to_string(),
-            Feature::LongestStrikeBelowMean => "longest_strike_below_mean".to_string(),
-            Feature::VariationCoefficient => "variation_coefficient".to_string(),
-            Feature::Auc => "auc".to_string(),
-            Feature::SlopeSignChange => "slope_sign_change".to_string(),
-            Feature::TurningPoints => "turning_points".to_string(),
-            Feature::ZeroCrossingMean => "zero_crossing_mean".to_string(),
-            Feature::ZeroCrossingStd => "zero_crossing_std".to_string(),
             Feature::C3(lag) => format!("c3-{}", lag),
             Feature::Paa(total, index) => format!("paa-{}-{}", total, index),
-            Feature::AbsMax => "abs_max".to_string(),
-            Feature::FirstLocMax => "first_loc_max".to_string(),
-            Feature::LastLocMax => "last_loc_max".to_string(),
-            Feature::FirstLocMin => "first_loc_min".to_string(),
-            Feature::LastLocMin => "last_loc_min".to_string(),
             Feature::Autocorr(lag) => format!("autocorr-{}", lag),
             Feature::AggAutocorrelation(func, maxlag) => {
                 let func_str = match func {
@@ -646,8 +614,6 @@ impl Feature {
                 };
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
-            Feature::SampleEntropy => "sample_entropy".to_string(),
-            Feature::HiguchiFd => "higuchi_fd".to_string(),
             Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
@@ -703,24 +669,8 @@ impl Feature {
             Feature::IndexMassQuantile(q_bits) => {
                 format!("index_mass_quantile-{}", f32::from_bits(*q_bits))
             }
-            Feature::BenfordCorrelation => "benford_correlation".to_string(),
             Feature::MaxLangevinFixedPoint(m, r_bits) => {
                 format!("max_langevin_fixed_point-{}-{}", m, f32::from_bits(*r_bits))
-            }
-            Feature::SumOfReoccurringValues => "sum_of_reoccurring_values".to_string(),
-            Feature::SumOfReoccurringDataPoints => "sum_of_reoccurring_data_points".to_string(),
-            Feature::PercentageOfReoccurringDatapointsToAllDatapoints => {
-                "percentage_of_reoccurring_datapoints_to_all_datapoints".to_string()
-            }
-            Feature::PercentageOfReoccurringValuesToAllValues => {
-                "percentage_of_reoccurring_values_to_all_values".to_string()
-            }
-            Feature::RatioValueNumberToTimeSeriesLength => {
-                "ratio_value_number_to_time_series_length".to_string()
-            }
-            Feature::Length => "length".to_string(),
-            Feature::VarianceLargerThanStandardDeviation => {
-                "variance_larger_than_standard_deviation".to_string()
             }
             Feature::QuerySimilarityCount(l, t) => {
                 format!("query_similarity_count-{}-{}", l, f32::from_bits(*t))
@@ -738,24 +688,12 @@ impl Feature {
             Feature::HumanRangeEnergy(fs_bits) => {
                 format!("human_range_energy-{}", f32::from_bits(*fs_bits))
             }
-            Feature::SpectralCentroid => "spectral_centroid".to_string(),
-            Feature::SpectralDistance => "spectral_distance".to_string(),
-            Feature::SpectralDecrease => "spectral_decrease".to_string(),
-            Feature::SpectralSlope => "spectral_slope".to_string(),
-            Feature::SpectralSpread => "spectral_spread".to_string(),
-            Feature::SpectralEntropy => "spectral_entropy".to_string(),
-            Feature::SpectralRollOn => "spectral_roll_on".to_string(),
-            Feature::SpectralRollOff => "spectral_roll_off".to_string(),
-            Feature::SpectralSkewness => "spectral_skewness".to_string(),
-            Feature::SpectralKurtosis => "spectral_kurtosis".to_string(),
-            Feature::SignalDistance => "signal_distance".to_string(),
             Feature::WaveletFeatures(w_bits, f) => {
                 format!("wavelet-{}-{}", f32::from_bits(*w_bits), f)
             }
             Feature::SpectrogramCoefficients(t, f_bits) => {
                 format!("spectrogram-{}-{}", t, f32::from_bits(*f_bits))
             }
-            Feature::MeanSecondDerivativeCentral => "mean_second_derivative_central".to_string(),
             Feature::LargeStandardDeviation(r_bits) => {
                 format!("large_standard_deviation-{}", f32::from_bits(*r_bits))
             }
@@ -765,18 +703,11 @@ impl Feature {
             Feature::RatioBeyondRSigma(r_bits) => {
                 format!("ratio_beyond_r_sigma-{}", f32::from_bits(*r_bits))
             }
-            Feature::HasDuplicateMax => "has_duplicate_max".to_string(),
-            Feature::HasDuplicateMin => "has_duplicate_min".to_string(),
-            Feature::HasDuplicate => "has_duplicate".to_string(),
-            Feature::PkPkDistance => "pk_pk_distance".to_string(),
-            Feature::ZeroCross => "zero_cross".to_string(),
-            Feature::MaxPowerSpectrum => "max_power_spectrum".to_string(),
             Feature::Lpcc(idx) => format!("lpcc-{}", idx),
             Feature::Ecdf(d) => format!("ecdf-{}", d),
             Feature::CalcCentroid(fs) => format!("calc_centroid-{}", f32::from_bits(*fs)),
             Feature::Mfcc(idx) => format!("mfcc-{}", idx),
             Feature::WaveletEnergy(idx) => format!("wavelet_energy-{}", idx),
-            Feature::WaveletEntropy => "wavelet_entropy".to_string(),
 
             Feature::SpktWelchDensity(coeff) => format!("spkt_welch_density__coeff_{}", coeff),
             Feature::CwtCoefficients(widths, len, coeff, w) => {
@@ -808,6 +739,7 @@ impl Feature {
                     coeff
                 )
             }
+            _ => unreachable!("unit variant {self:?} missing from unit_features! table"),
         }
     }
 }
