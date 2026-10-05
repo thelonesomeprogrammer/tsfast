@@ -32,14 +32,15 @@ impl std::str::FromStr for Feature {
                     let p1 = parts[0].strip_prefix("energy_ratio_by_chunks_num_segments_");
                     let p2 = parts[1].strip_prefix("segment_focus_");
                     if let (Some(num_s), Some(focus_s)) = (p1, p2) {
-                        if let (Ok(num), Ok(focus)) = (num_s.parse::<u16>(), focus_s.parse::<u16>()) {
+                        if let (Ok(num), Ok(focus)) = (num_s.parse::<u16>(), focus_s.parse::<u16>())
+                        {
                             if focus < num {
                                 return Ok(Feature::EnergyRatioByChunks(num, focus));
                             }
                         }
                     }
                 }
-            },
+            }
             "rms" => return Ok(Feature::Rms),
             "root_mean_square" => return Ok(Feature::RootMeanSquare),
             "zero_crossing_rate" => return Ok(Feature::ZeroCrossingRate),
@@ -47,6 +48,8 @@ impl std::str::FromStr for Feature {
             "has_duplicate_min" => return Ok(Feature::HasDuplicateMin),
             "has_duplicate" => return Ok(Feature::HasDuplicate),
             "peak_count" => return Ok(Feature::PeakCount),
+            "negative_turning" => return Ok(Feature::NegativeTurning),
+            "positive_turning" => return Ok(Feature::PositiveTurning),
             "autocorr_lag1" | "centered_autocorr_lag1" => return Ok(Feature::AutocorrLag1),
             "autocorrelation" | "autocorr_first_1e" => return Ok(Feature::AutocorrFirst1e),
             "mean_abs_change" => return Ok(Feature::MeanAbsChange),
@@ -583,11 +586,16 @@ impl Feature {
             Feature::Iqr => "iqr".to_string(),
             Feature::Entropy => "entropy".to_string(),
             Feature::Energy => "energy".to_string(),
-            Feature::EnergyRatioByChunks(num, focus) => format!("energy_ratio_by_chunks_num_segments_{}__segment_focus_{}", num, focus),
+            Feature::EnergyRatioByChunks(num, focus) => format!(
+                "energy_ratio_by_chunks_num_segments_{}__segment_focus_{}",
+                num, focus
+            ),
             Feature::Rms => "rms".to_string(),
             Feature::RootMeanSquare => "root_mean_square".to_string(),
             Feature::ZeroCrossingRate => "zero_crossing_rate".to_string(),
             Feature::PeakCount => "peak_count".to_string(),
+            Feature::NegativeTurning => "negative_turning".to_string(),
+            Feature::PositiveTurning => "positive_turning".to_string(),
             Feature::NumberCrossingM(m) => format!("number_crossing_m__m_{}", f32::from_bits(*m)),
             Feature::NumberPeaks(n) => format!("number_peaks__n_{}", n),
             Feature::AutocorrLag1 => "autocorr_lag1".to_string(),

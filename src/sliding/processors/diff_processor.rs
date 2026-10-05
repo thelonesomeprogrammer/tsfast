@@ -24,10 +24,14 @@ impl DiffProcessor {
         state.mc_sum_vec = f32x4::splat(0.0);
 
         state.peaks = 0;
-        // Recount peaks for the whole window
+        state.troughs = 0;
+        // Recount peaks and troughs for the whole window
         for i in 1..values.len().saturating_sub(1) {
             if values[i] > values[i - 1] && values[i] > values[i + 1] {
                 state.peaks += 1;
+            }
+            if values[i] < values[i - 1] && values[i] < values[i + 1] {
+                state.troughs += 1;
             }
         }
 

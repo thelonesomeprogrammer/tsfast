@@ -41,56 +41,58 @@ pub fn eval_crossings_peaks(
     let _paa_boundaries = context.paa_boundaries;
 
     let res = match feat {
-                Feature::ZeroCrossingRate => state.zcr_count as f32 / n,
-                Feature::ZeroCross => state.zcr_count as f32,
-                Feature::PeakCount => state.peaks as f32,
-                Feature::NumberCrossingM(m_bits) => {
-                    let mut count = 0;
-                    let m = f32::from_bits(*m_bits);
-                    let values = context.values;
-                    if values.len() > 1 {
-                        for i in 1..values.len() {
-                            if (values[i] > m) != (values[i - 1] > m) {
-                                count += 1;
+        Feature::ZeroCrossingRate => state.zcr_count as f32 / n,
+        Feature::ZeroCross => state.zcr_count as f32,
+        Feature::PeakCount => state.peaks as f32,
+        Feature::NegativeTurning => state.troughs as f32,
+        Feature::PositiveTurning => state.peaks as f32,
+        Feature::NumberCrossingM(m_bits) => {
+            let mut count = 0;
+            let m = f32::from_bits(*m_bits);
+            let values = context.values;
+            if values.len() > 1 {
+                for i in 1..values.len() {
+                    if (values[i] > m) != (values[i - 1] > m) {
+                        count += 1;
+                    }
+                }
+            }
+            count as f32
+        }
+        Feature::NumberPeaks(peak_n) => {
+            let mut count = 0;
+            let p_n = *peak_n as usize;
+            let values = context.values;
+            let len = values.len();
+            if p_n > 0 && len > 2 * p_n {
+                for i in p_n..(len - p_n) {
+                    let mut is_peak = true;
+                    let val = values[i];
+                    // Check left neighbors
+                    for j in 1..=p_n {
+                        if values[i - j] >= val {
+                            is_peak = false;
+                            break;
+                        }
+                    }
+                    if is_peak {
+                        // Check right neighbors
+                        for j in 1..=p_n {
+                            if values[i + j] >= val {
+                                is_peak = false;
+                                break;
                             }
                         }
                     }
-                    count as f32
-                }
-                Feature::NumberPeaks(peak_n) => {
-                    let mut count = 0;
-                    let p_n = *peak_n as usize;
-                    let values = context.values;
-                    let len = values.len();
-                    if p_n > 0 && len > 2 * p_n {
-                        for i in p_n..(len - p_n) {
-                            let mut is_peak = true;
-                            let val = values[i];
-                            // Check left neighbors
-                            for j in 1..=p_n {
-                                if values[i - j] >= val {
-                                    is_peak = false;
-                                    break;
-                                }
-                            }
-                            if is_peak {
-                                // Check right neighbors
-                                for j in 1..=p_n {
-                                    if values[i + j] >= val {
-                                        is_peak = false;
-                                        break;
-                                    }
-                                }
-                            }
-                            if is_peak {
-                                count += 1;
-                            }
-                        }
+                    if is_peak {
+                        count += 1;
                     }
-                    count as f32
                 }
-                Feature::ZeroCrossingMean => zc_mean,
-                Feature::ZeroCrossingStd => zc_std,
+            }
+            count as f32
+        }
+        Feature::ZeroCrossingMean => zc_mean,
+        Feature::ZeroCrossingStd => zc_std,
         _ => return None,
     };
     Some(res)

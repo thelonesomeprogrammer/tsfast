@@ -27,6 +27,8 @@ pub enum Feature {
     RootMeanSquare,
     ZeroCrossingRate,
     PeakCount,
+    NegativeTurning,
+    PositiveTurning,
     NumberCrossingM(u32),
     NumberPeaks(u16),
     AutocorrLag1,    // Centered (tsfresh default)
@@ -183,6 +185,8 @@ impl Feature {
             Self::RootMeanSquare => C::ENERGY | C::ROOT_MEAN_SQ,
             Self::ZeroCrossingRate => C::ZERO_CROSS,
             Self::PeakCount => C::PEAKS,
+            Self::NegativeTurning => C::TROUGHS,
+            Self::PositiveTurning => C::PEAKS,
             Self::NumberCrossingM(_) => C::NUMBER_PEAKS_CROSSINGS,
             Self::NumberPeaks(_) => C::NUMBER_PEAKS_CROSSINGS,
             Self::AutocorrLag1 => C::SUM | C::MEAN | C::ENERGY | C::AUTOCORR_LAG1,

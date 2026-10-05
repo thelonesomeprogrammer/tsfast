@@ -41,21 +41,17 @@ pub fn eval_complexity(
     let _paa_boundaries = context.paa_boundaries;
 
     let res = match feat {
-                Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
-                    let m_val = *m as usize;
-                    let r = f32::from_bits(*r_bits);
-                    let res = crate::common::approx_entropy_simd(m_val, r, values)
-                        - crate::common::approx_entropy_simd(m_val + 1, r, values);
-                    res
-                }
-                Feature::SampleEntropy => {
-                    crate::common::sample_entropy_simd(values, _std_dev)
-                }
-                Feature::PermutationEntropy(tau, dimension) => {
-                    crate::common::permutation_entropy(values, *tau, *dimension)
-                Feature::HiguchiFd => {
-                    calc_higuchi_fd(values)
-                }
+        Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
+            let m_val = *m as usize;
+            let r = f32::from_bits(*r_bits);
+            crate::common::approx_entropy_simd(m_val, r, values)
+                - crate::common::approx_entropy_simd(m_val + 1, r, values)
+        }
+        Feature::SampleEntropy => crate::common::sample_entropy_simd(values, _std_dev),
+        Feature::PermutationEntropy(tau, dimension) => {
+            crate::common::permutation_entropy(values, *tau, *dimension)
+        }
+        Feature::HiguchiFd => calc_higuchi_fd(values),
         _ => return None,
     };
     Some(res)
@@ -64,7 +60,8 @@ pub fn eval_complexity(
 #[inline(always)]
 fn calc_higuchi_fd(values: &[f32]) -> f32 {
     let n = values.len();
-    if n < 10 { // matching tsfel FEATURES_MIN_SIZE
+    if n < 10 {
+        // matching tsfel FEATURES_MIN_SIZE
         return f32::NAN;
     }
 
