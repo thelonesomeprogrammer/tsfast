@@ -8,6 +8,7 @@ impl std::str::FromStr for Feature {
         // 1. Exact matches (simple features)
         match s {
             "sample_entropy" => return Ok(Feature::SampleEntropy),
+            "higuchi_fd" => return Ok(Feature::HiguchiFd),
             "total_sum" | "value__sum_values" => return Ok(Feature::TotalSum),
             "mean" | "value__mean" => return Ok(Feature::Mean),
             "variance" | "value__variance" => return Ok(Feature::Variance),
@@ -246,6 +247,9 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         }
         let attr = parse_agg_attr(parts[0])?;
         let chunk_len: u16 = parts[1].parse().ok()?;
+        if chunk_len == 0 {
+            return None;
+        }
         let func = parse_agg_func(parts[2])?;
         return Some(Feature::AggLinearTrend(attr, chunk_len, func));
     }
@@ -324,6 +328,16 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
 // ─── Legacy tsfresh / torque format parsers ─────────────────────────────────
 
 fn parse_legacy_format(s: &str) -> Option<Feature> {
+    if s.contains("number_crossing_m__m_") {
+        let pos = s.find("m_")?;
+        let m: f32 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::NumberCrossingM(m.to_bits()));
+    }
+    if s.contains("number_peaks__n_") {
+        let pos = s.find("n_")?;
+        let n: u16 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::NumberPeaks(n));
+    }
     if s.contains("c3__lag_") {
         let pos = s.find("lag_")?;
         let n: u16 = s[pos + 4..].parse().ok()?;
@@ -371,6 +385,9 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         } else {
             5
         };
+        if chunk_len == 0 {
+            return None;
+        }
         let func = if s.contains("f_agg_\"mean\"") {
             AggFunc::Mean
         } else if s.contains("f_agg_\"var\"") {
@@ -487,6 +504,21 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
             }
         }
     }
+
+    if let Some(arg) = s.strip_prefix("permutation_entropy-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.len() == 2 {
+            if let (Ok(tau), Ok(dim)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                return Some(Feature::PermutationEntropy(tau, dim));
+            }
+        }
+    }
+
+    if let Some(arg) = s.strip_prefix("value_count-") {
+        if let Ok(v) = arg.parse::<f32>() {
+            return Some(Feature::ValueCount(v.to_bits()));
+        }
+    }
     if let Some(arg) = s.strip_prefix("large_standard_deviation__r_") {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::LargeStandardDeviation(r.to_bits()));
@@ -556,6 +588,8 @@ impl Feature {
             Feature::RootMeanSquare => "root_mean_square".to_string(),
             Feature::ZeroCrossingRate => "zero_crossing_rate".to_string(),
             Feature::PeakCount => "peak_count".to_string(),
+            Feature::NumberCrossingM(m) => format!("number_crossing_m__m_{}", f32::from_bits(*m)),
+            Feature::NumberPeaks(n) => format!("number_peaks__n_{}", n),
             Feature::AutocorrLag1 => "autocorr_lag1".to_string(),
             Feature::AutocorrFirst1e => "autocorrelation".to_string(),
             Feature::MeanAbsChange => "mean_abs_change".to_string(),
@@ -605,9 +639,16 @@ impl Feature {
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
             Feature::SampleEntropy => "sample_entropy".to_string(),
+            Feature::HiguchiFd => "higuchi_fd".to_string(),
             Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
+            }
+            Feature::PermutationEntropy(tau, dim) => {
+                format!("permutation_entropy-{}-{}", tau, dim)
+            }
+            Feature::ValueCount(val_bits) => {
+                format!("value_count-{}", f32::from_bits(*val_bits))
             }
             Feature::LinearTrend(attr) => {
                 let attr_str = match attr {

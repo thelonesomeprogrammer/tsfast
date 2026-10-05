@@ -11,9 +11,6 @@ These features are heavily used in Python but suffer from extreme performance bo
 | :--- | :--- | :--- | :--- |
 | **`permutation_entropy`** | TSFresh | **High** | Requires computing the Shannon entropy of ordinal rank permutations. In Rust: use branchless sorting networks for small $D \in [3, 7]$ and map permutations to integer Lehmer codes without heap allocations. |
 | **`lempel_ziv_complexity`** | TSFresh/TSFEL | **High** | LZ78 complexity of discretized series. In Rust: binarize via SIMD `_mm256_movemask_pd`, then parse using a zero-allocation array-based trie or flat hash set. |
-| **`change_quantiles`** | TSFresh | **Medium** | Computes quantiles, filters consecutive differences in the corridor, and aggregates. In Rust: SIMD vector comparisons and bitmasks to filter and aggregate in a single pass. |
-| **`matrix_profile`** | TSFresh | **Very High** | Subsequence 1-NN distances. In Rust: Implement STOMP/SCRIMP or STUMPY's MASS (FFT convolution) algorithm. |
-| **`query_similarity_count`** | TSFresh | **Very High** | Uses MASS (FFT convolution) to compute z-normalized Euclidean distance profiles. |
 
 ---
 
@@ -22,8 +19,6 @@ Features summarizing signal amplitude distribution, central tendency, and disper
 
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
-| **`median_abs_deviation`** | TSFEL | **Medium** | Quickselect for median, SIMD `abs(x - med)`, then quickselect on deviations. |
-| **`mean_abs_deviation`** | TSFEL | **Low** | SIMD vector subtract mean, vector absolute value, vector sum. *(Note: Check if tsfast `Mad` covers this exact formula)*. |
 | **`hist_mode`** | TSFEL | **Medium** | Fast SIMD min/max to establish bin edges, vectorized binning. |
 | **`ecdf_percentile`** | TSFEL | **Medium** | Value corresponding to target ECDF percentile. Quickselect / linear interpolation in Rust. |
 | **`ecdf_percentile_count`**| TSFEL | **Low** | Vectorized compare `_mm256_cmp_pd` + mask sum/popcount. |
@@ -41,8 +36,6 @@ Features sensitive to the temporal order, differences, and zero crossings.
 | :--- | :--- | :--- | :--- |
 | **`negative_turning`** | TSFEL | **Low** | Local minima count. 3-way SIMD vector compare (`x[i-1] > x[i] < x[i+1]`) + popcount. |
 | **`positive_turning`** | TSFEL | **Low** | Local maxima count. 3-way SIMD vector compare + popcount. |
-| **`median_abs_diff`** | TSFEL | **Medium** | Vectorized adjacent absolute differences -> quickselect. |
-| **`median_diff`** | TSFEL | **Medium** | Vectorized adjacent differences -> quickselect. |
 | **`number_crossing_m`** | TSFresh | **Low** | Number of crossings of value $m$. Shifted vector XOR of sign bits of $(x - m)$. |
 | **`number_peaks(n)`** | TSFresh | **Medium** | Number of peaks with dynamic support parameter $n$. Vectorized sliding window maximum filter. |
 | **`neighbourhood_peaks`**| TSFEL | **Medium** | Peaks that dominate window neighbourhood. Vectorized sliding window maximum. |
@@ -56,35 +49,18 @@ Features derived from Fourier transforms, PSD, or Cepstrum. Many can share a sin
 
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
-| **`fft_aggregated`** | TSFresh | **Low** | Add centroid, variance, skewness, kurtosis moments to the existing FFT cache. |
-| **`fourier_entropy`** | TSFresh | **Medium** | Shannon entropy of the Welch PSD. Reuse `SpktWelchDensity`, normalize, bin, and compute entropy. |
 | **`spectral_variation`** | TSFEL | **Medium** | Normalized spectral flux. Vectorized cross-correlation across FFT frames. |
 | **`spectral_positive_turning`**| TSFEL | **Low** | Peak count in FFT magnitude. 3-way SIMD compare on FFT output. |
 | **`fundamental_frequency`** | TSFEL | **Medium** | Dominant pitch frequency. Peak search in FFT magnitude or Cepstrum using SIMD argmax. |
 | **`max_frequency`** | TSFEL | **Low** | Frequency of max spectral amplitude. Post-FFT SIMD argmax over magnitude. |
 | **`median_frequency`** | TSFEL | **Medium** | Frequency dividing power into two equal halves. Prefix sum scan over power spectrum. |
 | **`power_bandwidth`** | TSFEL | **Medium** | Bandwidth above threshold. SIMD threshold filter + index range diff on PSD. |
-| **`spectrogram_mean_coeff`** | TSFEL | **High** | STFT average. Batch FFT frames, vectorized frame-wise sum accumulator. |
-| **`lpcc`** | TSFEL | **High** | Linear Prediction Cepstral Coefficients. SIMD Autocorrelation + Levinson-Durbin in registers. |
-
----
-
-## 5. Wavelet Domain (Continuous Wavelet Transform)
-*Note: `tsfast` has some wavelet support (`CwtCoefficients`, `NumberCwtPeaks`, `WaveletEnergy`), but TSFEL includes additional statistical summaries.*
-
-| Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
-| :--- | :--- | :--- | :--- |
-| **`wavelet_abs_mean`** | TSFEL | **High** | Vectorized CWT output absolute value and sum per scale. |
-| **`wavelet_std`** | TSFEL | **High** | Vectorized variance/std across scale rows. |
-| **`wavelet_var`** | TSFEL | **High** | Vectorized variance across scale rows. |
 
 ---
 
 ## 6. Stationarity, Autoregressive & Correlation
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
-| **`augmented_dickey_fuller`**| TSFresh | **High** | Unit root test. Vectorized OLS regression with AIC-based lag selection. Reuse `solve_ols_f64`. |
-| **`agg_autocorrelation`** | TSFresh | **Low** | Aggregations (mean, var) over lags of autocorrelation. Reuse `FULL_AUTOCORR`. |
 | **`linear_trend_timewise`** | TSFresh | **Specialized**| OLS regression against explicit DatetimeIndex (requires timestamp injection). |
 
 ---
