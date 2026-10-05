@@ -8,6 +8,7 @@ impl std::str::FromStr for Feature {
         // 1. Exact matches (simple features)
         match s {
             "sample_entropy" => return Ok(Feature::SampleEntropy),
+            "higuchi_fd" => return Ok(Feature::HiguchiFd),
             "total_sum" | "value__sum_values" => return Ok(Feature::TotalSum),
             "mean" | "value__mean" => return Ok(Feature::Mean),
             "variance" | "value__variance" => return Ok(Feature::Variance),
@@ -313,6 +314,16 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
 // ─── Legacy tsfresh / torque format parsers ─────────────────────────────────
 
 fn parse_legacy_format(s: &str) -> Option<Feature> {
+    if s.contains("number_crossing_m__m_") {
+        let pos = s.find("m_")?;
+        let m: f32 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::NumberCrossingM(m.to_bits()));
+    }
+    if s.contains("number_peaks__n_") {
+        let pos = s.find("n_")?;
+        let n: u16 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::NumberPeaks(n));
+    }
     if s.contains("c3__lag_") {
         let pos = s.find("lag_")?;
         let n: u16 = s[pos + 4..].parse().ok()?;
@@ -562,6 +573,8 @@ impl Feature {
             Feature::RootMeanSquare => "root_mean_square".to_string(),
             Feature::ZeroCrossingRate => "zero_crossing_rate".to_string(),
             Feature::PeakCount => "peak_count".to_string(),
+            Feature::NumberCrossingM(m) => format!("number_crossing_m__m_{}", f32::from_bits(*m)),
+            Feature::NumberPeaks(n) => format!("number_peaks__n_{}", n),
             Feature::AutocorrLag1 => "autocorr_lag1".to_string(),
             Feature::AutocorrFirst1e => "autocorrelation".to_string(),
             Feature::MeanAbsChange => "mean_abs_change".to_string(),
@@ -611,6 +624,7 @@ impl Feature {
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
             Feature::SampleEntropy => "sample_entropy".to_string(),
+            Feature::HiguchiFd => "higuchi_fd".to_string(),
             Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
