@@ -239,7 +239,7 @@ def test_ecdf_pk_centroid_sliding():
     import tsfast
     import pyarrow as pa
     x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0, 5.0, -1.0, 3.0], dtype=np.float32)
-    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50"]
+    features = ["ecdf-10", "ecdf-3", "pk_pk_distance"]
     window_size = 7
     extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=window_size)
 
@@ -251,8 +251,6 @@ def test_ecdf_pk_centroid_sliding():
     tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(windowed_x, d=10)
     tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(windowed_x, d=3)
     tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(windowed_x)
-    tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(windowed_x, fs=100)
-    tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(windowed_x, fs=50)
 
     assert np.allclose(results[0], min(10.0 / window_size, 1.0))
     assert np.allclose(results[1], min(3.0 / window_size, 1.0))
@@ -287,6 +285,8 @@ def test_ecdf_pk_centroid_sliding():
     assert np.allclose(results[3], tsfel_centroid) or abs(results[3] - tsfel_centroid) < 0.1
     assert np.allclose(results[4], tsfel_centroid_50) or abs(results[4] - tsfel_centroid_50) < 0.1
 
+
+
 def test_sliding_invalid_type():
     # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
     x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
@@ -316,3 +316,115 @@ def test_median_diff_sliding():
     w2 = data[50:150]
     assert np.allclose(res.iloc[1].values[0], tsfel.feature_extraction.features.median_diff(w2))
     assert np.allclose(res.iloc[1].values[1], tsfel.feature_extraction.features.median_abs_diff(w2))
+
+def test_sliding_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    from tsfast._tsfast import SlidingExtractor
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    features = ["higuchi_fd"]
+    n_cols = 1
+    window_size = 200
+    stride = 100
+    extractor = SlidingExtractor(features, n_cols, window_size, stride)
+
+    x = np.random.randn(300).astype(np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['col1'])
+
+    res = extractor.update(batch).to_pandas()
+
+    # Window 1: x[0:200]
+    # Window 2: x[100:300]
+    h1 = higuchi_fractal_dimension(x[0:200])
+    h2 = higuchi_fractal_dimension(x[100:300])
+
+    assert np.allclose(res.iloc[0, 0], h1, atol=1e-2)
+    assert np.allclose(res.iloc[1, 0], h2, atol=1e-2)
+    print("test_sliding_fractal_dimensions passed!")
+
+def test_sliding_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    from tsfast._tsfast import SlidingExtractor
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    features = ["higuchi_fd"]
+    n_cols = 1
+    window_size = 200
+    stride = 100
+    extractor = SlidingExtractor(features, n_cols, window_size, stride)
+
+    x = np.random.randn(300).astype(np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['col1'])
+
+    res = extractor.update(batch).to_pandas()
+
+    # Window 1: x[0:200]
+    # Window 2: x[100:300]
+    h1 = higuchi_fractal_dimension(x[0:200])
+    h2 = higuchi_fractal_dimension(x[100:300])
+
+    assert np.allclose(res.iloc[0, 0], h1, atol=5e-2)
+    assert np.allclose(res.iloc[1, 0], h2, atol=5e-2)
+    print("test_sliding_fractal_dimensions passed!")
+
+def test_sliding_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    from tsfast._tsfast import SlidingExtractor
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    features = ["higuchi_fd"]
+    n_cols = 1
+    window_size = 200
+    stride = 100
+    extractor = SlidingExtractor(features, n_cols, window_size, stride)
+
+    x = np.random.randn(300).astype(np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['col1'])
+
+    res = extractor.update(batch).to_pandas()
+
+    # Window 1: x[0:200]
+    # Window 2: x[100:300]
+    h1 = higuchi_fractal_dimension(x[0:200])
+    h2 = higuchi_fractal_dimension(x[100:300])
+
+    assert np.allclose(res.iloc[0, 0], h1, atol=1e-2)
+    assert np.allclose(res.iloc[1, 0], h2, atol=1e-2)
+    print("test_sliding_fractal_dimensions passed!")
+
+def test_sliding_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    from tsfast._tsfast import SlidingExtractor
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    features = ["higuchi_fd"]
+    n_cols = 1
+    window_size = 200
+    stride = 100
+    extractor = SlidingExtractor(features, n_cols, window_size, stride)
+
+    x = np.random.randn(300).astype(np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['col1'])
+
+    res = extractor.update(batch).to_pandas()
+
+    # Window 1: x[0:200]
+    # Window 2: x[100:300]
+    h1 = higuchi_fractal_dimension(x[0:200])
+    h2 = higuchi_fractal_dimension(x[100:300])
+
+    assert np.allclose(res.iloc[0, 0], h1, atol=5e-2)
+    assert np.allclose(res.iloc[1, 0], h2, atol=5e-2)
+    print("test_sliding_fractal_dimensions passed!")

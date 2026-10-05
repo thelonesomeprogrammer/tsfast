@@ -8,6 +8,7 @@ impl std::str::FromStr for Feature {
         // 1. Exact matches (simple features)
         match s {
             "sample_entropy" => return Ok(Feature::SampleEntropy),
+            "higuchi_fd" => return Ok(Feature::HiguchiFd),
             "total_sum" | "value__sum_values" => return Ok(Feature::TotalSum),
             "mean" | "value__mean" => return Ok(Feature::Mean),
             "variance" | "value__variance" => return Ok(Feature::Variance),
@@ -232,6 +233,9 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         }
         let attr = parse_agg_attr(parts[0])?;
         let chunk_len: u16 = parts[1].parse().ok()?;
+        if chunk_len == 0 {
+            return None;
+        }
         let func = parse_agg_func(parts[2])?;
         return Some(Feature::AggLinearTrend(attr, chunk_len, func));
     }
@@ -367,6 +371,9 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         } else {
             5
         };
+        if chunk_len == 0 {
+            return None;
+        }
         let func = if s.contains("f_agg_\"mean\"") {
             AggFunc::Mean
         } else if s.contains("f_agg_\"var\"") {
@@ -602,6 +609,7 @@ impl Feature {
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
             Feature::SampleEntropy => "sample_entropy".to_string(),
+            Feature::HiguchiFd => "higuchi_fd".to_string(),
             Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
