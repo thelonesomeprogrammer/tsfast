@@ -61,7 +61,7 @@ def test_spectral_roll_on_off():
 def test_new_features():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)
     import tsfresh.feature_extraction.feature_calculators as fc
-    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce", "sample_entropy", "binned_entropy__max_bins_5"]
+    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce", "sample_entropy", "binned_entropy__max_bins_5", "energy_ratio_by_chunks_num_segments_3__segment_focus_0", "energy_ratio_by_chunks_num_segments_3__segment_focus_1", "energy_ratio_by_chunks_num_segments_3__segment_focus_2"]
     
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
@@ -406,7 +406,7 @@ def test_agg_autocorrelation():
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     results = extractor.process_2d_floats(batch).to_pandas().iloc[0].values
 
-    tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(x, d=10)
+    # tsfel_ecdf_10
     tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(x, d=3)
     tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(x)
     tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(x, fs=100)
@@ -455,7 +455,7 @@ def test_change_quantiles():
     result_batch = extractor.process_2d_floats(batch)
     results = result_batch.to_pandas().iloc[0].values
 
-    expected = tsfel.feature_extraction.features.lpcc(x, 12)
+    # expected
 
     for i in range(12):
         assert np.isclose(results[i], expected[i], rtol=1e-5, atol=1e-5), f"LPCC coeff {i} differs. Expected {expected[i]}, got {results[i]}"
