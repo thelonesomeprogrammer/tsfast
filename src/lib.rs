@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 
 pub mod common;
 pub mod expanding;
+mod numpy_io;
 pub mod sliding;
 pub mod static_ext;
 pub mod types;

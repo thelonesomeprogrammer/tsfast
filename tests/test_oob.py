@@ -1,5 +1,4 @@
 import pytest
-import pyarrow as pa
 import numpy as np
 import tsfast
 

@@ -1,6 +1,5 @@
 import pytest
 import numpy as np
-import pyarrow as pa
 import tsfast
 
 @pytest.fixture
@@ -10,17 +9,7 @@ def sliding_stream():
     total_len = 1000
     chunk_size = 50
     data = np.random.randn(n_cols, total_len).astype(np.float32)
-    col_names = [f"c_{i}" for i in range(n_cols)]
-    
-    chunks = []
-    for j in range(0, total_len, chunk_size):
-        chunk = data[:, j:j + chunk_size]
-        batch = pa.RecordBatch.from_arrays(
-            [pa.array(chunk[i]) for i in range(n_cols)],
-            names=col_names
-        )
-        chunks.append(batch)
-    return chunks
+    return [data[:, j:j + chunk_size].copy() for j in range(0, total_len, chunk_size)]
 
 @pytest.mark.benchmark(group="sliding_extraction")
 def test_bench_sliding_window200_stride50(benchmark, sliding_stream, basic_features):

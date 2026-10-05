@@ -63,9 +63,9 @@ pub fn finalize(
     if compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) && n > 1.0 {
         let n2 = values.len() * 2;
         let fft_size_ac = crate::common::next_good_fft_size(n2);
-        let mut planner = realfft::RealFftPlanner::<f32>::new();
-        let r2c_ac = planner.plan_fft_forward(fft_size_ac);
-        let c2r_ac = planner.plan_fft_inverse(fft_size_ac);
+        let (r2c_ac, c2r_ac) = PLANNER.with_borrow_mut(|p| {
+            (p.plan_fft_forward(fft_size_ac), p.plan_fft_inverse(fft_size_ac))
+        });
 
         let mut indata = std::mem::take(&mut state.fft_in_buffer);
         if indata.len() < fft_size_ac {
@@ -324,7 +324,7 @@ pub fn finalize(
     }
 
     if compute.intersects(Compute::MFCC) {
-        mfcc = tsfel_mfcc(values, state)?;
+        mfcc = tsfel_mfcc(values)?;
     }
 
     if compute.intersects(Compute::CWT_MEXH) {
@@ -354,7 +354,7 @@ pub fn finalize(
     let mut welch_density = Vec::new();
     if compute.intersects(Compute::WELCH) && !values.is_empty() {
         // tsfresh spkt_welch_density: scipy.signal.welch(x, nperseg=min(n, 256)), fs = 1.
-        welch_density = welch_psd(values, values.len().min(256), 1.0, state)?;
+        welch_density = welch_psd(values, values.len().min(256), 1.0)?;
     }
 
     let cwt_peaks = 0;
@@ -387,13 +387,16 @@ pub fn finalize(
     })
 }
 
-fn planner(state: &mut ColumnState) -> std::sync::Arc<std::sync::Mutex<realfft::RealFftPlanner<f32>>> {
-    state
-        .welch_planner
-        .get_or_insert_with(|| {
-            std::sync::Arc::new(std::sync::Mutex::new(realfft::RealFftPlanner::<f32>::new()))
-        })
-        .clone()
+thread_local! {
+    /// Planning an FFT costs far more than running a short one, and the planner
+    /// caches its plans, so keep one per (rayon worker) thread for the process
+    /// lifetime instead of one per column.
+    static PLANNER: std::cell::RefCell<realfft::RealFftPlanner<f32>> =
+        std::cell::RefCell::new(realfft::RealFftPlanner::new());
+}
+
+fn plan_forward(len: usize) -> std::sync::Arc<dyn realfft::RealToComplex<f32>> {
+    PLANNER.with_borrow_mut(|p| p.plan_fft_forward(len))
 }
 
 /// scipy.signal.welch(values, fs, nperseg) with its defaults: periodic Hann
@@ -402,16 +405,12 @@ pub fn welch_psd(
     values: &[f32],
     nperseg: usize,
     fs: f32,
-    state: &mut ColumnState,
 ) -> Result<Vec<f32>, String> {
     let n = values.len();
     if nperseg == 0 || n < nperseg {
         return Ok(Vec::new());
     }
-    let r2c = planner(state)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .plan_fft_forward(nperseg);
+    let r2c = plan_forward(nperseg);
     let window: Vec<f32> = (0..nperseg)
         .map(|i| 0.5 - 0.5 * (2.0 * std::f32::consts::PI * i as f32 / nperseg as f32).cos())
         .collect();
@@ -447,7 +446,7 @@ pub fn welch_psd(
 /// TSFEL mfcc(signal, fs=100): pre-emphasis 0.97, 512-point power spectrum,
 /// 40 mel filters in dB, orthonormal DCT-II coefficients 1..=12, mean-centred,
 /// sinusoidal lifter 22.
-fn tsfel_mfcc(values: &[f32], state: &mut ColumnState) -> Result<Vec<f32>, String> {
+fn tsfel_mfcc(values: &[f32]) -> Result<Vec<f32>, String> {
     const NFFT: usize = 512;
     const NFILT: usize = 40;
     const NUM_CEPS: usize = 12;
@@ -459,10 +458,7 @@ fn tsfel_mfcc(values: &[f32], state: &mut ColumnState) -> Result<Vec<f32>, Strin
     for (i, d) in indata.iter_mut().enumerate().take(values.len()) {
         *d = if i == 0 { values[0] } else { values[i] - 0.97 * values[i - 1] };
     }
-    let r2c = planner(state)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .plan_fft_forward(NFFT);
+    let r2c = plan_forward(NFFT);
     let mut out = r2c.make_output_vec();
     r2c.process(&mut indata, &mut out).map_err(|e| e.to_string())?;
     let pow: Vec<f64> = out.iter().map(|c| c.norm_sqr() as f64 / NFFT as f64).collect();

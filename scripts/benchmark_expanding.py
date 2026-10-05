@@ -3,7 +3,6 @@ import argparse
 import time
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import tsfast
 import warnings
 
@@ -64,19 +63,17 @@ def run_batched_benchmark(X, initial_size=500, expansion_size=100):
     t0 = time.perf_counter()
     for x in X:
         if x.shape[1] < initial_size: continue
-        batch = pa.RecordBatch.from_arrays([pa.array(x[i, :initial_size]) for i in range(x.shape[0])], names=[COLNAMES[i] for i in SIGNAL_COL])
+        batch = np.ascontiguousarray(x[:, :initial_size], dtype=np.float32)
         static_ext.process_2d_floats(batch)
     static_times.append(time.perf_counter() - t0)
 
     # Expanding
     arrays = []
-    names = []
     for s_idx, x in enumerate(X):
         if x.shape[1] < initial_size: continue
         for i in range(x.shape[0]):
-            arrays.append(pa.array(x[i, :initial_size]))
-            names.append(f"s{s_idx}_c{i}")
-    batch = pa.RecordBatch.from_arrays(arrays, names=names)
+            arrays.append(x[i, :initial_size])
+    batch = np.stack(arrays).astype(np.float32)
     t0 = time.perf_counter()
     exp_ext.update(batch)
     expanding_times.append(time.perf_counter() - t0)
@@ -94,7 +91,7 @@ def run_batched_benchmark(X, initial_size=500, expansion_size=100):
         count = 0
         for x in X:
             if x.shape[1] < current_size: continue
-            batch = pa.RecordBatch.from_arrays([pa.array(x[i, :current_size]) for i in range(x.shape[0])], names=[COLNAMES[i] for i in SIGNAL_COL])
+            batch = np.ascontiguousarray(x[:, :current_size], dtype=np.float32)
             static_ext.process_2d_floats(batch)
             count += 1
         if count == 0: break
@@ -102,13 +99,11 @@ def run_batched_benchmark(X, initial_size=500, expansion_size=100):
 
         # Expanding: process only new points
         arrays = []
-        names = []
         for s_idx, x in enumerate(X):
             if x.shape[1] < current_size: continue
             for i in range(x.shape[0]):
-                arrays.append(pa.array(x[i, current_size-expansion_size:current_size]))
-                names.append(f"s{s_idx}_c{i}")
-        batch = pa.RecordBatch.from_arrays(arrays, names=names)
+                arrays.append(x[i, current_size-expansion_size:current_size])
+        batch = np.stack(arrays).astype(np.float32)
         t0 = time.perf_counter()
         exp_ext.update(batch)
         expanding_times.append(time.perf_counter() - t0)
@@ -130,19 +125,18 @@ def run_per_series_benchmark(X, initial_size=500, expansion_size=100):
     static_step_timings = {}
     expanding_step_timings = {}
     static_ext = tsfast.Extractor(FEATURES)
-    names = [COLNAMES[i] for i in SIGNAL_COL]
 
     for s_idx, x in enumerate(X):
         if x.shape[1] < initial_size: continue
         exp_ext = tsfast.ExpandingExtractor(FEATURES, len(SIGNAL_COL))
 
         # Initial
-        batch_static = pa.RecordBatch.from_arrays([pa.array(x[i, :initial_size]) for i in range(x.shape[0])], names=names)
+        batch_static = np.ascontiguousarray(x[:, :initial_size], dtype=np.float32)
         t0 = time.perf_counter()
         static_ext.process_2d_floats(batch_static)
         static_step_timings.setdefault(0, []).append(time.perf_counter() - t0)
 
-        batch_exp = pa.RecordBatch.from_arrays([pa.array(x[i, :initial_size]) for i in range(x.shape[0])], names=names)
+        batch_exp = np.ascontiguousarray(x[:, :initial_size], dtype=np.float32)
         t0 = time.perf_counter()
         exp_ext.update(batch_exp)
         expanding_step_timings.setdefault(0, []).append(time.perf_counter() - t0)
@@ -152,13 +146,13 @@ def run_per_series_benchmark(X, initial_size=500, expansion_size=100):
         while current_size + expansion_size <= x.shape[1]:
             current_size += expansion_size
             # Static
-            b_s = pa.RecordBatch.from_arrays([pa.array(x[i, :current_size]) for i in range(x.shape[0])], names=names)
+            b_s = np.ascontiguousarray(x[:, :current_size], dtype=np.float32)
             t0 = time.perf_counter()
             static_ext.process_2d_floats(b_s)
             static_step_timings.setdefault(step, []).append(time.perf_counter() - t0)
 
             # Expanding
-            b_e = pa.RecordBatch.from_arrays([pa.array(x[i, current_size-expansion_size:current_size]) for i in range(x.shape[0])], names=names)
+            b_e = np.ascontiguousarray(x[:, current_size-expansion_size:current_size], dtype=np.float32)
             t0 = time.perf_counter()
             exp_ext.update(b_e)
             expanding_step_timings.setdefault(step, []).append(time.perf_counter() - t0)

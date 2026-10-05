@@ -2,7 +2,6 @@
 from pathlib import Path
 
 import numpy as np
-import pyarrow as pa
 import pytest
 
 import tsfast
@@ -39,8 +38,8 @@ def test_matches_reference(feature, n):
     if n < MIN_LENGTH.get(feature, 0):
         pytest.skip(f"reference is NaN below {MIN_LENGTH[feature]} samples")
     x = _series(n)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=["c"])
-    got = tsfast.Extractor([feature]).process_2d_floats(batch).column(0).to_numpy()[0]
+    batch = np.stack([x])
+    got = tsfast.Extractor([feature]).process_2d_floats(batch)[0, 0]
     _, ref = REFERENCES[feature]
     want = float(ref(x.astype(np.float64)))
     np.testing.assert_allclose(got, want, rtol=RTOL, atol=ATOL, equal_nan=True)

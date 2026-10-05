@@ -1,6 +1,5 @@
 import pytest
 import numpy as np
-import pyarrow as pa
 
 @pytest.fixture(scope="session")
 def basic_features():
@@ -41,23 +40,19 @@ def single_series():
 
 @pytest.fixture(scope="session")
 def single_batch(single_series):
-    return pa.RecordBatch.from_arrays([pa.array(single_series)], names=["c0"])
+    return single_series[None, :]
 
 @pytest.fixture(scope="session")
 def batch_100_series():
     np.random.seed(42)
     data = np.random.randn(1000, 100).astype(np.float32)
-    arrays = [pa.array(data[:, i]) for i in range(100)]
-    names = [f"c_{i}" for i in range(100)]
-    return pa.RecordBatch.from_arrays(arrays, names=names)
+    return np.ascontiguousarray(data.T)  # one series per row
 
 @pytest.fixture(scope="session")
 def batch_1000_series():
     np.random.seed(42)
     data = np.random.randn(1000, 1000).astype(np.float32)
-    arrays = [pa.array(data[:, i]) for i in range(1000)]
-    names = [f"c_{i}" for i in range(1000)]
-    return pa.RecordBatch.from_arrays(arrays, names=names)
+    return np.ascontiguousarray(data.T)  # one series per row
 
 @pytest.fixture(scope="session")
 def streaming_chunks():
@@ -66,14 +61,4 @@ def streaming_chunks():
     total_len = 2000
     chunk_size = 100
     data = np.random.randn(n_cols, total_len).astype(np.float32)
-    col_names = [f"c_{i}" for i in range(n_cols)]
-    
-    chunks = []
-    for j in range(0, total_len, chunk_size):
-        chunk = data[:, j:j + chunk_size]
-        batch = pa.RecordBatch.from_arrays(
-            [pa.array(chunk[i]) for i in range(n_cols)],
-            names=col_names
-        )
-        chunks.append(batch)
-    return chunks
+    return [data[:, j:j + chunk_size].copy() for j in range(0, total_len, chunk_size)]

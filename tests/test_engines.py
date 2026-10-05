@@ -13,7 +13,6 @@ import functools
 from pathlib import Path
 
 import numpy as np
-import pyarrow as pa
 import pytest
 
 import tsfast
@@ -56,15 +55,18 @@ def _series():
 
 
 def _batch(*cols):
-    return pa.RecordBatch.from_arrays(
-        [pa.array(c, type=pa.float32()) for c in cols], names=[f"c{i}" for i in range(len(cols))]
-    )
+    return np.stack(cols).astype(np.float32)
+
+
+def _column(out, feature_idx=0):
+    """One feature's values over every output row (sliding: every window)."""
+    return out.reshape(-1, out.shape[-1])[:, feature_idx]
 
 
 def _static(feature, segments):
     """Static result for each segment (all segments must have equal length)."""
     out = tsfast.Extractor([feature]).process_2d_floats(_batch(*segments))
-    return out.column(0).to_numpy()
+    return _column(out)
 
 
 def _static_each(feature, segments):
@@ -86,7 +88,7 @@ def test_sliding_matches_static(feature, window):
     x = _series()
     extractor = tsfast.SlidingExtractor([feature], 1, window)
     got = np.concatenate(
-        [extractor.update(_batch(c)).column(0).to_numpy() for c in _chunks(x, SLIDING_CHUNKS)]
+        [_column(extractor.update(_batch(c))) for c in _chunks(x, SLIDING_CHUNKS)]
     )
     windows = [x[i:i + window] for i in range(len(x) - window + 1)]
     np.testing.assert_allclose(got, _static(feature, windows), rtol=RTOL, atol=ATOL, equal_nan=True)
@@ -97,7 +99,7 @@ def test_expanding_matches_static(feature):
     x = _series()[: sum(EXPANDING_CHUNKS)]
     extractor = tsfast.ExpandingExtractor([feature], 1)
     got = np.concatenate(
-        [extractor.update(_batch(c)).column(0).to_numpy() for c in _chunks(x, EXPANDING_CHUNKS)]
+        [_column(extractor.update(_batch(c))) for c in _chunks(x, EXPANDING_CHUNKS)]
     )
     prefixes = [x[:end] for end in np.cumsum(EXPANDING_CHUNKS)]
     np.testing.assert_allclose(got, _static_each(feature, prefixes), rtol=RTOL, atol=ATOL, equal_nan=True)
@@ -106,8 +108,8 @@ def test_expanding_matches_static(feature):
 @pytest.mark.parametrize("feature", _params("constant"))
 def test_constant_series_matches_static(feature):
     x = np.full(WINDOW + 10, 2.5, dtype=np.float32)
-    sliding = tsfast.SlidingExtractor([feature], 1, WINDOW).update(_batch(x)).column(0).to_numpy()
-    expanding = tsfast.ExpandingExtractor([feature], 1).update(_batch(x)).column(0).to_numpy()
+    sliding = _column(tsfast.SlidingExtractor([feature], 1, WINDOW).update(_batch(x)))
+    expanding = _column(tsfast.ExpandingExtractor([feature], 1).update(_batch(x)))
     want_window = _static(feature, [x[:WINDOW]])[0]
     np.testing.assert_allclose(sliding, want_window, rtol=RTOL, atol=ATOL, equal_nan=True)
     np.testing.assert_allclose(expanding, _static(feature, [x]), rtol=RTOL, atol=ATOL, equal_nan=True)
@@ -130,5 +132,5 @@ def test_feature_independent_of_other_features(feature, engine):
         alone = tsfast.Extractor([feature]).process_2d_floats(_batch(x))
     else:
         alone = tsfast.SlidingExtractor([feature], 1, WINDOW).update(_batch(x))
-    together = _all_at_once(engine).column(FEATURES.index(feature)).to_numpy()
-    np.testing.assert_allclose(together, alone.column(0).to_numpy(), rtol=RTOL, atol=ATOL, equal_nan=True)
+    together = _column(_all_at_once(engine), FEATURES.index(feature))
+    np.testing.assert_allclose(together, _column(alone), rtol=RTOL, atol=ATOL, equal_nan=True)

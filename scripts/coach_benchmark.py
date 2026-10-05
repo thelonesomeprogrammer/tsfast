@@ -25,7 +25,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 import tsfast
 
@@ -159,10 +158,9 @@ def update_readme():
     else:
         print("Could not find '## Latest Results' in README.md")
 
-def make_batch(columns):
-    return pa.RecordBatch.from_arrays(
-        [pa.array(c, type=pa.float32()) for c in columns], names=[f"c{i}" for i in range(len(columns))]
-    )
+def make_batch(series):
+    """Extractor input: one series per row, contiguous float32."""
+    return np.ascontiguousarray(series, dtype=np.float32)
 
 
 def per_call(fn, min_time):

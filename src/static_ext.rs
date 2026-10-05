@@ -1,14 +1,12 @@
+use crate::numpy_io;
 use crate::types::Compute;
 use crate::types::Feature;
-use arrow::array::{ArrayRef, Float32Array, RecordBatch};
-use arrow::datatypes::DataType;
-use arrow::datatypes::{Field, Schema};
-use arrow::pyarrow::PyArrowType;
-use pyo3::exceptions::PyTypeError;
+use numpy::PyArray2;
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use realfft::RealFftPlanner;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 pub mod engine;
 
@@ -81,35 +79,42 @@ impl Extractor {
         })
     }
 
-    pub fn process_2d_floats(
+    /// Canonical names of the output columns, in order.
+    #[getter]
+    pub fn feature_names(&self) -> Vec<String> {
+        self.features.iter().map(Feature::name).collect()
+    }
+
+    /// Features of every row of `values`, a 2-D float32/float64 numpy array of
+    /// shape (n_series, n_samples): one series per row. Returns a float32 array
+    /// of shape (n_series, n_features), columns in `feature_names` order. An
+    /// array with no samples gives zero rows.
+    pub fn process_2d_floats<'py>(
         &self,
-        batch: PyArrowType<RecordBatch>,
-    ) -> PyResult<PyArrowType<RecordBatch>> {
-        let record_batch = batch.0;
-        let n_cols = record_batch.num_columns();
-        let n_rows = record_batch.num_rows();
+        py: Python<'py>,
+        values: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyArray2<f32>>> {
+        let (n_series, data) = numpy_io::with_rows(values, |rows, n_samples| {
+            let n_series = if n_samples == 0 { 0 } else { rows.len() };
+            // Python can still write to the array meanwhile; like any extension
+            // releasing the GIL, that only garbles this call's features.
+            Ok((n_series, py.detach(|| self.extract(&rows[..n_series], n_samples))))
+        })?;
+        numpy_io::to_numpy_2d(py, n_series, self.features.len(), data)
+    }
+}
 
-        if n_rows == 0 {
-            // Return empty batch with correct schema
-            let mut fields = Vec::with_capacity(self.features.len());
-            for feat in &self.features {
-                fields.push(Field::new(feat.name(), DataType::Float32, false));
-            }
-            let schema = Arc::new(Schema::new(fields));
-            let results: Vec<ArrayRef> = (0..self.features.len())
-                .map(|_| Arc::new(Float32Array::from(Vec::<f32>::new())) as ArrayRef)
-                .collect();
-            let empty_batch = RecordBatch::try_new(schema, results).unwrap();
-            return Ok(PyArrowType(empty_batch));
-        }
+/// Estimated work below which waking rayon's workers (about 5 µs per fan-out)
+/// costs more than splitting the columns over them saves.
+const PARALLEL_MIN_WORK: Duration = Duration::from_micros(25);
 
+impl Extractor {
+    /// Features of each column, all `n_rows` long, flattened row-major: one row
+    /// of `features.len()` values per column.
+    pub fn extract(&self, columns: &[&[f32]], n_rows: usize) -> Vec<f32> {
         let compute = self.compute;
-        let features = &self.features;
-        let unique_paa_totals = &self.unique_paa_totals;
-        let unique_c3_lags = &self.unique_c3_lags;
-        let unique_tra_lags = &self.unique_tra_lags;
-
-        let paa_boundaries: Vec<Vec<usize>> = unique_paa_totals
+        let paa_boundaries: Vec<Vec<usize>> = self
+            .unique_paa_totals
             .iter()
             .map(|&total| {
                 (0..=total)
@@ -128,69 +133,37 @@ impl Extractor {
             None
         };
 
-        let column_results: Result<Vec<Vec<f32>>, String> = record_batch
-            .columns()
-            .par_iter()
-            .map(|col| {
-                let float_array = col
-                    .as_any()
-                    .downcast_ref::<Float32Array>()
-                    .ok_or_else(|| "Failed to downcast column to Float32Array".to_string())?;
+        let processor = StaticEngine {
+            compute,
+            features: &self.features,
+            unique_paa_totals: &self.unique_paa_totals,
+            unique_c3_lags: &self.unique_c3_lags,
+            unique_tra_lags: &self.unique_tra_lags,
+            paa_boundaries: &paa_boundaries,
+            r2c,
+        };
 
-                let processor = StaticEngine {
-                    compute,
-                    features,
-                    unique_paa_totals,
-                    unique_c3_lags,
-                    unique_tra_lags,
-                    paa_boundaries: &paa_boundaries,
-                    r2c: r2c.as_ref().cloned(),
-                };
-                Ok(processor.process_column(float_array.values()))
-            })
-            .collect();
-
-        let column_results = column_results.map_err(|e| PyTypeError::new_err(e))?;
-
-        let mut fields = Vec::with_capacity(features.len());
-        let results: Vec<ArrayRef> = (0..features.len())
-            .into_par_iter()
-            .map(|feat_idx| {
-                let mut col_data = Vec::with_capacity(n_cols);
-                for col in column_results.iter().take(n_cols) {
-                    col_data.push(col[feat_idx]);
-                }
-                Arc::new(Float32Array::from(col_data)) as ArrayRef
-            })
-            .collect();
-
-        for feat in features {
-            fields.push(Field::new(feat.name(), DataType::Float32, false));
+        // Time the first column to decide whether the rest are worth spreading
+        // over threads: cheap features on a few short series finish before the
+        // workers would even wake up.
+        let mut column_results = Vec::with_capacity(columns.len());
+        if let Some((first, rest)) = columns.split_first() {
+            let start = Instant::now();
+            column_results.push(processor.process_column(first));
+            let estimate = start.elapsed() * rest.len() as u32;
+            if estimate < PARALLEL_MIN_WORK {
+                column_results.extend(rest.iter().map(|col| processor.process_column(col)));
+            } else {
+                column_results.par_extend(rest.par_iter().map(|col| processor.process_column(col)));
+            }
         }
-
-        let return_batch =
-            RecordBatch::try_new(Arc::new(Schema::new(fields)), results).map_err(|e| {
-                PyTypeError::new_err(format!("Failed to create return RecordBatch: {}", e))
-            })?;
-
-        Ok(PyArrowType(return_batch))
+        column_results.concat()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow::array::Float32Array;
-    use arrow::array::RecordBatch;
-    use arrow::datatypes::{DataType, Field, Schema};
-    use std::sync::Arc;
-
-    fn create_test_batch(data: Vec<f32>) -> PyArrowType<RecordBatch> {
-        let schema = Schema::new(vec![Field::new("c1", DataType::Float32, false)]);
-        let array = Float32Array::from(data);
-        let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(array)]).unwrap();
-        PyArrowType(batch)
-    }
 
     #[test]
     fn test_all_features() {
@@ -232,23 +205,17 @@ mod tests {
             "paa-2-1".to_string(),
         ];
         let extractor = Extractor::new(features, None).unwrap();
-        let batch = create_test_batch(data.clone());
-        let result = extractor.process_2d_floats(batch).unwrap().0;
+        let result = extractor.extract(&[&data], data.len());
 
-        assert_eq!(result.num_columns(), 34);
+        assert_eq!(result.len(), 34);
 
-        for i in 0..result.num_columns() {
-            let col = result
-                .column(i)
-                .as_any()
-                .downcast_ref::<Float32Array>()
-                .unwrap();
-            let val = col.value(0);
-            println!("{}: {}", result.schema().field(i).name(), val);
+        let names = extractor.feature_names();
+        for (i, &val) in result.iter().enumerate() {
+            println!("{}: {}", names[i], val);
             assert!(
                 !val.is_nan(),
                 "Feature {} is NaN",
-                result.schema().field(i).name()
+                names[i]
             );
         }
     }
@@ -268,8 +235,7 @@ mod tests {
             "mad".to_string(),
         ];
         let extractor = Extractor::new(features, None).unwrap();
-        let batch = create_test_batch(data.clone());
-        let result = extractor.process_2d_floats(batch).unwrap().0;
+        let result = extractor.extract(&[&data], data.len());
 
         let n = data.len() as f32;
         let scalar_sum: f32 = data.iter().sum();
@@ -278,36 +244,11 @@ mod tests {
         let scalar_energy = data.iter().map(|&x| x * x).sum::<f32>();
         let scalar_mad = data.iter().map(|&x| (x - scalar_mean).abs()).sum::<f32>() / n;
 
-        let col_mean = result
-            .column(0)
-            .as_any()
-            .downcast_ref::<Float32Array>()
-            .unwrap()
-            .value(0);
-        let col_var = result
-            .column(1)
-            .as_any()
-            .downcast_ref::<Float32Array>()
-            .unwrap()
-            .value(0);
-        let col_sum = result
-            .column(2)
-            .as_any()
-            .downcast_ref::<Float32Array>()
-            .unwrap()
-            .value(0);
-        let col_energy = result
-            .column(6)
-            .as_any()
-            .downcast_ref::<Float32Array>()
-            .unwrap()
-            .value(0);
-        let col_mad = result
-            .column(8)
-            .as_any()
-            .downcast_ref::<Float32Array>()
-            .unwrap()
-            .value(0);
+        let col_mean = result[0];
+        let col_var = result[1];
+        let col_sum = result[2];
+        let col_energy = result[6];
+        let col_mad = result[8];
 
         assert!((col_mean - scalar_mean).abs() < 1e-5);
         assert!((col_var - scalar_var).abs() < 1e-5);

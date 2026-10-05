@@ -2,7 +2,7 @@
 
 > **Agents:** this is the backlog. Pick tasks from here, and delete a row in the same PR that implements it.
 
-Based on a comprehensive audit of **TSFresh** (76 features) and **TSFEL** (68 features), here are the features that are **NOT yet implemented** in `tsfast` (excluding WIP features `ecdf`, `pk_pk_distance`, and `calc_centroid`). The estimated complexity indicates the effort and algorithmic difficulty of implementing these optimally in Rust using SIMD.
+Based on a comprehensive audit of **TSFresh** (76 features) and **TSFEL** (68 features), here are the features that are **NOT yet implemented** in `tsfast`. The estimated complexity indicates the effort and algorithmic difficulty of implementing these optimally in Rust using SIMD.
 
 ---
 

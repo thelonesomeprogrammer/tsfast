@@ -1,8 +1,7 @@
 use crate::common::{ColumnState, map_features_to_indices};
 use crate::types::{Compute, Feature};
-use arrow::array::{ArrayRef, Float32Array, RecordBatch};
-use arrow::datatypes::{DataType, Field, Schema};
-use arrow::pyarrow::PyArrowType;
+use crate::numpy_io;
+use numpy::PyArray3;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use realfft::RealFftPlanner;
@@ -109,16 +108,38 @@ impl SlidingExtractor {
         })
     }
 
-    pub fn update(
-        &mut self,
-        batch: PyArrowType<RecordBatch>,
-    ) -> PyResult<PyArrowType<RecordBatch>> {
-        let record_batch = batch.0;
-        let n_cols = record_batch.num_columns();
-        let n_rows = record_batch.num_rows();
+    /// Canonical names of the last output axis, in order.
+    #[getter]
+    pub fn feature_names(&self) -> Vec<String> {
+        self.features.iter().map(Feature::name).collect()
+    }
 
-        if n_rows == 0 {
-            return Ok(PyArrowType(record_batch));
+    /// Append `values`, a 2-D float32/float64 numpy array of shape
+    /// (n_series, n_new_samples), to each series' window. Returns a float32
+    /// array of shape (n_series, n_windows, n_features): the features of every
+    /// window completed by these samples, oldest first.
+    pub fn update<'py>(
+        &mut self,
+        py: Python<'py>,
+        values: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyArray3<f32>>> {
+        let (n_series, n_windows, data) = numpy_io::with_rows(values, |rows, _| {
+            let (n_windows, data) =
+                py.detach(|| self.update_rows(rows)).map_err(PyTypeError::new_err)?;
+            Ok((rows.len(), n_windows, data))
+        })?;
+        numpy_io::to_numpy_3d(py, (n_series, n_windows, self.features.len()), data)
+    }
+}
+
+impl SlidingExtractor {
+    /// Append one row of new samples per series (all the same length). Returns
+    /// the number of windows completed per series and their features,
+    /// flattened series-major, then window, then feature.
+    pub fn update_rows(&mut self, rows: &[&[f32]]) -> Result<(usize, Vec<f32>), String> {
+        let n_cols = rows.len();
+        if n_cols == 0 || rows[0].is_empty() {
+            return Ok((0, Vec::new()));
         }
 
         if self.states.len() < n_cols {
@@ -162,15 +183,9 @@ impl SlidingExtractor {
         let column_results = self.states[..n_cols]
             .par_iter_mut()
             .zip(self.histories[..n_cols].par_iter_mut())
-            .zip(record_batch.columns().par_iter())
+            .zip(rows.par_iter())
             .map(
-                |((state, history), column)| -> Result<Vec<Vec<f32>>, String> {
-                    let array = column
-                        .as_any()
-                        .downcast_ref::<Float32Array>()
-                        .ok_or_else(|| "Expected Float32Array".to_string())?;
-
-                    let values = array.values();
+                |((state, history), &values)| -> Result<Vec<Vec<f32>>, String> {
                     let engine = SlidingEngine {
                         compute: self.compute,
                         features: &self.features,
@@ -223,36 +238,9 @@ impl SlidingExtractor {
                     Ok(batch_res)
                 },
             )
-            .collect::<Result<Vec<Vec<Vec<f32>>>, String>>()
-            .map_err(|e| pyo3::exceptions::PyTypeError::new_err(e))?;
+            .collect::<Result<Vec<Vec<Vec<f32>>>, String>>()?;
 
-        let column_results = column_results;
-        let n_results = column_results[0].len();
-        let mut fields = Vec::with_capacity(self.features.len());
-        for feat in &self.features {
-            fields.push(Field::new(feat.name(), DataType::Float32, false));
-        }
-        let schema = Arc::new(Schema::new(fields));
-
-        if n_results == 0 {
-            return Ok(PyArrowType(RecordBatch::new_empty(schema)));
-        }
-
-        let results: Vec<ArrayRef> = (0..self.features.len())
-            .map(|feat_idx| {
-                let mut flat_data = Vec::with_capacity(n_cols * n_results);
-                for col_res in &column_results {
-                    for slide_res in col_res {
-                        flat_data.push(slide_res[feat_idx]);
-                    }
-                }
-                Arc::new(Float32Array::from(flat_data)) as ArrayRef
-            })
-            .collect();
-
-        let return_batch = RecordBatch::try_new(schema, results)
-            .map_err(|e| PyTypeError::new_err(format!("Failed to create RecordBatch: {}", e)))?;
-
-        Ok(PyArrowType(return_batch))
+        let n_windows = column_results[0].len();
+        Ok((n_windows, column_results.concat().concat()))
     }
 }

@@ -1,6 +1,5 @@
 import tsfast
 import numpy as np
-import pyarrow as pa
 import pytest
 from tsfresh.feature_extraction import feature_calculators as fc
 
@@ -14,9 +13,9 @@ def test_linear_trend():
     ]
 
     extractor = tsfast.Extractor(features)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    result_batch = extractor.process_2d_floats(batch)
-    results = result_batch.to_pandas().iloc[0].values
+    batch = np.stack([x])
+    out = extractor.process_2d_floats(batch)
+    results = out[0]
 
     tsfresh_param = [{"attr": "rvalue"}, {"attr": "intercept"}, {"attr": "slope"}, {"attr": "stderr"}]
     tsfresh_results = fc.linear_trend(x, tsfresh_param)
@@ -32,9 +31,9 @@ def test_agg_linear_trend():
     ]
 
     extractor = tsfast.Extractor(features)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    result_batch = extractor.process_2d_floats(batch)
-    results = result_batch.to_pandas().iloc[0].values
+    batch = np.stack([x])
+    out = extractor.process_2d_floats(batch)
+    results = out[0]
 
     tsfresh_param = [
         {"attr": "intercept", "chunk_len": 3, "f_agg": "mean"},
@@ -53,9 +52,9 @@ def test_time_reversal_asymmetry_statistic():
     ]
 
     extractor = tsfast.Extractor(features)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    result_batch = extractor.process_2d_floats(batch)
-    results = result_batch.to_pandas().iloc[0].values
+    batch = np.stack([x])
+    out = extractor.process_2d_floats(batch)
+    results = out[0]
 
     tsfresh_val_1 = fc.time_reversal_asymmetry_statistic(x, 1)
     tsfresh_val_2 = fc.time_reversal_asymmetry_statistic(x, 2)
@@ -72,26 +71,26 @@ def test_incremental_linear_trend():
 
     # Static extractor
     extractor_static = tsfast.Extractor(features)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    results_static = extractor_static.process_2d_floats(batch).to_pandas().iloc[0].values
+    batch = np.stack([x])
+    results_static = extractor_static.process_2d_floats(batch)[0]
 
     # Sliding extractor (window size 6)
     extractor_sliding = tsfast.SlidingExtractor(features, 1, 6, 1)
     results_sliding = None
     for i in range(len(x)):
-        batch_i = pa.RecordBatch.from_arrays([pa.array([x[i]])], names=['c1'])
+        batch_i = np.stack([[x[i]]])
         res = extractor_sliding.update(batch_i)
         if i == len(x) - 1:
-            results_sliding = res.to_pandas().iloc[0].values
+            results_sliding = res[0, 0]
 
     # Expanding extractor
     extractor_exp = tsfast.ExpandingExtractor(features, 1)
     results_exp = None
     for i in range(len(x)):
-        batch_i = pa.RecordBatch.from_arrays([pa.array([x[i]])], names=['c1'])
+        batch_i = np.stack([[x[i]]])
         res = extractor_exp.update(batch_i)
         if i == len(x) - 1:
-            results_exp = res.to_pandas().iloc[0].values
+            results_exp = res[0]
 
     assert np.allclose(results_static, results_sliding, atol=1e-5)
     assert np.allclose(results_static, results_exp, atol=1e-5)
@@ -104,24 +103,24 @@ def test_incremental_time_reversal_asymmetry():
     ]
 
     extractor_static = tsfast.Extractor(features)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    results_static = extractor_static.process_2d_floats(batch).to_pandas().iloc[0].values
+    batch = np.stack([x])
+    results_static = extractor_static.process_2d_floats(batch)[0]
 
     extractor_sliding = tsfast.SlidingExtractor(features, 1, 6, 1)
     results_sliding = None
     for i in range(len(x)):
-        batch_i = pa.RecordBatch.from_arrays([pa.array([x[i]])], names=['c1'])
+        batch_i = np.stack([[x[i]]])
         res = extractor_sliding.update(batch_i)
         if i == len(x) - 1:
-            results_sliding = res.to_pandas().iloc[0].values
+            results_sliding = res[0, 0]
 
     extractor_exp = tsfast.ExpandingExtractor(features, 1)
     results_exp = None
     for i in range(len(x)):
-        batch_i = pa.RecordBatch.from_arrays([pa.array([x[i]])], names=['c1'])
+        batch_i = np.stack([[x[i]]])
         res = extractor_exp.update(batch_i)
         if i == len(x) - 1:
-            results_exp = res.to_pandas().iloc[0].values
+            results_exp = res[0]
 
     assert np.allclose(results_static, results_sliding, atol=1e-5)
     assert np.allclose(results_static, results_exp, atol=1e-5)

@@ -97,7 +97,7 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             } else {
                 values.to_vec()
             };
-            let psd = crate::spectral::welch_psd(&scaled, scaled.len(), crate::spectral::FS, context.state)
+            let psd = crate::spectral::welch_psd(&scaled, scaled.len(), crate::spectral::FS)
                 .unwrap_or_default();
             psd.into_iter().fold(0.0, f32::max)
         }
