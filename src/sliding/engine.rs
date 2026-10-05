@@ -364,43 +364,7 @@ impl<'a> SlidingEngine<'a> {
 
         let mut feats = Vec::with_capacity(self.features.len());
         for feat in self.features {
-            let val = {
-                if let Some(v) = crate::features::moments::eval_moments(feat, &mut context) {
-                    v
-                } else if let Some(v) = crate::features::min_max::eval_min_max(feat, &mut context) {
-                    v
-                } else if let Some(v) =
-                    crate::features::distribution::eval_distribution(feat, &mut context)
-                {
-                    v
-                } else if let Some(v) = crate::features::energy::eval_energy(feat, &mut context) {
-                    v
-                } else if let Some(v) =
-                    crate::features::crossings_peaks::eval_crossings_peaks(feat, &mut context)
-                {
-                    v
-                } else if let Some(v) =
-                    crate::features::autocorrelation::eval_autocorrelation(feat, &mut context)
-                {
-                    v
-                } else if let Some(v) = crate::features::changes::eval_changes(feat, &mut context) {
-                    v
-                } else if let Some(v) = crate::features::runs::eval_runs(feat, &mut context) {
-                    v
-                } else if let Some(v) = crate::features::subsequence::eval_subsequence(feat, &mut context) {
-                    v
-                } else if let Some(v) =
-                    crate::features::transform::eval_transform(feat, &mut context)
-                {
-                    v
-                } else if let Some(v) =
-                    crate::features::complexity::eval_complexity(feat, &mut context)
-                {
-                    v
-                } else {
-                    crate::features::dynamic::eval_dynamic(feat, &mut context).or_else(|| crate::features::stationarity::eval_stationarity(feat, &mut context)).unwrap_or_else(|| crate::features::misc::eval_misc(feat, &mut context).unwrap_or(0.0))
-                }
-            };
+            let val = crate::features::eval(feat, &mut context);
             feats.push(val);
         }
         Ok(feats)
