@@ -13,6 +13,7 @@ uv run pytest tests/test_sliding.py -k energy   # narrow it down while iterating
 cargo build                  # fast Rust-only type check
 cargo test                   # Rust unit tests: feature name round-trips, coverage
 uv run pytest benchmarks     # benchmarks (slow, not part of the normal test run)
+uv run python scripts/coach_benchmark.py --skip-readme  # per-feature timings vs references -> .jules/feature_benchmarks.md
 ```
 
 - **Do not run `maturin develop` or `pip install`.** uv owns the build: it
@@ -79,6 +80,11 @@ and tells you where to look.
    `tests/feature_samples.txt` (`cargo test` fails until you do): it drives
    `tests/test_engines.py`, which checks that all three engines agree and that
    the feature gives the same value alone as alongside every other feature.
+   Then map it to its tsfresh/TSFEL function in `tests/references.py`
+   (`REFERENCES`, or `NO_REFERENCE` with a reason): `tests/test_references.py`
+   requires every feature within 1% of its reference. If tsfresh and TSFEL
+   define the same quantity differently, add one feature per definition
+   (e.g. `skewness` / `biased_skewness`) rather than picking one.
 7. Delete the feature's row from `missing.md`.
 
 Reference implementation: `EnergyRatioByChunks`. Before starting, grep

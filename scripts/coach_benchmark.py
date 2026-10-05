@@ -1,93 +1,46 @@
-import time
+"""Coach benchmark: tsfast vs the tsfresh/TSFEL reference, per feature and engine.
+
+Every feature in tests/feature_samples.txt is timed on the same windows in the
+static, sliding and expanding engines and, when it has one, against its
+reference implementation from tests/references.py (the table the accuracy tests
+use, so the benchmark covers exactly the features that are checked).
+
+Outputs:
+  .jules/feature_benchmarks.csv / .md  per-feature microseconds per window
+  .jules/benchmarks.csv                appended aggregate history (all features
+                                       in one extractor), plotted by the chart
+  README.md "## Latest Results"        unless --skip-readme
+
+    uv run python scripts/coach_benchmark.py [--quick] [--skip-readme]
+"""
+import argparse
+import csv
 import datetime
-import subprocess
 import os
+import subprocess
+import sys
+import time
+import warnings
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+
 import tsfast
-import tsfel
-from tsfresh.feature_extraction import extract_features
-from tabulate import tabulate
-import matplotlib.pyplot as plt
-import warnings
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tests"))
+from references import REFERENCES  # noqa: E402
 
 warnings.filterwarnings("ignore")
 
-FEATURE_MAPPING = {
-    "mean": {"tsfresh": {"mean": None}, "tsfel": ("statistical", "Mean")},
-    "variance": {"tsfresh": {"variance": None}, "tsfel": ("statistical", "Variance")},
-    "std_dev": {"tsfresh": {"standard_deviation": None}, "tsfel": ("statistical", "Standard deviation")},
-    "min_value": {"tsfresh": {"minimum": None}, "tsfel": ("statistical", "Min")},
-    "max_value": {"tsfresh": {"maximum": None}, "tsfel": ("statistical", "Max")},
-    "median": {"tsfresh": {"median": None}, "tsfel": ("statistical", "Median")},
-    "skewness": {"tsfresh": {"skewness": None}, "tsfel": ("statistical", "Skewness")},
-    "kurtosis": {"tsfresh": {"kurtosis": None}, "tsfel": None},
-    "biased_fisher_kurtosis": {"tsfresh": None, "tsfel": ("statistical", "Kurtosis")},
-    "abs_max": {"tsfresh": {"absolute_maximum": None}, "tsfel": None},
-    "first_loc_max": {"tsfresh": {"first_location_of_maximum": None}, "tsfel": None},
-    "last_loc_max": {"tsfresh": {"last_location_of_maximum": None}, "tsfel": None},
-    "first_loc_min": {"tsfresh": {"first_location_of_minimum": None}, "tsfel": None},
-    "last_loc_min": {"tsfresh": {"last_location_of_minimum": None}, "tsfel": None},
-    "autocorr-1": {"tsfresh": {"autocorrelation": [{"lag": 1}]}, "tsfel": None},
-    "autocorrelation": {"tsfresh": None, "tsfel": ("temporal", "Autocorrelation")},
-    "mean_abs_change": {"tsfresh": {"mean_abs_change": None}, "tsfel": None},
-    "mean_change": {"tsfresh": {"mean_change": None}, "tsfel": ("statistical", "Mean diff")},
-    "zero_crossing_rate": {"tsfresh": None, "tsfel": ("temporal", "Zero crossing rate")},
-    "energy": {"tsfresh": {"abs_energy": None}, "tsfel": ("statistical", "Absolute energy")},
-    "rms": {"tsfresh": {"root_mean_square": None}, "tsfel": ("statistical", "Root mean square")},
-    "total_sum": {"tsfresh": {"sum_values": None}, "tsfel": ("statistical", "Sum")},
-    "iqr": {"tsfresh": None, "tsfel": ("statistical", "Interquartile range")},
-    "mad": {"tsfresh": None, "tsfel": ("statistical", "Mean absolute deviation")},
-    "auc": {"tsfresh": None, "tsfel": ("statistical", "Area under the curve")},
-    "count_above_mean": {"tsfresh": {"count_above_mean": None}, "tsfel": None},
-    "count_below_mean": {"tsfresh": {"count_below_mean": None}, "tsfel": None},
-    "longest_strike_above_mean": {"tsfresh": {"longest_strike_above_mean": None}, "tsfel": None},
-    "longest_strike_below_mean": {"tsfresh": {"longest_strike_below_mean": None}, "tsfel": None},
-    "variation_coefficient": {"tsfresh": {"variation_coefficient": None}, "tsfel": None},
-    "quantile-0.5": {"tsfresh": {"quantile": [{"q": 0.5}]}, "tsfel": None},
-    "quantile-0.1": {"tsfresh": {"quantile": [{"q": 0.1}]}, "tsfel": None},
-    "quantile-0.9": {"tsfresh": {"quantile": [{"q": 0.9}]}, "tsfel": None},
-    "fft_coeff-1-abs": {"tsfresh": {"fft_coefficient": [{"attr": "abs", "coeff": 1}]}, "tsfel": None},
-    "fft_coeff-1-real": {"tsfresh": {"fft_coefficient": [{"attr": "real", "coeff": 1}]}, "tsfel": None},
-    "fft_coeff-1-imag": {"tsfresh": {"fft_coefficient": [{"attr": "imag", "coeff": 1}]}, "tsfel": None},
-    "fft_coeff-1-angle": {"tsfresh": {"fft_coefficient": [{"attr": "angle", "coeff": 1}]}, "tsfel": None},
-    "cid_ce": {"tsfresh": {"cid_ce": [{"normalize": False}]}, "tsfel": None},
-    "c3-5": {"tsfresh": {"c3": [{"lag": 5}]}, "tsfel": None},
-    "benford_correlation": {"tsfresh": {"benford_correlation": None}, "tsfel": None},
-    "abs_sum_change": {"tsfresh": {"absolute_sum_of_changes": None}, "tsfel": None},
-    "mean_n_absolute_max-5": {"tsfresh": {"mean_n_absolute_max": [{"number_of_maxima": 5}]}, "tsfel": None},
-    "peak_count": {"tsfresh": {"number_peaks": [{"n": 1}]}, "tsfel": None},
-    "mean_second_derivative_central": {"tsfresh": {"mean_second_derivative_central": None}, "tsfel": None},
-    "large_standard_deviation-0.05": {"tsfresh": {"large_standard_deviation": [{"r": 0.05}]}, "tsfel": None},
-    "symmetry_looking-0.05": {"tsfresh": {"symmetry_looking": [{"r": 0.05}]}, "tsfel": None}
-}
+FEATURES = [
+    line.strip()
+    for line in (ROOT / "tests" / "feature_samples.txt").read_text().splitlines()
+    if line.strip() and not line.startswith("#")
+]
 
-def get_tsfresh_params(features):
-    params = {}
-    for f in features:
-        p = FEATURE_MAPPING[f]["tsfresh"]
-        if p:
-            for k, v in p.items():
-                if k not in params:
-                    params[k] = v
-                else:
-                    if v is not None:
-                        params[k].extend(v)
-    return params
-
-def get_tsfel_cfg(features):
-    cfg = {}
-    for f in features:
-        item = FEATURE_MAPPING[f]["tsfel"]
-        if item:
-            domain, name = item
-            if domain not in cfg:
-                cfg[domain] = {}
-            full_cfg = tsfel.get_features_by_domain(domain)
-            if name in full_cfg[domain]:
-                cfg[domain][name] = full_cfg[domain][name]
-    return cfg
 
 def get_git_hash():
     try:
@@ -127,94 +80,44 @@ def append_to_csv(filepath, new_rows):
 
             writer.writerow([date_str, commit_hash, bench_name, metric_val, unit, round(delta, 2)])
 
-def make_batch(data_slice):
-    n_samples = data_slice.shape[0]
-    return pa.RecordBatch.from_arrays(
-        [pa.array(data_slice[i]) for i in range(n_samples)], 
-        names=[f"c{i}" for i in range(n_samples)]
-    )
-
 def generate_chart():
-    csv_path = '.jules/benchmarks.csv'
-    chart_path = '.jules/benchmark_trends.png'
+    """Trend of the all-features-in-one-extractor timings and feature counts."""
+    import matplotlib
 
-    if not os.path.exists(csv_path):
-        print(f"Error: {csv_path} not found.")
-        return
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
 
+    csv_path = ROOT / ".jules" / "benchmarks.csv"
     df = pd.read_csv(csv_path)
-    if df.empty:
-        print("Error: DataFrame is empty.")
-        return
-
-    df['Date'] = pd.to_datetime(df['Date'])
-
-    tsfast_sliding = df[df['Benchmark_Name'] == 'tsfast_sliding_avg_next_50']['Metric_Value'].values
-    tsfresh_sliding = df[df['Benchmark_Name'] == 'tsfresh_sliding_avg_next_50']['Metric_Value'].values
-    tsfel_sliding = df[df['Benchmark_Name'] == 'tsfel_sliding_avg_next_50']['Metric_Value'].values
-
-    tsfast_exp = df[df['Benchmark_Name'] == 'tsfast_expanding_avg_next_50']['Metric_Value'].values
-    tsfresh_exp = df[df['Benchmark_Name'] == 'tsfresh_expanding_avg_next_50']['Metric_Value'].values
-    tsfel_exp = df[df['Benchmark_Name'] == 'tsfel_expanding_avg_next_50']['Metric_Value'].values
-
-    tsfast_feats = df[df['Benchmark_Name'] == 'tsfast_compatible_features']['Metric_Value'].values
-    tsfresh_feats = df[df['Benchmark_Name'] == 'tsfresh_compatible_features']['Metric_Value'].values
-    tsfel_feats = df[df['Benchmark_Name'] == 'tsfel_compatible_features']['Metric_Value'].values
-
-    runs = range(1, len(tsfast_sliding) + 1)
-
-    try:
-        plt.style.use('seaborn-v0_8-darkgrid')
-    except:
-        pass  # Fallback if style not available
-        
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
-    
-    color_fast = 'tab:blue'
-    color_fresh = 'tab:green'
-    color_fel = 'tab:red'
-
-    # Top Plot: Execution Time
-    ax1.set_title("Benchmark Execution Time Trends", fontsize=14, fontweight='bold')
-    ax1.set_ylabel("Time per window (ms) [Log Scale]", fontsize=12)
-    
-    if len(tsfast_sliding) > 0:
-        ax1.plot(runs, tsfast_sliding, color=color_fast, linestyle='-', label='tsfast Sliding', marker='o')
-    if len(tsfresh_sliding) > 0:
-        ax1.plot(runs, tsfresh_sliding, color=color_fresh, linestyle='-', label='tsfresh Sliding', marker='s')
-    if len(tsfel_sliding) > 0:
-        ax1.plot(runs, tsfel_sliding, color=color_fel, linestyle='-', label='tsfel Sliding', marker='^')
-        
-    if len(tsfast_exp) > 0:
-        ax1.plot(runs, tsfast_exp, color=color_fast, linestyle='--', label='tsfast Expanding', marker='o', alpha=0.7)
-    if len(tsfresh_exp) > 0:
-        ax1.plot(runs, tsfresh_exp, color=color_fresh, linestyle='--', label='tsfresh Expanding', marker='s', alpha=0.7)
-    if len(tsfel_exp) > 0:
-        ax1.plot(runs, tsfel_exp, color=color_fel, linestyle='--', label='tsfel Expanding', marker='^', alpha=0.7)
-
-    ax1.set_yscale('log')
-    ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    series = {
+        "tsfast static": "tsfast_static_all_features",
+        "tsfast sliding": "tsfast_sliding_all_features",
+        "tsfast expanding": "tsfast_expanding_all_features",
+        "references (sum)": "reference_all_features",
+    }
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
+    ax1.set_title("All features, one extractor: ms per window", fontweight="bold")
+    for label, name in series.items():
+        values = df[df["Benchmark_Name"] == name]["Metric_Value"].values
+        if len(values):
+            ax1.plot(range(1, len(values) + 1), values, marker="o", label=label)
+    ax1.set_yscale("log")
     ax1.grid(True, which="both", ls="--", alpha=0.5)
+    ax1.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 
-    # Bottom Plot: Features
-    ax2.set_title("Compatible Feature Count Trends", fontsize=14, fontweight='bold')
-    ax2.set_xlabel("Benchmark Run", fontsize=12)
-    ax2.set_ylabel("Number of Features", fontsize=12)
-    
-    if len(tsfast_feats) > 0:
-        ax2.plot(runs, tsfast_feats, color=color_fast, linestyle='-', label='tsfast', marker='o')
-    if len(tsfresh_feats) > 0:
-        ax2.plot(runs, tsfresh_feats, color=color_fresh, linestyle='-', label='tsfresh', marker='s')
-    if len(tsfel_feats) > 0:
-        ax2.plot(runs, tsfel_feats, color=color_fel, linestyle='-', label='tsfel', marker='^')
-
-    max_feats = max(max(tsfast_feats, default=1), max(tsfresh_feats, default=1), max(tsfel_feats, default=1))
-    ax2.set_ylim(0, max_feats + 10)
-    ax2.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax2.set_title("Feature count", fontweight="bold")
+    for label, name in [("tsfast", "tsfast_features"), ("with reference", "referenced_features")]:
+        values = df[df["Benchmark_Name"] == name]["Metric_Value"].values
+        if len(values):
+            ax2.plot(range(1, len(values) + 1), values, marker="o", label=label)
+    ax2.set_xlabel("Benchmark run")
+    ax2.set_ylim(bottom=0)
     ax2.grid(True, ls="--", alpha=0.5)
+    ax2.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 
     fig.tight_layout()
-    plt.savefig(chart_path, dpi=300, bbox_inches='tight')
+    chart_path = ROOT / ".jules" / "benchmark_trends.png"
+    plt.savefig(chart_path, dpi=150, bbox_inches="tight")
     print(f"Chart saved to {chart_path}")
 
 
@@ -256,144 +159,163 @@ def update_readme():
     else:
         print("Could not find '## Latest Results' in README.md")
 
-def main():
-    n_samples = 40
-    first_window = 100
-    chunk_size = 50
-    num_windows = 50
-    n_points = first_window + chunk_size * num_windows
-    np.random.seed(42)
-    data = np.random.randn(n_samples, n_points).astype(np.float32)
+def make_batch(columns):
+    return pa.RecordBatch.from_arrays(
+        [pa.array(c, type=pa.float32()) for c in columns], names=[f"c{i}" for i in range(len(columns))]
+    )
 
-    features = list(FEATURE_MAPPING.keys())
+
+def per_call(fn, min_time):
+    """Seconds per call of fn(), repeating until min_time has elapsed."""
+    fn()  # warm-up (plans FFTs, fills caches)
+    calls, start = 0, time.perf_counter()
+    while True:
+        fn()
+        calls += 1
+        elapsed = time.perf_counter() - start
+        if elapsed >= min_time:
+            return elapsed / calls
+
+
+def bench_feature(feature, data, window, step, min_time):
+    """Microseconds per window per series for each engine and the reference."""
+    n_cols = data.shape[0]
+    windows = make_batch(data[:, :window])
+    prime = make_batch(data[:, :window])
+    more = make_batch(data[:, window:window + step])
+
+    static = tsfast.Extractor([feature])
+    t_static = per_call(lambda: static.process_2d_floats(windows), min_time) / n_cols
+
+    def sliding_step():
+        ext = tsfast.SlidingExtractor([feature], n_cols, window)
+        ext.update(prime)
+        start = time.perf_counter()
+        ext.update(more)  # `step` new windows per column
+        return time.perf_counter() - start
+
+    def expanding_step():
+        ext = tsfast.ExpandingExtractor([feature], n_cols)
+        ext.update(prime)
+        start = time.perf_counter()
+        ext.update(more)  # one update per column, series grows by `step`
+        return time.perf_counter() - start
+
+    def median_of(fn):
+        samples, start = [], time.perf_counter()
+        while not samples or time.perf_counter() - start < min_time:
+            samples.append(fn())
+        return float(np.median(samples))
+
+    t_sliding = median_of(sliding_step) / (n_cols * step)
+    t_expanding = median_of(expanding_step) / n_cols
+
+    lib, t_ref = "", float("nan")
+    if feature in REFERENCES:
+        lib, ref = REFERENCES[feature]
+        x = data[0, :window].astype(np.float64)
+        t_ref = per_call(lambda: ref(x), min_time)
+
+    us = 1e6
+    return {
+        "feature": feature,
+        "static_us": t_static * us,
+        "sliding_us": t_sliding * us,
+        "expanding_us": t_expanding * us,
+        "reference": lib,
+        "reference_us": t_ref * us,
+        "speedup": t_ref / t_static if t_static > 0 else float("nan"),
+    }
+
+
+def write_feature_table(rows, window, step, n_cols):
+    out = ROOT / ".jules"
+    out.mkdir(exist_ok=True)
+    df = pd.DataFrame(rows).sort_values("feature")
+    df.to_csv(out / "feature_benchmarks.csv", index=False, float_format="%.3f")
+
+    def fmt(v, digits=1):
+        return "" if pd.isna(v) else f"{v:,.{digits}f}"
+
+    lines = [
+        "# Per-feature benchmark",
+        "",
+        f"Microseconds per window per series. Window {window}, {n_cols} series, "
+        f"{step} new values per sliding/expanding update. Commit {get_git_hash()}, "
+        f"{datetime.datetime.now():%Y-%m-%d %H:%M}.",
+        "Sliding = per new window; expanding = per update. Reference = the tsfresh/TSFEL",
+        "function tsfast is tested against, called on one window; speed-up = reference / static.",
+        "",
+        "| feature | static | sliding | expanding | reference | ref µs | speed-up |",
+        "|:--|--:|--:|--:|:--|--:|--:|",
+    ]
+    for r in df.itertuples():
+        ref = r.reference or "—"
+        lines.append(
+            f"| `{r.feature}` | {fmt(r.static_us, 2)} | {fmt(r.sliding_us, 2)} | {fmt(r.expanding_us, 2)} "
+            f"| {ref} | {fmt(r.reference_us)} | {fmt(r.speedup)}× |".replace("| × |", "| |")
+        )
+    (out / "feature_benchmarks.md").write_text("\n".join(lines) + "\n")
+    return df
+
+
+def bench_all_in_one(data, window, step, min_time):
+    """All features in one extractor: the realistic deployment cost."""
+    n_cols = data.shape[0]
+    prime, more = make_batch(data[:, :window]), make_batch(data[:, window:window + step])
+    static = tsfast.Extractor(FEATURES)
+    t_static = per_call(lambda: static.process_2d_floats(prime), min_time) / n_cols
+
+    def timed(make):
+        ext = make()
+        ext.update(prime)
+        start = time.perf_counter()
+        ext.update(more)
+        return time.perf_counter() - start
+
+    t_sliding = timed(lambda: tsfast.SlidingExtractor(FEATURES, n_cols, window)) / (n_cols * step)
+    t_expanding = timed(lambda: tsfast.ExpandingExtractor(FEATURES, n_cols)) / n_cols
+    return t_static, t_sliding, t_expanding
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--quick", action="store_true", help="shorter timings, for a smoke run")
+    parser.add_argument("--skip-readme", action="store_true", help="don't rewrite README.md")
+    parser.add_argument("--skip-history", action="store_true", help="don't append .jules/benchmarks.csv")
+    args = parser.parse_args()
+
+    n_cols, window, step = 20, 256, 32
+    min_time = 0.02 if args.quick else 0.2
+    rng = np.random.default_rng(42)
+    data = rng.normal(size=(n_cols, window + step)).astype(np.float32)
 
     rows = []
+    for i, feature in enumerate(FEATURES, 1):
+        rows.append(bench_feature(feature, data, window, step, min_time))
+        print(f"[{i}/{len(FEATURES)}] {feature}", file=sys.stderr)
+    df = write_feature_table(rows, window, step, n_cols)
+    print(f"Wrote .jules/feature_benchmarks.md ({len(df)} features)")
 
-    def record_metrics(prefix, times):
-        if len(times) > 0:
-            rows.append((f"{prefix}_first_window", times[0] * 1000, "ms"))
-        if len(times) > 1:
-            avg_time = sum(times[1:]) / len(times[1:])
-            rows.append((f"{prefix}_avg_next_{num_windows}", avg_time * 1000, "ms"))
+    t_static, t_sliding, t_expanding = bench_all_in_one(data, window, step, min_time)
+    ref_total = df["reference_us"].sum(skipna=True) / 1e3  # ms, sum over referenced features
+    print(f"All {len(FEATURES)} features, ms per window: static {t_static * 1e3:.3f}, "
+          f"sliding {t_sliding * 1e3:.3f}, expanding {t_expanding * 1e3:.3f}; "
+          f"references (sum of {df['reference'].astype(bool).sum()}) {ref_total:.3f}")
 
-    # 1. tsfast sliding (stateful)
-    extractor = tsfast.SlidingExtractor(features, n_samples, first_window, stride=chunk_size)
-    times_tsfast_sliding = []
-    accumulated_time = 0.0
-    for j in range(0, n_points, chunk_size):
-        chunk = data[:, j:j+chunk_size]
-        batch = make_batch(chunk)
-        start = time.time()
-        res = extractor.update(batch)
-        elapsed = time.time() - start
-        if res is not None and res.num_rows > 0:
-            times_tsfast_sliding.append(accumulated_time + elapsed)
-            accumulated_time = 0.0
-        else:
-            accumulated_time += elapsed
-    record_metrics("tsfast_sliding", times_tsfast_sliding)
+    if not args.skip_history:
+        append_to_csv(str(ROOT / ".jules" / "benchmarks.csv"), [
+            ("tsfast_static_all_features", t_static * 1e3, "ms"),
+            ("tsfast_sliding_all_features", t_sliding * 1e3, "ms"),
+            ("tsfast_expanding_all_features", t_expanding * 1e3, "ms"),
+            ("reference_all_features", ref_total, "ms"),
+            ("tsfast_features", len(FEATURES), "count"),
+            ("referenced_features", int(df["reference"].astype(bool).sum()), "count"),
+        ])
+        generate_chart()
+    if not args.skip_readme:
+        update_readme()
 
-    # 2. tsfast expanding (stateful)
-    extractor = tsfast.ExpandingExtractor(features, n_samples)
-    times_tsfast_expanding = []
-    # first window
-    chunk = data[:, :first_window]
-    batch = make_batch(chunk)
-    start = time.time()
-    res = extractor.update(batch)
-    times_tsfast_expanding.append(time.time() - start)
-    # next windows
-    for j in range(first_window, n_points, chunk_size):
-        chunk = data[:, j:j+chunk_size]
-        batch = make_batch(chunk)
-        start = time.time()
-        res = extractor.update(batch)
-        times_tsfast_expanding.append(time.time() - start)
-    record_metrics("tsfast_expanding", times_tsfast_expanding)
-
-    # 3. tsfast static sliding
-    extractor = tsfast.Extractor(features)
-    times_tsfast_static_sliding = []
-    for j in range(first_window, n_points + 1, chunk_size):
-        chunk = data[:, j-first_window:j]
-        batch = make_batch(chunk)
-        start = time.time()
-        res = extractor.process_2d_floats(batch)
-        times_tsfast_static_sliding.append(time.time() - start)
-    record_metrics("tsfast_static_sliding", times_tsfast_static_sliding)
-
-    # 4. tsfast static expanding
-    extractor = tsfast.Extractor(features)
-    times_tsfast_static_expanding = []
-    for j in range(first_window, n_points + 1, chunk_size):
-        chunk = data[:, :j]
-        batch = make_batch(chunk)
-        start = time.time()
-        res = extractor.process_2d_floats(batch)
-        times_tsfast_static_expanding.append(time.time() - start)
-    record_metrics("tsfast_static_expanding", times_tsfast_static_expanding)
-
-    # tsfresh
-    tsfresh_features = [f for f in features if FEATURE_MAPPING[f]["tsfresh"]]
-    tsfresh_params = get_tsfresh_params(tsfresh_features)
-    
-    # 5. tsfresh sliding
-    times_tsfresh_sliding = []
-    for j in range(first_window, n_points + 1, chunk_size):
-        window_data = data[:, j-first_window:j]
-        df_list = [pd.DataFrame({"id": i, "v": window_data[i]}) for i in range(n_samples)]
-        full_df = pd.concat(df_list)
-        start = time.time()
-        _ = extract_features(full_df, column_id="id", default_fc_parameters=tsfresh_params, n_jobs=1, disable_progressbar=True)
-        times_tsfresh_sliding.append(time.time() - start)
-    record_metrics("tsfresh_sliding", times_tsfresh_sliding)
-
-    # 6. tsfresh expanding
-    times_tsfresh_expanding = []
-    for j in range(first_window, n_points + 1, chunk_size):
-        window_data = data[:, :j]
-        df_list = [pd.DataFrame({"id": i, "v": window_data[i]}) for i in range(n_samples)]
-        full_df = pd.concat(df_list)
-        start = time.time()
-        _ = extract_features(full_df, column_id="id", default_fc_parameters=tsfresh_params, n_jobs=1, disable_progressbar=True)
-        times_tsfresh_expanding.append(time.time() - start)
-    record_metrics("tsfresh_expanding", times_tsfresh_expanding)
-
-    # tsfel
-    tsfel_features = [f for f in features if FEATURE_MAPPING[f]["tsfel"]]
-    tsfel_cfg = get_tsfel_cfg(tsfel_features)
-    
-    # 7. tsfel sliding
-    times_tsfel_sliding = []
-    for j in range(first_window, n_points + 1, chunk_size):
-        window_data = data[:, j-first_window:j]
-        start = time.time()
-        for i in range(n_samples):
-            _ = tsfel.time_series_features_extractor(tsfel_cfg, window_data[i], fs=100, verbose=0)
-        times_tsfel_sliding.append(time.time() - start)
-    record_metrics("tsfel_sliding", times_tsfel_sliding)
-
-    # 8. tsfel expanding
-    times_tsfel_expanding = []
-    for j in range(first_window, n_points + 1, chunk_size):
-        window_data = data[:, :j]
-        start = time.time()
-        for i in range(n_samples):
-            _ = tsfel.time_series_features_extractor(tsfel_cfg, window_data[i], fs=100, verbose=0)
-        times_tsfel_expanding.append(time.time() - start)
-    record_metrics("tsfel_expanding", times_tsfel_expanding)
-
-    rows.extend([
-        ("tsfast_compatible_features", len(features), "count"),
-        ("tsfresh_compatible_features", len(tsfresh_features), "count"),
-        ("tsfel_compatible_features", len(tsfel_features), "count")
-    ])
-
-    append_to_csv('.jules/benchmarks.csv', rows)
-    print("Benchmark complete and saved to .jules/benchmarks.csv")
-
-    generate_chart()
-    update_readme()
 
 if __name__ == "__main__":
     main()
