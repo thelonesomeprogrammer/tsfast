@@ -108,6 +108,7 @@ bitflags! {
         const CALC_CENTROID        = 1 << 89;
         const ADF                  = 1 << 90;
         const LPCC                 = 1 << 91;
+        const TROUGHS              = 1 << 92;
 
         // ── Composite masks (zero bit-cost) ────────────────────
         const ANY_FFT = Self::FFT_COEFF.bits()

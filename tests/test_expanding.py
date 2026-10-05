@@ -209,12 +209,14 @@ def test_ecdf_pk_centroid_expanding():
     import tsfast
     import pyarrow as pa
     x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0], dtype=np.float32)
-    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50"]
+    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50", "negative_turning", "positive_turning"]
     extractor = tsfast.ExpandingExtractor(features, n_cols=1)
 
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     results = extractor.update(batch).to_pandas().iloc[-1].values
 
+    tsfel_neg = tsfel.feature_extraction.features.negative_turning(x)
+    tsfel_pos = tsfel.feature_extraction.features.positive_turning(x)
     tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(x, d=10)
     tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(x, d=3)
     tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(x)
@@ -226,6 +228,8 @@ def test_ecdf_pk_centroid_expanding():
     assert np.allclose(results[2], tsfel_pk)
     assert np.allclose(results[3], tsfel_centroid)
     assert np.allclose(results[4], tsfel_centroid_50)
+    assert np.allclose(results[5], tsfel_neg)
+    assert np.allclose(results[6], tsfel_pos)
 
 
 def test_ecdf_pk_centroid_expanding():
@@ -233,12 +237,14 @@ def test_ecdf_pk_centroid_expanding():
     import tsfast
     import pyarrow as pa
     x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0], dtype=np.float32)
-    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50"]
+    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50", "negative_turning", "positive_turning"]
     extractor = tsfast.ExpandingExtractor(features, n_cols=1)
 
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     results = extractor.update(batch).to_pandas().iloc[-1].values
 
+    tsfel_neg = tsfel.feature_extraction.features.negative_turning(x)
+    tsfel_pos = tsfel.feature_extraction.features.positive_turning(x)
     tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(x, d=10)
     tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(x, d=3)
     tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(x)
@@ -250,6 +256,8 @@ def test_ecdf_pk_centroid_expanding():
     assert np.allclose(results[2], tsfel_pk)
     assert np.allclose(results[3], tsfel_centroid)
     assert np.allclose(results[4], tsfel_centroid_50)
+    assert np.allclose(results[5], tsfel_neg)
+    assert np.allclose(results[6], tsfel_pos)
 
 def test_expanding_invalid_type():
     # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing

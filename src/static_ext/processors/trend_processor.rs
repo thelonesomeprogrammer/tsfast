@@ -20,7 +20,7 @@ impl TrendProcessor {
         paa_boundaries: &[Vec<usize>],
         unique_c3_lags: &[u16],
     ) {
-        if compute.contains(Compute::PEAKS) {
+        if compute.intersects(Compute::PEAKS | Compute::TROUGHS) {
             let left = f32x4::from_array([
                 if global_idx > 0 {
                     values[global_idx - 1]
@@ -41,8 +41,14 @@ impl TrendProcessor {
                     values[values.len() - 1]
                 },
             ]);
-            let mask = chunk.simd_gt(left) & chunk.simd_gt(right);
-            state.peaks += mask.to_bitmask().count_ones();
+            if compute.contains(Compute::PEAKS) {
+                let mask = chunk.simd_gt(left) & chunk.simd_gt(right);
+                state.peaks += mask.to_bitmask().count_ones();
+            }
+            if compute.contains(Compute::TROUGHS) {
+                let mask = chunk.simd_lt(left) & chunk.simd_lt(right);
+                state.troughs += mask.to_bitmask().count_ones();
+            }
         }
 
         if compute.contains(Compute::SLOPE) {
@@ -126,13 +132,19 @@ impl TrendProcessor {
         paa_boundaries: &[Vec<usize>],
         unique_c3_lags: &[u16],
     ) {
-        if compute.contains(Compute::PEAKS)
-            && global_idx > 0
-            && global_idx < values.len() - 1
-            && val > values[global_idx - 1]
-            && val > values[global_idx + 1]
-        {
-            state.peaks += 1;
+        if global_idx > 0 && global_idx < values.len() - 1 {
+            if compute.contains(Compute::PEAKS)
+                && val > values[global_idx - 1]
+                && val > values[global_idx + 1]
+            {
+                state.peaks += 1;
+            }
+            if compute.contains(Compute::TROUGHS)
+                && val < values[global_idx - 1]
+                && val < values[global_idx + 1]
+            {
+                state.troughs += 1;
+            }
         }
         if compute.contains(Compute::SLOPE) {
             state.sum_ix += (global_idx as f32) * val;

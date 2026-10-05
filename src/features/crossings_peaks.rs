@@ -44,6 +44,8 @@ pub fn eval_crossings_peaks(
                 Feature::ZeroCrossingRate => state.zcr_count as f32 / n,
                 Feature::ZeroCross => state.zcr_count as f32,
                 Feature::PeakCount => state.peaks as f32,
+                Feature::NegativeTurning => state.troughs as f32,
+                Feature::PositiveTurning => state.peaks as f32,
                 Feature::ZeroCrossingMean => zc_mean,
                 Feature::ZeroCrossingStd => zc_std,
         _ => return None,

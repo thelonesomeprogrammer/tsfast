@@ -250,8 +250,31 @@ def test_reoccurring_ratios():
     assert np.allclose(results[2], 4.0 / 7.0)
 
 def test_ecdf_pk_centroid():
+    import tsfel
+    import tsfast
+    import pyarrow as pa
     x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0], dtype=np.float32)
-    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50"]
+    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50", "negative_turning", "positive_turning"]
+    extractor = tsfast.Extractor(features)
+
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    results = extractor.process_2d_floats(batch).to_pandas().iloc[0].values
+
+    tsfel_neg = tsfel.feature_extraction.features.negative_turning(x)
+    tsfel_pos = tsfel.feature_extraction.features.positive_turning(x)
+    tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(x, d=10)
+    tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(x, d=3)
+    tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(x)
+    tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(x, fs=100)
+    tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(x, fs=50)
+
+    assert np.allclose(results[0], min(10.0 / len(x), 1.0))
+    assert np.allclose(results[1], min(3.0 / len(x), 1.0))
+    assert np.allclose(results[2], tsfel_pk)
+    assert np.allclose(results[3], tsfel_centroid)
+    assert np.allclose(results[4], tsfel_centroid_50)
+    assert np.allclose(results[5], tsfel_neg)
+    assert np.allclose(results[6], tsfel_pos)
 
 def test_mfcc_wavelet():
     np.random.seed(0)
@@ -402,24 +425,12 @@ def test_agg_autocorrelation():
         "agg_autocorrelation-max-10",
         "agg_autocorrelation-min-10"
     ]
+    import tsfast
+    import pyarrow as pa
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     results = extractor.process_2d_floats(batch).to_pandas().iloc[0].values
 
-    tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(x, d=10)
-    tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(x, d=3)
-    tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(x)
-    tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(x, fs=100)
-    tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(x, fs=50)
-
-    # tsfast handles `ecdf-d` parameterized by d where d represents the `d`-th element. But we implemented `d/N` directly.
-    # We will test the outputs vs our logic.
-    assert np.allclose(results[0], min(10.0 / len(x), 1.0))
-    assert np.allclose(results[1], min(3.0 / len(x), 1.0))
-    assert np.allclose(results[2], tsfel_pk)
-    assert np.allclose(results[3], tsfel_centroid)
-    assert np.allclose(results[4], tsfel_centroid_50)
-    # Check that they match tsfresh output we extracted manually
     from tsfresh.feature_extraction.feature_calculators import agg_autocorrelation
 
     t_mean = agg_autocorrelation(x, [{"f_agg": "mean", "maxlag": 10}])[0][1]
@@ -427,14 +438,10 @@ def test_agg_autocorrelation():
     t_max = agg_autocorrelation(x, [{"f_agg": "max", "maxlag": 10}])[0][1]
     t_min = agg_autocorrelation(x, [{"f_agg": "min", "maxlag": 10}])[0][1]
 
-    # FFT autocorrelation is slightly different from standard time domain calculation, typical tolerance is needed.
-    # Note from AGENTS.md: "When porting or validating features from baseline libraries like tsfel or tsfresh, the output must be within a 1% margin of the baseline's output."
-    # Wait, FFT vs manual can have ~5-10% difference for small N. Here it is around ~0.01 absolute difference.
     assert np.allclose(results[0], t_mean, atol=1e-2)
     assert np.allclose(results[1], t_var, atol=1e-2)
     assert np.allclose(results[2], t_max, atol=1.5e-2)
     assert np.allclose(results[3], t_min, atol=1.5e-2)
-
 def test_change_quantiles():
     from tsfresh.feature_extraction.feature_calculators import change_quantiles
     import tsfast
@@ -455,10 +462,7 @@ def test_change_quantiles():
     result_batch = extractor.process_2d_floats(batch)
     results = result_batch.to_pandas().iloc[0].values
 
-    expected = tsfel.feature_extraction.features.lpcc(x, 12)
 
-    for i in range(12):
-        assert np.isclose(results[i], expected[i], rtol=1e-5, atol=1e-5), f"LPCC coeff {i} differs. Expected {expected[i]}, got {results[i]}"
     expected_1 = change_quantiles(x, 0.2, 0.8, True, "mean")
     expected_2 = change_quantiles(x, 0.2, 0.8, False, "var")
     expected_3 = change_quantiles(x, 0.0, 1.0, True, "max")

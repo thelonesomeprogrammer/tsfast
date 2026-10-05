@@ -79,6 +79,7 @@ pub struct ColumnState {
 
     pub zcr_count: u32,
     pub peaks: u32,
+    pub troughs: u32,
     pub zc_indices: SmallVec<[f32; 32]>,
     pub paa_sums: Vec<Vec<f32>>,
     pub current_paa_segs: Vec<usize>,
@@ -224,6 +225,7 @@ impl ColumnState {
             t_energy_vec: f32x4::splat(0.0),
             zcr_count: 0,
             peaks: 0,
+            troughs: 0,
             zc_indices: SmallVec::new(),
             paa_sums: unique_paa_totals
                 .iter()
