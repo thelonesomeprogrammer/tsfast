@@ -64,11 +64,25 @@ pub fn eval_distribution(
 
     let res = match feat {
         Feature::Median => median,
+        // tsfresh: |mean - median| < r * (max - min)
+        Feature::SymmetryLooking(r_bits) => {
+            let r = f32::from_bits(*r_bits);
+            ((context.mean - median).abs() < r * (max_val - min_val)) as u8 as f32
+        }
         Feature::MedianAbsDeviation => context.median_abs_dev,
         Feature::Entropy => entropy,
         Feature::Ecdf(d) => {
             let d_idx = *d as f32;
             if d_idx >= n { 1.0 } else { d_idx / n }
+        }
+        Feature::ValueCount(val_bits) => {
+            let val = f32::from_bits(*val_bits);
+            let count = if val.is_nan() {
+                values.iter().filter(|&&v| v.is_nan()).count()
+            } else {
+                values.iter().filter(|&&v| v == val).count()
+            };
+            return Some(count as f32);
         }
         Feature::BinnedEntropy(max_bins) => {
             let max_bins = *max_bins as usize;

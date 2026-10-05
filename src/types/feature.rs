@@ -2,7 +2,8 @@ use super::compute::Compute;
 
 // ─── Feature enum ───────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy, strum::EnumDiscriminants)]
+#[strum_discriminants(derive(Hash, strum::EnumIter))]
 pub enum Feature {
     TotalSum,
     Mean,
@@ -19,12 +20,18 @@ pub enum Feature {
     Iqr,
     Entropy,
     SampleEntropy,
+    HiguchiFd,
     BinnedEntropy(u32),
     Energy,
+    EnergyRatioByChunks(u16, u16),
     Rms,
     RootMeanSquare,
     ZeroCrossingRate,
     PeakCount,
+    NegativeTurning,
+    PositiveTurning,
+    NumberCrossingM(u32),
+    NumberPeaks(u16),
     AutocorrLag1,    // Centered (tsfresh default)
     AutocorrFirst1e, // tsfel 'Autocorrelation' feature
     MeanAbsChange,
@@ -102,6 +109,8 @@ pub enum Feature {
     HasDuplicateMin,
     HasDuplicate,
     Ecdf(u32),
+    PermutationEntropy(u32, u32),
+    ValueCount(u32),
     CalcCentroid(u32),
     Mfcc(u16),
     Lpcc(u16),
@@ -172,10 +181,15 @@ impl Feature {
             }
             Self::BinnedEntropy(_) => C::MIN | C::MAX | C::BINNED_ENT,
             Self::Energy => C::ENERGY,
+            Self::EnergyRatioByChunks(_, _) => C::ENERGY,
             Self::Rms => C::ENERGY | C::RMS,
             Self::RootMeanSquare => C::ENERGY | C::ROOT_MEAN_SQ,
             Self::ZeroCrossingRate => C::ZERO_CROSS,
             Self::PeakCount => C::PEAKS,
+            Self::NegativeTurning => C::TROUGHS,
+            Self::PositiveTurning => C::PEAKS,
+            Self::NumberCrossingM(_) => C::NUMBER_PEAKS_CROSSINGS,
+            Self::NumberPeaks(_) => C::NUMBER_PEAKS_CROSSINGS,
             Self::AutocorrLag1 => C::SUM | C::MEAN | C::ENERGY | C::AUTOCORR_LAG1,
             Self::AutocorrFirst1e => {
                 C::SUM | C::MEAN | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
@@ -198,8 +212,8 @@ impl Feature {
             }
             Self::C3(_) => C::C3,
             Self::Auc => C::AUC,
-            Self::SlopeSignChange => C::PEAKS | C::SLOPE_SIGN_CHG,
-            Self::TurningPoints => C::PEAKS | C::TURNING_PTS,
+            Self::SlopeSignChange => C::empty(),
+            Self::TurningPoints => C::PEAKS | C::TROUGHS,
             Self::ZeroCrossingMean => {
                 C::SUM | C::MEAN | C::ZERO_CROSS | C::ZC_STATS | C::ZC_INDICES | C::NEEDS_SORT
             }
@@ -263,7 +277,6 @@ impl Feature {
             Self::SpectralEntropy => C::SPEC_ENTROPY | C::NEEDS_SORT,
             Self::SpectralRollOn => C::SPEC_ROLLON | C::NEEDS_SORT,
             Self::SpectralRollOff => C::SPEC_ROLLOFF | C::NEEDS_SORT,
-            Self::SpectralSpread => C::SPEC_SPREAD | C::NEEDS_SORT,
             Self::SpectralSkewness => C::SPEC_SKEWNESS | C::NEEDS_SORT,
             Self::SpectralKurtosis => C::SPEC_KURTOSIS | C::NEEDS_SORT,
             Self::SignalDistance => C::SIG_DISTANCE | C::NEEDS_SORT,
@@ -271,7 +284,7 @@ impl Feature {
             Self::QuerySimilarityCount(_, _) => C::QUERY_SIMILARITY | C::NEEDS_SORT,
             Self::MatrixProfile(_, _) => C::MATRIX_PROFILE | C::NEEDS_SORT,
             Self::SpectrogramCoefficients(_, _) => C::SPECTROGRAM | C::NEEDS_SORT,
-            Self::MeanSecondDerivativeCentral => C::LENGTH | C::NEEDS_SORT,
+            Self::MeanSecondDerivativeCentral => C::empty(),
             Self::LargeStandardDeviation(_) => {
                 C::SUM | C::MEAN | C::VARIANCE | C::MIN | C::MAX | C::ENERGY | C::NEEDS_SORT
             }
@@ -288,6 +301,8 @@ impl Feature {
             Self::ZeroCross => C::ZERO_CROSS,
             Self::MaxPowerSpectrum => C::ANY_FFT,
             Self::Ecdf(_) => C::LENGTH,
+            Self::PermutationEntropy(_, _) => C::empty(),
+            Self::ValueCount(_) => C::empty(),
             Self::CalcCentroid(_) => C::ENERGY | C::CALC_CENTROID,
             Self::Mfcc(_) => C::MFCC,
             Self::Lpcc(_) => C::LPCC | C::FULL_AUTOCORR,
@@ -297,6 +312,7 @@ impl Feature {
             Self::CwtCoefficients(_, _, _, _) => C::CWT,
             Self::NumberCwtPeaks(_) => C::CWT,
             Self::AugmentedDickeyFuller(_) => C::ADF | C::NEEDS_SORT,
+            Self::HiguchiFd => C::empty(),
         }
     }
 }

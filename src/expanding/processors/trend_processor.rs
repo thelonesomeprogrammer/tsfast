@@ -48,9 +48,16 @@ impl TrendProcessor {
         unique_autocorr_lags: &[u16],
         unique_tra_lags: &[u16],
     ) {
-        if compute.contains(Compute::PEAKS) {
-            if state.prev_val > state.prev_prev_val && state.prev_val > val {
-                state.peaks += 1;
+        if compute.intersects(Compute::PEAKS | Compute::TROUGHS) {
+            if compute.contains(Compute::PEAKS) {
+                if state.prev_val > state.prev_prev_val && state.prev_val > val {
+                    state.peaks += 1;
+                }
+            }
+            if compute.contains(Compute::TROUGHS) {
+                if state.prev_val < state.prev_prev_val && state.prev_val < val {
+                    state.troughs += 1;
+                }
             }
             state.prev_prev_val = state.prev_val;
             state.prev_val = val;

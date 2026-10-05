@@ -23,8 +23,23 @@ dynamic = ["version"]
 features = ["pyo3/extension-module"]
 module-name = "tsfast._tsfast"
 
+[tool.uv]
+# uv builds the Rust extension itself (editable install into ./tsfast/).
+# Rebuild whenever Rust sources change, and always in release mode, so
+# `uv run ...` never tests a stale or debug build. Don't use `maturin develop`.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "rust-toolchain.toml" },
+    { file = "src/**/*.rs" },
+]
+
+[tool.uv.config-settings-package]
+tsfast = { "maturin.build-args" = "--profile=release" }
+
 [tool.pytest.ini_options]
-testpaths = ["tests", "benchmarks"]
+testpaths = ["tests"]
 markers = [
     "benchmark: mark test as a benchmark"
 ]

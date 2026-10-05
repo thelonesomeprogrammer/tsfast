@@ -79,6 +79,7 @@ pub struct ColumnState {
 
     pub zcr_count: u32,
     pub peaks: u32,
+    pub troughs: u32,
     pub zc_indices: SmallVec<[f32; 32]>,
     pub paa_sums: Vec<Vec<f32>>,
     pub current_paa_segs: Vec<usize>,
@@ -224,6 +225,7 @@ impl ColumnState {
             t_energy_vec: f32x4::splat(0.0),
             zcr_count: 0,
             peaks: 0,
+            troughs: 0,
             zc_indices: SmallVec::new(),
             paa_sums: unique_paa_totals
                 .iter()
@@ -421,4 +423,72 @@ pub fn approx_entropy_simd(m: usize, r: f32, data: &[f32]) -> f32 {
     }
 
     result / end as f32
+}
+
+pub fn permutation_entropy(data: &[f32], tau: u32, dimension: u32) -> f32 {
+    let tau = tau as usize;
+    let dim = dimension as usize;
+    let n = data.len();
+
+    // tsfresh _into_subchunks implementation logic:
+    // chunk length = dimension, starts every 'tau' (which they call every_n)
+    // The window index in the original array is: start + j (where j < dim)
+    // start shifts by 'tau' each time.
+    if n < dim {
+        return f32::NAN;
+    }
+
+    let num_shifts = (n - dim) / tau + 1;
+    if num_shifts == 0 {
+        return f32::NAN;
+    }
+
+    let mut counts = rustc_hash::FxHashMap::default();
+    let mut perm_indices = vec![0usize; dim];
+
+    for shift in 0..num_shifts {
+        let start = shift * tau;
+        for j in 0..dim {
+            perm_indices[j] = j;
+        }
+
+        perm_indices.sort_by(|&a, &b| {
+            let val_a = data[start + a];
+            let val_b = data[start + b];
+
+            match (val_a.is_nan(), val_b.is_nan()) {
+                (true, true) => std::cmp::Ordering::Equal,
+                (true, false) => std::cmp::Ordering::Greater,
+                (false, true) => std::cmp::Ordering::Less,
+                (false, false) => val_a.partial_cmp(&val_b).unwrap_or(std::cmp::Ordering::Equal),
+            }
+        });
+
+        let mut inv_perm = vec![0usize; dim];
+        for (rank, &idx) in perm_indices.iter().enumerate() {
+            inv_perm[idx] = rank;
+        }
+
+        if dim <= 16 {
+            let mut encoded: u64 = 0;
+            for (shift, &idx) in inv_perm.iter().enumerate() {
+                encoded |= (idx as u64) << (shift * 4);
+            }
+            *counts.entry(encoded).or_insert(0usize) += 1;
+        } else {
+            return f32::NAN;
+        }
+    }
+
+    let mut entropy = 0.0;
+    let num_windows_f = num_shifts as f32;
+    for &count in counts.values() {
+        let p = count as f32 / num_windows_f;
+        if p > 0.0 {
+            // TSFresh uses natural log here despite mathematical formulation calling for log2
+            entropy -= p * p.ln();
+        }
+    }
+
+    entropy
 }
