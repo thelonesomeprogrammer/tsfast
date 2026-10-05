@@ -103,3 +103,18 @@ fn invalid_parameters_are_rejected() {
         assert!(s.parse::<Feature>().is_err(), "{s:?} should be rejected");
     }
 }
+
+#[test]
+fn compute_flags_have_distinct_single_bits() {
+    use super::Compute;
+
+    let names: Vec<_> = Compute::all().iter_names().collect();
+    for (name, flag) in &names {
+        assert_eq!(flag.bits().count_ones(), 1, "{name} should be a single bit");
+    }
+    assert_eq!(
+        Compute::all().bits().count_ones() as usize,
+        names.len(),
+        "two Compute flags share a bit"
+    );
+}

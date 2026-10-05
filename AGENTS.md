@@ -27,7 +27,7 @@ uv run pytest benchmarks     # benchmarks (slow, not part of the normal test run
 | Path | What |
 | :--- | :--- |
 | `src/types/feature.rs` | `Feature` enum + `required_compute()` (which `Compute` flags a feature needs) |
-| `src/types/compute.rs` | `Compute` bitflags (`u128`, check the last used bit before adding one) |
+| `src/types/compute.rs` | `Compute` bitflags; add a flag by name to `compute_flags!`, bits are assigned automatically |
 | `src/types/parse.rs` | `unit_features!` name table; `FromStr` and `Feature::name()` for parameterized features |
 | `src/types/tests.rs` | round-trip/coverage tests over every `Feature` variant |
 | `src/features/mod.rs` | `eval()`: exhaustive routing of every variant to its module |
@@ -67,8 +67,8 @@ and tells you where to look.
    Returning `None` from an `eval_*` arm means "not computable for this window"
    and is reported as `0.0`; return `Some(f32::NAN)` if NaN is what the
    reference library gives.
-5. Only if the feature needs new accumulated state: add a `Compute` flag in
-   `compute.rs`, a field on `ColumnState` (`common.rs`), and update the relevant
+5. Only if the feature needs new accumulated state: add a `Compute` flag name
+   to the `compute_flags!` list in `compute.rs` (never write a bit index), a field on `ColumnState` (`common.rs`), and update the relevant
    processor in **all three** engines (`*/processors/*.rs`). The sliding engine
    must also handle values leaving the window. Nothing enforces this step; the
    Python tests are the only check.
