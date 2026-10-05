@@ -15,7 +15,6 @@ pub struct SortMetrics {
     pub median: f32,
     pub median_abs_dev: f32,
     pub iqr: f32,
-    pub entropy: f32,
 }
 
 pub struct MeanMetrics {

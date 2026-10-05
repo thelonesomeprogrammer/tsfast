@@ -19,7 +19,6 @@ pub fn eval_moments(feat: &Feature, context: &mut crate::context::FeatureContext
     let _last_min_idx = context.last_min_idx;
     let _median = context.median;
     let iqr = context.iqr;
-    let _entropy = context.entropy;
     let mad_sum = context.mad_sum;
     let _count_a = context.count_a;
     let _count_b = context.count_b;
@@ -42,7 +41,14 @@ pub fn eval_moments(feat: &Feature, context: &mut crate::context::FeatureContext
         Feature::Mean => mean,
         Feature::Variance => var,
         Feature::Std => std_dev,
-        Feature::Skew if var > 1e-9 => {
+        // tsfresh (pandas): adjusted Fisher-Pearson G1.
+        Feature::Skew if var > 1e-9 && n > 2.0 => {
+            let mu2 = m2 / n;
+            let g1 = (m3 / n) / mu2.powf(1.5);
+            g1 * (n * (n - 1.0)).sqrt() / (n - 2.0)
+        }
+        // TSFEL (scipy.stats.skew): biased g1.
+        Feature::BiasedSkew if var > 1e-9 => {
             let mu2 = m2 / n;
             (m3 / n) / mu2.powf(1.5)
         }

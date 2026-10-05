@@ -24,7 +24,6 @@ pub struct FeatureContext<'a> {
     pub median: f32,
     pub median_abs_dev: f32,
     pub iqr: f32,
-    pub entropy: f32,
 
     // MeanMetrics
     pub mad_sum: f32,
@@ -101,7 +100,6 @@ impl<'a> FeatureContext<'a> {
             median: sort.median,
             median_abs_dev: sort.median_abs_dev,
             iqr: sort.iqr,
-            entropy: sort.entropy,
             mad_sum: mean.mad_sum,
             count_a: mean.count_a,
             count_b: mean.count_b,

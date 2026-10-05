@@ -38,8 +38,6 @@ _EXP_CWT = "expanding CWT (wavelet_energy/wavelet_entropy) differs from static"
 _CONST_FFT = "constant series: FFT round-off leaves ~1e-7 bins and spectral ratios blow up"
 KNOWN_FAILURES = {
     "sliding": {
-        "auc": "sliding incremental auc_sum drifts from static after the first window",
-        "autocorr_lag1": "sliding incremental sum_prod drifts from static after the first window",
         "paa-3-2": _PAA,
     },
     "expanding": {

@@ -142,13 +142,10 @@ def test_sliding_higher_moments():
     # window 1: [1, 2, 3, 4, 5]
     w1 = x[:5]
     assert np.allclose(res.iloc[0]['mean'], np.mean(w1))
-    assert np.allclose(res.iloc[0]['std_dev'], np.std(w1, ddof=1))
+    assert np.allclose(res.iloc[0]['std_dev'], np.std(w1))  # ddof=0, as tsfresh/TSFEL
 
-    from scipy.stats import kurtosis
-    v = np.var(w1, ddof=1)
-    m = np.mean(w1)
-    m3 = np.mean((w1 - m)**3)
-    expected_skew = m3 / (v**1.5)
+    from scipy.stats import kurtosis, skew
+    expected_skew = skew(w1, bias=False)  # tsfresh (pandas) skewness
     expected_kurt = kurtosis(w1, fisher=True, bias=False)
 
     assert np.allclose(res.iloc[0]['skewness'], expected_skew, atol=1e-5)

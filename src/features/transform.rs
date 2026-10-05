@@ -19,7 +19,6 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
     let _last_min_idx = context.last_min_idx;
     let _median = context.median;
     let _iqr = context.iqr;
-    let _entropy = context.entropy;
     let _mad_sum = context.mad_sum;
     let _count_a = context.count_a;
     let _count_b = context.count_b;

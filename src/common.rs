@@ -55,9 +55,7 @@ pub struct ColumnState {
     pub mac_sum: f32,
     pub mc_sum: f32,
     pub sum_sq_diff: f32,
-    pub sum_prod: f32,
     pub sum_ix: f32,
-    pub auc_sum: f32,
     pub t_energy: f32,
     pub mac_sum_vec: f32x4,
     pub mc_sum_vec: f32x4,
@@ -71,8 +69,6 @@ pub struct ColumnState {
     pub max_vec: f32x4,
     pub abs_max_vec: f32x4,
     pub sum_sq_diff_vec: f32x4,
-    pub sum_prod_vec: f32x4,
-    pub auc_sum_vec: f32x4,
     pub sum_ix_vec: f32x4,
     pub t_energy_vec: f32x4,
 
@@ -122,13 +118,8 @@ pub struct ColumnState {
     pub reoccurring_datapoints: u32,
     pub reoccurring_values: u32,
     pub ar_coeffs: rustc_hash::FxHashMap<u16, Vec<f32>>,
-    pub ar_xtx: rustc_hash::FxHashMap<u16, ndarray::Array2<f64>>,
-    pub ar_xty: rustc_hash::FxHashMap<u16, ndarray::Array1<f64>>,
     pub friedrich_coeffs: rustc_hash::FxHashMap<(u8, u32), Vec<f32>>,
     pub max_langevin_fixed_point_cache: rustc_hash::FxHashMap<(u8, u32), f32>,
-    pub last_dynamic_n: usize,
-    pub last_dynamic_ptr: usize,
-    pub dynamic_val_cache: Vec<f32>,
 
     // Incremental moments (Welford's or similar)
     pub n: f32,
@@ -185,6 +176,7 @@ impl ColumnState {
     /// buffer addresses can't tell windows apart: the sliding engine reuses its
     /// history buffer in place, so every window has the same pointer and length.
     pub fn reset_window_caches(&mut self) {
+        self.ar_coeffs.clear();
         self.friedrich_coeffs.clear();
         self.max_langevin_fixed_point_cache.clear();
         self.adf_test_stat = f32::NAN;
@@ -209,9 +201,7 @@ impl ColumnState {
             mac_sum: 0.0,
             mc_sum: 0.0,
             sum_sq_diff: 0.0,
-            sum_prod: 0.0,
             sum_ix: 0.0,
-            auc_sum: 0.0,
             mac_sum_vec: f32x4::splat(0.0),
             mc_sum_vec: f32x4::splat(0.0),
             sum_vec: f32x4::splat(0.0),
@@ -223,8 +213,6 @@ impl ColumnState {
             abs_max_vec: f32x4::splat(0.0),
             t_energy: 0.0,
             sum_sq_diff_vec: f32x4::splat(0.0),
-            sum_prod_vec: f32x4::splat(0.0),
-            auc_sum_vec: f32x4::splat(0.0),
             sum_ix_vec: f32x4::splat(0.0),
             t_energy_vec: f32x4::splat(0.0),
             zcr_count: 0,
@@ -276,13 +264,8 @@ impl ColumnState {
             reoccurring_datapoints: 0,
             reoccurring_values: 0,
             ar_coeffs: rustc_hash::FxHashMap::default(),
-            ar_xtx: rustc_hash::FxHashMap::default(),
-            ar_xty: rustc_hash::FxHashMap::default(),
             friedrich_coeffs: rustc_hash::FxHashMap::default(),
             max_langevin_fixed_point_cache: rustc_hash::FxHashMap::default(),
-            last_dynamic_n: 0,
-            last_dynamic_ptr: 0,
-            dynamic_val_cache: Vec::new(),
             n: 0.0,
             mean: 0.0,
             m2: 0.0,
@@ -369,6 +352,15 @@ pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
                     a_count += 1;
                 }
             }
+        }
+    }
+
+    // B also uses the last length-m template (index n - m), which has no
+    // length-(m+1) extension, so the loop above didn't visit it.
+    let last = end_m;
+    for j in 0..last {
+        if (data[j] - data[last]).abs() <= r && (data[j + 1] - data[last + 1]).abs() <= r {
+            b_count += 1;
         }
     }
 

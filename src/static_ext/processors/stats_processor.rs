@@ -98,7 +98,8 @@ impl StatsProcessor {
         let m4 = state.sum_quads - 4.0 * mean * state.sum_cubes + 6.0 * mean * mean * state.energy
             - 3.0 * mean * mean * mean * state.total_sum;
 
-        let var = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
+        // Population variance (ddof=0), as tsfresh and TSFEL.
+        let var = if n > 0.0 { m2 / n } else { 0.0 };
         let std_dev = var.sqrt();
 
         crate::metrics::BaseMetrics {

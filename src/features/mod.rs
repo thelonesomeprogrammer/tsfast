@@ -29,6 +29,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::Mad
         | F::Mean
         | F::Skew
+        | F::BiasedSkew
         | F::Std
         | F::TotalSum
         | F::UnbiasedFisherKurtosis

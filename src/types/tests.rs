@@ -34,7 +34,7 @@ fn parameterized_samples() -> Vec<Feature> {
         F::ChangeQuantiles(f(0.2), f(0.8), true, AggFunc::Mean),
         F::IndexMassQuantile(f(0.5)),
         F::MaxLangevinFixedPoint(3, f(30.0)),
-        F::ArCoefficient(1, 10),
+        F::ArCoefficient(10, 1),
         F::FriedrichCoefficients(3, f(30.0), 0),
         F::MeanNAbsoluteMax(7),
         F::QuerySimilarityCount(10, f(0.5)),
@@ -95,6 +95,8 @@ fn name_round_trips_through_parse() {
 fn invalid_parameters_are_rejected() {
     for s in [
         "paa-2-2",
+        "ar_coefficient-1-10",
+        "ar_coefficient-0-0",
         "agg_linear_trend-slope-0-mean",
         "energy_ratio_by_chunks_num_segments_3__segment_focus_3",
         "human_range_energy-0",

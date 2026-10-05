@@ -15,7 +15,7 @@ def test_extract():
     print(f"Extract results: {results}")
     
     assert np.allclose(results[0], 3.0)
-    assert np.allclose(results[1], np.std(x, ddof=1)) # Rust uses ddof=1 for variance/std
+    assert np.allclose(results[1], np.std(x))  # ddof=0, as tsfresh/TSFEL
     assert np.allclose(results[2], np.sum(x**2))
     assert results[3] == 1.0
     assert results[4] == 5.0
@@ -95,15 +95,16 @@ def test_paa():
 
 def test_advanced_features():
     x = np.array([1.0, 2.0, 1.0, 2.0, 1.0, 2.0], dtype=np.float32)
-    # autocorr-2 for [1,2,1,2,1,2] mean=1.5, var=0.3
+    # autocorr-2 for [1,2,1,2,1,2] mean=1.5, population var=0.25
     # num: sum_{i=0}^{n-lag-1} (x[i]-mean)(x[i+lag]-mean)
     # i=0: (1-1.5)*(1-1.5) = 0.25
     # i=1: (2-1.5)*(2-1.5) = 0.25
     # i=2: (1-1.5)*(1-1.5) = 0.25
     # i=3: (2-1.5)*(2-1.5) = 0.25
     # sum = 1.0
-    # den = var * (n-1) = 0.3 * 5 = 1.5
-    # result = 1.0 / 1.5 = 0.666...
+    # tsfresh normalises lag l by (n - l) * population variance:
+    # den = (6 - 2) * 0.25 = 1.0
+    # result = 1.0 / 1.0 = 1.0
     features = ["fft_coeff-1-real", "fft_coeff-1-abs", "autocorr-2"]
     
     extractor = tsfast.Extractor(features)
@@ -116,7 +117,7 @@ def test_advanced_features():
     assert np.allclose(results[0], 0.0, atol=1e-5)
     
     # autocorr-2 parity
-    assert np.allclose(results[2], 2/3, atol=1e-5)
+    assert np.allclose(results[2], 1.0, atol=1e-5)
     print("test_advanced_features passed!")
 
 def test_2d_extraction():

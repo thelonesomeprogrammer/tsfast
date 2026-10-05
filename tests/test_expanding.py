@@ -98,21 +98,11 @@ def test_expanding_higher_moments():
     data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
     res = extractor.update(data).to_pandas().iloc[0]
     
-    from scipy.stats import kurtosis
+    from scipy.stats import kurtosis, skew
     assert np.allclose(res['mean'], np.mean(x))
-    assert np.allclose(res['std_dev'], np.std(x, ddof=1))
-    # scipy skew/kurtosis might have different bias corrections, but let's check values are reasonable
-    # tsfast skewness: (m3 / n) / var.powf(1.5)
-    # tsfast kurtosis: (m4 / n) / (var * var) - 3.0
-    
-    m = np.mean(x)
-    v = np.var(x, ddof=1)
-    m3 = np.mean((x - m)**3)
-    expected_skew = m3 / (v**1.5)
+    assert np.allclose(res['std_dev'], np.std(x))  # ddof=0, as tsfresh/TSFEL
+    expected_skew = skew(x, bias=False)  # tsfresh (pandas) skewness
     expected_kurt = kurtosis(x, fisher=True, bias=False)
-    
-    # Wait, tsfast uses (m3/n) where m3 is sum of (x-mean)^3.
-    # So (m3/n) is exactly np.mean((x-m)**3).
     assert np.allclose(res['skewness'], expected_skew, atol=1e-5)
     assert np.allclose(res["kurtosis"], expected_kurt, atol=1e-5)
 

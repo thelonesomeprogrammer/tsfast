@@ -14,27 +14,6 @@ pub fn eval_dynamic(feat: &Feature, context: &mut crate::context::FeatureContext
 
     let state = &mut *context.state;
 
-    // Cache invalidation: Use pointer address for sliding checks
-    let current_ptr = values.as_ptr() as usize;
-    let mut offset = 0isize;
-    if state.last_dynamic_ptr != 0 && state.last_dynamic_n != 0 {
-        offset = (current_ptr as isize - state.last_dynamic_ptr as isize) / 4;
-    }
-
-    if state.last_dynamic_ptr != current_ptr || state.last_dynamic_n != n {
-        state.ar_coeffs.clear();
-        state.friedrich_coeffs.clear();
-        state.max_langevin_fixed_point_cache.clear();
-
-        if offset < 0 || offset > state.last_dynamic_n as isize || state.dynamic_val_cache.is_empty() {
-            state.ar_xtx.clear();
-            state.ar_xty.clear();
-        }
-
-        state.last_dynamic_ptr = current_ptr;
-        state.last_dynamic_n = n;
-    }
-
     let mut res = None;
 
     match feat {
@@ -46,47 +25,8 @@ pub fn eval_dynamic(feat: &Feature, context: &mut crate::context::FeatureContext
                 res = Some(f32::NAN);
             } else {
                 let coeffs = state.ar_coeffs.entry(*k).or_insert_with(|| {
-                    let mut xtx = state.ar_xtx.entry(*k).or_insert_with(|| Array2::<f64>::zeros((k_val + 1, k_val + 1))).clone();
-                    let mut xty = state.ar_xty.entry(*k).or_insert_with(|| Array1::<f64>::zeros(k_val + 1)).clone();
-
-                    let mut is_full_recalc = true;
-                    if state.dynamic_val_cache.len() == state.last_dynamic_n && offset >= 0 && offset < state.last_dynamic_n as isize {
-                        is_full_recalc = false;
-                    }
-
-                    if is_full_recalc {
-                        let (new_xtx, new_xty) = compute_ar_matrices_full(values, k_val);
-                        xtx = new_xtx;
-                        xty = new_xty;
-                    } else if offset == 0 {
-                        // Expanding window: just add the new values
-                        let old_n = state.dynamic_val_cache.len();
-                        let added_count = n - old_n;
-                        if added_count > 0 {
-                            update_ar_matrices_add(&mut xtx, &mut xty, values, k_val, old_n, n);
-                        }
-                    } else {
-                        // Sliding window: subtract dropped, add new
-                        // The dropped elements correspond to indices `0..offset` in `dynamic_val_cache`.
-                        if state.dynamic_val_cache.len() >= k_val + offset as usize {
-                            update_ar_matrices_sub(&mut xtx, &mut xty, &state.dynamic_val_cache, k_val, offset as usize);
-                            update_ar_matrices_add(&mut xtx, &mut xty, values, k_val, n - offset as usize, n);
-                        } else {
-                            // Fallback if cache is somehow too small
-                            let (new_xtx, new_xty) = compute_ar_matrices_full(values, k_val);
-                            xtx = new_xtx;
-                            xty = new_xty;
-                        }
-                    }
-
-                    state.ar_xtx.insert(*k, xtx.clone());
-                    state.ar_xty.insert(*k, xty.clone());
-
-                    if let Some(c) = solve_ols_f64(&xtx, &xty) {
-                        c
-                    } else {
-                        vec![f32::NAN; k_val + 1]
-                    }
+                    let (xtx, xty) = compute_ar_matrices_full(values, k_val);
+                    solve_ols_f64(&xtx, &xty).unwrap_or_else(|| vec![f32::NAN; k_val + 1])
                 });
 
                 if p_val < coeffs.len() {
@@ -126,93 +66,7 @@ pub fn eval_dynamic(feat: &Feature, context: &mut crate::context::FeatureContext
         _ => return None,
     }
 
-    if state.dynamic_val_cache.len() != n || (n > 0 && state.dynamic_val_cache.last() != Some(&values[n-1])) {
-        state.dynamic_val_cache.clear();
-        state.dynamic_val_cache.extend_from_slice(values);
-    }
-
     res
-}
-
-fn update_ar_matrices_add(xtx: &mut Array2<f64>, xty: &mut Array1<f64>, values: &[f32], k: usize, start_t: usize, end_t: usize) {
-    let m = k + 1;
-    let v64: Vec<f64> = values.iter().map(|&x| x as f64).collect();
-
-    // Safety clamp
-    let start_t = start_t.max(k);
-    let end_t = end_t.max(k);
-
-    for i in 0..m {
-        let mut sum_y = 0.0;
-        if i == 0 {
-            for t in start_t..end_t {
-                sum_y += v64[t];
-            }
-        } else {
-            for t in start_t..end_t {
-                sum_y += v64[t-i] * v64[t];
-            }
-        }
-        xty[i] += sum_y;
-
-        for j in i..m {
-            let mut sum_x = 0.0;
-            if i == 0 && j == 0 {
-                sum_x = (end_t - start_t) as f64;
-            } else if i == 0 {
-                for t in start_t..end_t {
-                    sum_x += v64[t-j];
-                }
-            } else {
-                for t in start_t..end_t {
-                    sum_x += v64[t-i] * v64[t-j];
-                }
-            }
-            xtx[[i, j]] += sum_x;
-            if i != j {
-                xtx[[j, i]] += sum_x;
-            }
-        }
-    }
-}
-
-fn update_ar_matrices_sub(xtx: &mut Array2<f64>, xty: &mut Array1<f64>, old_values: &[f32], k: usize, offset: usize) {
-    let m = k + 1;
-    let v64: Vec<f64> = old_values.iter().map(|&x| x as f64).collect();
-    let end_t = k + offset;
-
-    for i in 0..m {
-        let mut sum_y = 0.0;
-        if i == 0 {
-            for t in k..end_t {
-                sum_y += v64[t];
-            }
-        } else {
-            for t in k..end_t {
-                sum_y += v64[t-i] * v64[t];
-            }
-        }
-        xty[i] -= sum_y;
-
-        for j in i..m {
-            let mut sum_x = 0.0;
-            if i == 0 && j == 0 {
-                sum_x = offset as f64;
-            } else if i == 0 {
-                for t in k..end_t {
-                    sum_x += v64[t-j];
-                }
-            } else {
-                for t in k..end_t {
-                    sum_x += v64[t-i] * v64[t-j];
-                }
-            }
-            xtx[[i, j]] -= sum_x;
-            if i != j {
-                xtx[[j, i]] -= sum_x;
-            }
-        }
-    }
 }
 
 fn compute_ar_matrices_full(values: &[f32], k: usize) -> (Array2<f64>, Array1<f64>) {
@@ -459,35 +313,44 @@ fn compute_friedrich_coeffs(values: &[f32], m: usize, r: f32) -> Vec<f32> {
         delta.push((values[i + 1] - values[i]) as f64);
     }
 
+    // tsfresh bins with pd.qcut(signal, r): edges are linear-interpolated
+    // quantiles, bins are right-closed (the first also includes its left edge),
+    // and duplicate edges raise, which tsfresh turns into NaN coefficients.
     let r_int = r as usize;
     if r_int < 1 {
         return vec![f32::NAN; m + 1];
     }
+    let mut sorted = signal.clone();
+    sorted.sort_by(f64::total_cmp);
+    let last = (sorted.len() - 1) as f64;
+    let edges: Vec<f64> = (0..=r_int)
+        .map(|q| {
+            let pos = q as f64 / r_int as f64 * last;
+            let lo = pos.floor() as usize;
+            let hi = (lo + 1).min(sorted.len() - 1);
+            sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo as f64)
+        })
+        .collect();
+    if edges.windows(2).any(|w| w[0] == w[1]) {
+        return vec![f32::NAN; m + 1];
+    }
 
-    let mut pairs: Vec<(usize, f64)> = signal.iter().cloned().enumerate().collect();
-    pairs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    let total = pairs.len();
-    let mut x_means = Vec::new();
-    let mut y_means = Vec::new();
-
+    let mut sum_x = vec![0.0f64; r_int];
+    let mut sum_y = vec![0.0f64; r_int];
+    let mut count = vec![0usize; r_int];
+    for (&sx, &dy) in signal.iter().zip(&delta) {
+        // First bin whose right edge is >= sx.
+        let bin = edges[1..].partition_point(|&e| e < sx).min(r_int - 1);
+        sum_x[bin] += sx;
+        sum_y[bin] += dy;
+        count[bin] += 1;
+    }
+    let mut x_means = Vec::with_capacity(r_int);
+    let mut y_means = Vec::with_capacity(r_int);
     for q in 0..r_int {
-        let start = (q * total) / r_int;
-        let end = ((q + 1) * total) / r_int;
-
-        if end > start {
-            let mut sum_x = 0.0;
-            let mut sum_y = 0.0;
-            let count = (end - start) as f64;
-
-            for i in start..end {
-                let idx = pairs[i].0;
-                sum_x += signal[idx];
-                sum_y += delta[idx];
-            }
-
-            x_means.push(sum_x / count);
-            y_means.push(sum_y / count);
+        if count[q] > 0 {
+            x_means.push(sum_x[q] / count[q] as f64);
+            y_means.push(sum_y[q] / count[q] as f64);
         }
     }
 

@@ -170,7 +170,7 @@ impl StatsProcessor {
             state.abs_max_vec = state.abs_max_vec.simd_max(chunk.abs());
         }
 
-        if compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
+        if compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR) {
             if state.min_queue.is_empty() {
                 state.min_queue = vec![(0, 0.0); window_size];
                 state.max_queue = vec![(0, 0.0); window_size];
@@ -288,7 +288,8 @@ impl StatsProcessor {
         let m4 = state.sum_quads - 4.0 * mean * state.sum_cubes + 6.0 * mean * mean * state.energy
             - 3.0 * mean * mean * mean * state.total_sum;
 
-        let var = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
+        // Population variance (ddof=0), as tsfresh and TSFEL.
+        let var = if n > 0.0 { m2 / n } else { 0.0 };
         let std_dev = var.sqrt();
 
         BaseMetrics {

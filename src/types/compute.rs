@@ -49,7 +49,6 @@ compute_flags! {
     KURTOSIS,             // sum_quads
     MAD,
     IQR,
-    ENTROPY,
     ENERGY,               // sum of squares
     RMS,
     ROOT_MEAN_SQ,
@@ -57,7 +56,6 @@ compute_flags! {
     PEAKS,
     TROUGHS,
     NUMBER_PEAKS_CROSSINGS,
-    AUTOCORR_LAG1,        // lag-1 product
     MAC,                  // mean abs change
     MC,                   // mean change
     CID_CE,
@@ -70,7 +68,6 @@ compute_flags! {
     STRIKE_BELOW,
     VAR_COEFF,
     C3,
-    AUC,
     ZC_STATS,             // zero-crossing mean
     ZC_STD,
     ZC_INDICES,
@@ -157,10 +154,8 @@ impl Compute {
 
     pub const ANY_DIFF: Self = Self::from_bits_retain(
         Self::ZERO_CROSS.bits()
-            | Self::AUTOCORR_LAG1.bits()
             | Self::MAC.bits()
             | Self::MC.bits()
-            | Self::CID_CE.bits()
-            | Self::AUC.bits(),
+            | Self::CID_CE.bits(),
     );
 }

@@ -41,6 +41,7 @@ unit_features! {
     Median => "median", ["value__median"];
     MedianAbsDeviation => "median_abs_deviation";
     Skew => "skewness", ["skew", "value__skewness"];
+    BiasedSkew => "biased_skewness";
     UnbiasedFisherKurtosis => "kurtosis", ["value__kurtosis", "unbiased_fisher_kurtosis"];
     BiasedFisherKurtosis => "biased_fisher_kurtosis";
     Mad => "mad", ["mean_abs_deviation"];
@@ -277,8 +278,12 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     }
     if let Some(arg) = s.strip_prefix("ar_coefficient-") {
         let (k_s, p_s) = arg.split_once('-')?;
+        // ar_coefficient-<order k>-<coefficient p>; p = 0 is the intercept.
         let k: u16 = k_s.parse().ok()?;
         let p: u16 = p_s.parse().ok()?;
+        if k == 0 || p > k {
+            return None;
+        }
         return Some(Feature::ArCoefficient(k, p));
     }
     if let Some(arg) = s.strip_prefix("friedrich_coefficients-") {

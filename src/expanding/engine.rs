@@ -195,7 +195,7 @@ impl<'a> ExpandingEngine<'a> {
             state,
         );
 
-        let (mean_metrics, entropy) =
+        let mean_metrics =
             MeanProcessor::finalize(self.compute, full_series, n, base_metrics.mean, state);
 
         let zc_metrics = DiffProcessor::finalize(self.compute, state);
@@ -208,7 +208,6 @@ impl<'a> ExpandingEngine<'a> {
             median,
             median_abs_dev,
             iqr,
-            entropy,
         };
 
         let mut context = crate::context::FeatureContext::new(

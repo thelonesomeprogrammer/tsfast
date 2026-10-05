@@ -279,7 +279,7 @@ mod tests {
         let n = data.len() as f32;
         let scalar_sum: f32 = data.iter().sum();
         let scalar_mean = scalar_sum / n;
-        let scalar_var = data.iter().map(|&x| (x - scalar_mean).powi(2)).sum::<f32>() / (n - 1.0);
+        let scalar_var = data.iter().map(|&x| (x - scalar_mean).powi(2)).sum::<f32>() / n; // ddof=0
         let scalar_energy = data.iter().map(|&x| x * x).sum::<f32>();
         let scalar_mad = data.iter().map(|&x| (x - scalar_mean).abs()).sum::<f32>() / n;
 

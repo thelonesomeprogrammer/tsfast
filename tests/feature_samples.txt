@@ -11,6 +11,7 @@ max_value
 median
 median_abs_deviation
 skewness
+biased_skewness
 kurtosis
 biased_fisher_kurtosis
 mad
@@ -95,7 +96,7 @@ quantile-0.25
 change_quantiles-0.2-0.8-True-mean
 index_mass_quantile-0.5
 max_langevin_fixed_point-3-30
-ar_coefficient-1-10
+ar_coefficient-10-1
 friedrich_coefficients-3-30-0
 mean_n_absolute_max-7
 query_similarity_count-10-0.5
@@ -140,7 +141,7 @@ agg_linear_trend-rvalue-5-var
 quantile-0.9
 change_quantiles-0-1-False-var
 index_mass_quantile-0.9
-ar_coefficient-0-10
+ar_coefficient-10-0
 friedrich_coefficients-3-30-3
 matrix_profile-10-max
 matrix_profile-10-mean

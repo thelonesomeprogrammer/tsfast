@@ -14,6 +14,7 @@ pub enum Feature {
     Median,
     MedianAbsDeviation,
     Skew,
+    BiasedSkew,
     UnbiasedFisherKurtosis, // tsfresh default
     BiasedFisherKurtosis,   // tsfel default
     Mad,
@@ -169,14 +170,14 @@ impl Feature {
             Self::Max => C::MAX,
             Self::Median => C::MEDIAN | C::NEEDS_SORT,
             Self::MedianAbsDeviation => C::MEDIAN | C::MEDIAN_ABS_DEV | C::NEEDS_SORT,
-            Self::Skew => C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT,
+            Self::Skew | Self::BiasedSkew => C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT,
             // The 4th central moment needs the sum of cubes, accumulated under SKEW.
             Self::UnbiasedFisherKurtosis | Self::BiasedFisherKurtosis => {
                 C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::KURTOSIS | C::ENERGY | C::NEEDS_SORT
             }
             Self::Mad => C::SUM | C::MEAN | C::MAD | C::NEEDS_SORT,
             Self::Iqr => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::NEEDS_SORT,
-            Self::Entropy => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::ENTROPY | C::NEEDS_SORT,
+            Self::Entropy => C::empty(),
             Self::SampleEntropy => {
                 C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::SAMP_ENT | C::NEEDS_SORT
             }
@@ -191,7 +192,7 @@ impl Feature {
             Self::PositiveTurning => C::PEAKS,
             Self::NumberCrossingM(_) => C::NUMBER_PEAKS_CROSSINGS,
             Self::NumberPeaks(_) => C::NUMBER_PEAKS_CROSSINGS,
-            Self::AutocorrLag1 => C::SUM | C::MEAN | C::ENERGY | C::AUTOCORR_LAG1,
+            Self::AutocorrLag1 => C::SUM | C::MEAN | C::ENERGY,
             Self::AutocorrFirst1e => {
                 C::SUM | C::MEAN | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
             }
@@ -212,7 +213,7 @@ impl Feature {
                 C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::VAR_COEFF | C::NEEDS_SORT
             }
             Self::C3(_) => C::C3,
-            Self::Auc => C::AUC,
+            Self::Auc => C::empty(),
             Self::SlopeSignChange => C::empty(),
             Self::TurningPoints => C::PEAKS | C::TROUGHS,
             Self::ZeroCrossingMean => {

@@ -10,7 +10,7 @@ pub fn eval_autocorrelation(
     let state = &mut *context.state;
     let n = context.n;
     let mean = context.mean;
-    let m2 = context.m2;
+    let _m2 = context.m2;
     let _m3 = context.m3;
     let _m4 = context.m4;
     let var = context.var;
@@ -23,7 +23,6 @@ pub fn eval_autocorrelation(
     let _last_min_idx = context.last_min_idx;
     let _median = context.median;
     let _iqr = context.iqr;
-    let _entropy = context.entropy;
     let _mad_sum = context.mad_sum;
     let _count_a = context.count_a;
     let _count_b = context.count_b;
@@ -43,12 +42,13 @@ pub fn eval_autocorrelation(
     let _paa_boundaries = context.paa_boundaries;
 
     let res = match feat {
+        // tsfresh autocorrelation(x, 1), computed directly from the window.
         Feature::AutocorrLag1 if var > 1e-9 && n > 1.0 => {
-            let x0 = values[0];
-            let xn = values[values.len() - 1];
-            let cov =
-                state.sum_prod - mean * (2.0 * state.total_sum - x0 - xn) + (n - 1.0) * mean * mean;
-            cov / m2
+            let cov: f32 = values
+                .windows(2)
+                .map(|w| (w[0] - mean) * (w[1] - mean))
+                .sum();
+            cov / ((n - 1.0) * var)
         }
         Feature::AutocorrFirst1e => {
             if !fft_autocorr.is_empty() {
@@ -75,7 +75,9 @@ pub fn eval_autocorrelation(
                 if max_l == 0 {
                     0.0
                 } else {
-                    let slice = &fft_autocorr[1..=max_l];
+                    let adjusted: Vec<f32> =
+                        (1..=max_l).map(|l| adjusted_acf(fft_autocorr, l)).collect();
+                    let slice = &adjusted[..];
                     match func {
                         crate::types::AggFunc::Mean => {
                             let sum: f32 = slice.iter().sum();
@@ -99,7 +101,7 @@ pub fn eval_autocorrelation(
         Feature::Autocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
             let l = *lag as usize;
             if !fft_autocorr.is_empty() && l < fft_autocorr.len() {
-                fft_autocorr[l]
+                adjusted_acf(fft_autocorr, l)
             } else {
                 0.0
             }
@@ -139,7 +141,8 @@ pub fn eval_autocorrelation(
             if fft_autocorr.is_empty() || fft_autocorr.len() <= l {
                 0.0
             } else {
-                let r = &fft_autocorr;
+                // statsmodels pacf(method="ld") runs Levinson-Durbin on the adjusted acf.
+                let r: Vec<f32> = (0..=l).map(|k| adjusted_acf(fft_autocorr, k)).collect();
                 let stride = l + 1;
                 let mut phi = vec![0.0; stride * stride];
                 let mut error = r[0] as f64;
@@ -172,4 +175,11 @@ pub fn eval_autocorrelation(
         _ => return None,
     };
     Some(res)
+}
+
+/// The FFT autocorrelation divides every lag by n; tsfresh and statsmodels
+/// ("adjusted") divide lag l by n - l.
+fn adjusted_acf(fft_autocorr: &[f32], lag: usize) -> f32 {
+    let n = fft_autocorr.len() as f32;
+    fft_autocorr[lag] * n / (n - lag as f32)
 }

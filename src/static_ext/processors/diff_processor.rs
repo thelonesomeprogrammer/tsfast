@@ -15,7 +15,7 @@ impl DiffProcessor {
         offset: f32,
         state: &mut ColumnState,
     ) {
-        if compute.intersects(Compute::ZERO_CROSS | Compute::AUTOCORR_LAG1 | Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUC) {
+        if compute.intersects(Compute::ZERO_CROSS | Compute::MAC | Compute::MC | Compute::CID_CE) {
             let diff = chunk - shifted;
             if compute.contains(Compute::MAC) {
                 state.mac_sum_vec += diff.abs();
@@ -25,12 +25,6 @@ impl DiffProcessor {
             }
             if compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff_vec += diff * diff;
-            }
-            if compute.contains(Compute::AUTOCORR_LAG1) {
-                state.sum_prod_vec += chunk * shifted;
-            }
-            if compute.contains(Compute::AUC) {
-                state.auc_sum_vec += (chunk + shifted) * f32x4::splat(0.5);
             }
             if compute.contains(Compute::ZERO_CROSS) {
                 let signs = chunk.simd_lt(f32x4::splat(0.0));
@@ -62,14 +56,6 @@ impl DiffProcessor {
             state.sum_sq_diff += state.sum_sq_diff_vec.reduce_sum();
             state.sum_sq_diff_vec = f32x4::splat(0.0);
         }
-        if compute.contains(Compute::AUTOCORR_LAG1) {
-            state.sum_prod += state.sum_prod_vec.reduce_sum();
-            state.sum_prod_vec = f32x4::splat(0.0);
-        }
-        if compute.contains(Compute::AUC) {
-            state.auc_sum += state.auc_sum_vec.reduce_sum();
-            state.auc_sum_vec = f32x4::splat(0.0);
-        }
     }
 
     #[inline(always)]
@@ -89,12 +75,6 @@ impl DiffProcessor {
         }
         if compute.contains(Compute::CID_CE) {
             state.sum_sq_diff += diff * diff;
-        }
-        if compute.contains(Compute::AUTOCORR_LAG1) {
-            state.sum_prod += val * prev;
-        }
-        if compute.contains(Compute::AUC) {
-            state.auc_sum += (val + prev) * 0.5;
         }
         if compute.contains(Compute::ZERO_CROSS) && (val < 0.0) != (prev < 0.0) {
             state.zcr_count += 1;

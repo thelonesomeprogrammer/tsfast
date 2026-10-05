@@ -42,7 +42,6 @@ pub fn eval_distribution(
     let _last_min_idx = context.last_min_idx;
     let median = context.median;
     let _iqr = context.iqr;
-    let entropy = context.entropy;
     let min_val = state.min_value;
     let max_val = state.max_value;
     let _mad_sum = context.mad_sum;
@@ -70,7 +69,21 @@ pub fn eval_distribution(
             ((context.mean - median).abs() < r * (max_val - min_val)) as u8 as f32
         }
         Feature::MedianAbsDeviation => context.median_abs_dev,
-        Feature::Entropy => entropy,
+        // TSFEL: entropy of the distinct-value distribution, normalised by log2(n).
+        Feature::Entropy => {
+            let mut sorted = std::mem::take(&mut state.sort_buffer);
+            sorted.clear();
+            sorted.extend_from_slice(values);
+            sorted.sort_unstable_by(f32::total_cmp);
+            let n_f = sorted.len() as f64;
+            let mut h = 0.0f64;
+            for run in sorted.chunk_by(|a, b| a == b) {
+                let p = run.len() as f64 / n_f;
+                h -= p * p.log2();
+            }
+            state.sort_buffer = sorted;
+            if values.len() <= 2 { 0.0 } else { (h / n_f.log2()) as f32 }
+        }
         Feature::Ecdf(d) => {
             let d_idx = *d as f32;
             if d_idx >= n { 1.0 } else { d_idx / n }
