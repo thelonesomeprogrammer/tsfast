@@ -446,6 +446,15 @@ def test_agg_autocorrelation():
     tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(x, fs=50)
 
     from tsfresh.feature_extraction.feature_calculators import agg_autocorrelation
+    # tsfresh returns a dictionary: { "f_agg_"mean"_maxlag_10": val, ... }
+
+    t_mean = agg_autocorrelation(x, [{"f_agg": "mean", "maxlag": 10}])[0][1]
+    t_var = agg_autocorrelation(x, [{"f_agg": "var", "maxlag": 10}])[0][1]
+
+    # Check bounds or logic
+    assert len(results) == 4
+
+    from tsfresh.feature_extraction.feature_calculators import agg_autocorrelation
 
     t_mean = agg_autocorrelation(x, [{"f_agg": "mean", "maxlag": 10}])[0][1]
     t_var = agg_autocorrelation(x, [{"f_agg": "var", "maxlag": 10}])[0][1]
@@ -476,6 +485,9 @@ def test_change_quantiles():
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
     result_batch = extractor.process_2d_floats(batch)
     results = result_batch.to_pandas().iloc[0].values
+
+
+    assert len(results) == 4
 
     expected = [
         change_quantiles(x, 0.2, 0.8, True, "mean"),
