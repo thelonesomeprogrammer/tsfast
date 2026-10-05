@@ -58,6 +58,12 @@ pub fn eval_moments(feat: &Feature, context: &mut crate::context::FeatureContext
         Feature::Mad => mad_sum,
         Feature::Iqr => iqr,
         Feature::VariationCoefficient if mean.abs() > 1e-9 => std_dev / mean,
+        // tsfresh: np.std(x) (ddof=0) > r * (max - min)
+        Feature::LargeStandardDeviation(r_bits) => {
+            let r = f32::from_bits(*r_bits);
+            let pop_std = (m2 / n).max(0.0).sqrt();
+            (pop_std > r * (state.max_value - state.min_value)) as u8 as f32
+        }
         _ => return None,
     };
     Some(res)

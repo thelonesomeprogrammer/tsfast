@@ -2,7 +2,8 @@ use super::compute::Compute;
 
 // ─── Feature enum ───────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy, strum::EnumDiscriminants)]
+#[strum_discriminants(derive(Hash, strum::EnumIter))]
 pub enum Feature {
     TotalSum,
     Mean,
@@ -211,8 +212,8 @@ impl Feature {
             }
             Self::C3(_) => C::C3,
             Self::Auc => C::AUC,
-            Self::SlopeSignChange => C::PEAKS | C::SLOPE_SIGN_CHG,
-            Self::TurningPoints => C::PEAKS | C::TURNING_PTS,
+            Self::SlopeSignChange => C::empty(),
+            Self::TurningPoints => C::PEAKS | C::TROUGHS,
             Self::ZeroCrossingMean => {
                 C::SUM | C::MEAN | C::ZERO_CROSS | C::ZC_STATS | C::ZC_INDICES | C::NEEDS_SORT
             }
@@ -276,7 +277,6 @@ impl Feature {
             Self::SpectralEntropy => C::SPEC_ENTROPY | C::NEEDS_SORT,
             Self::SpectralRollOn => C::SPEC_ROLLON | C::NEEDS_SORT,
             Self::SpectralRollOff => C::SPEC_ROLLOFF | C::NEEDS_SORT,
-            Self::SpectralSpread => C::SPEC_SPREAD | C::NEEDS_SORT,
             Self::SpectralSkewness => C::SPEC_SKEWNESS | C::NEEDS_SORT,
             Self::SpectralKurtosis => C::SPEC_KURTOSIS | C::NEEDS_SORT,
             Self::SignalDistance => C::SIG_DISTANCE | C::NEEDS_SORT,
@@ -284,7 +284,7 @@ impl Feature {
             Self::QuerySimilarityCount(_, _) => C::QUERY_SIMILARITY | C::NEEDS_SORT,
             Self::MatrixProfile(_, _) => C::MATRIX_PROFILE | C::NEEDS_SORT,
             Self::SpectrogramCoefficients(_, _) => C::SPECTROGRAM | C::NEEDS_SORT,
-            Self::MeanSecondDerivativeCentral => C::LENGTH | C::NEEDS_SORT,
+            Self::MeanSecondDerivativeCentral => C::empty(),
             Self::LargeStandardDeviation(_) => {
                 C::SUM | C::MEAN | C::VARIANCE | C::MIN | C::MAX | C::ENERGY | C::NEEDS_SORT
             }

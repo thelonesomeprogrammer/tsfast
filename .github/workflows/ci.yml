@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: No shadowed (duplicate) test functions
+        run: |
+          python - <<'PY'
+          import ast, glob, sys
+          bad = []
+          for f in glob.glob("tests/*.py") + glob.glob("benchmarks/*.py"):
+              seen = set()
+              for n in ast.parse(open(f).read()).body:
+                  if isinstance(n, ast.FunctionDef) and n.name.startswith("test_"):
+                      if n.name in seen:
+                          bad.append(f"{f}:{n.lineno} duplicate {n.name}")
+                      seen.add(n.name)
+          print("\n".join(bad)); sys.exit(1 if bad else 0)
+          PY
+
+      - name: No scratch files in repo root
+        run: |
+          if ls plan.md patch_*.py revert_*.py fix_*.py 2>/dev/null; then
+            echo "Remove agent scratch files listed above"; exit 1
+          fi
+
+      - name: Rust tests
+        run: cargo test
+
+      - name: Build and test
+        run: uv run pytest -q

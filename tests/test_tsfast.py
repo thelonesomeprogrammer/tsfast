@@ -578,3 +578,57 @@ def test_empty_batch():
     extractor = tsfast.Extractor(features)
     result = extractor.process_2d_floats(empty_data)
     assert result.num_rows == 0
+
+
+# Shared reference for mean_second_derivative_central, large_standard_deviation,
+# symmetry_looking, turning_points and slope_sign_change (also used by the
+# sliding/expanding tests).
+SHAPE_FEATURES = [
+    "mean_second_derivative_central",
+    "large_standard_deviation-0.25",
+    "symmetry_looking-0.05",
+    "turning_points",
+    "slope_sign_change",
+]
+
+
+def shape_features_reference(x):
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    x = np.asarray(x, dtype=np.float64)
+    mid = x[1:-1]
+    left, right = x[:-2], x[2:]
+    turning = np.sum(((mid > left) & (mid > right)) | ((mid < left) & (mid < right)))
+    ssc = np.sum((mid - left) * (mid - right) >= 0)
+    return [
+        fc.mean_second_derivative_central(x),
+        float(fc.large_standard_deviation(x, 0.25)),
+        float(dict(fc.symmetry_looking(x, [{"r": 0.05}]))["r_0.05"]),
+        float(turning),
+        float(ssc),
+    ]
+
+
+SHAPE_CASES = {
+    "randn": np.random.RandomState(0).randn(200),
+    "exponential": np.random.RandomState(1).exponential(size=120),
+    "constant": np.full(50, 3.0),
+    "plateaus": np.array([0, 1, 1, 0, -1, -1, 0, 2, 2, 2, 1], dtype=float),
+}
+
+
+@pytest.mark.parametrize("case", SHAPE_CASES)
+def test_shape_features_static(case):
+    x = SHAPE_CASES[case].astype(np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=["c1"])
+    results = tsfast.Extractor(SHAPE_FEATURES).process_2d_floats(batch).to_pandas().iloc[0].values
+    assert np.allclose(results, shape_features_reference(x), atol=1e-5, equal_nan=True)
+
+
+def test_undefined_moments_of_constant_series_are_zero():
+    # Guarded features (zero variance) report 0.0, not NaN.
+    x = np.full(20, 2.0, dtype=np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=["c1"])
+    feats = ["skewness", "kurtosis", "biased_fisher_kurtosis", "autocorr_lag1"]
+    results = tsfast.Extractor(feats).process_2d_floats(batch).to_pandas().iloc[0].values
+    assert np.array_equal(results, np.zeros(len(feats)))

@@ -231,34 +231,6 @@ def test_ecdf_pk_centroid_expanding():
     assert np.allclose(results[5], tsfel_neg)
     assert np.allclose(results[6], tsfel_pos)
 
-
-def test_ecdf_pk_centroid_expanding():
-    import tsfel
-    import tsfast
-    import pyarrow as pa
-    x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0], dtype=np.float32)
-    features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50", "negative_turning", "positive_turning"]
-    extractor = tsfast.ExpandingExtractor(features, n_cols=1)
-
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    results = extractor.update(batch).to_pandas().iloc[-1].values
-
-    tsfel_neg = tsfel.feature_extraction.features.negative_turning(x)
-    tsfel_pos = tsfel.feature_extraction.features.positive_turning(x)
-    tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(x, d=10)
-    tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(x, d=3)
-    tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(x)
-    tsfel_centroid = tsfel.feature_extraction.features.calc_centroid(x, fs=100)
-    tsfel_centroid_50 = tsfel.feature_extraction.features.calc_centroid(x, fs=50)
-
-    assert np.allclose(results[0], min(10.0 / len(x), 1.0))
-    assert np.allclose(results[1], min(3.0 / len(x), 1.0))
-    assert np.allclose(results[2], tsfel_pk)
-    assert np.allclose(results[3], tsfel_centroid)
-    assert np.allclose(results[4], tsfel_centroid_50)
-    assert np.allclose(results[5], tsfel_neg)
-    assert np.allclose(results[6], tsfel_pos)
-
 def test_expanding_invalid_type():
     # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
     x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
@@ -333,117 +305,6 @@ def test_expanding_permutation_entropy_and_value_count():
             np.testing.assert_allclose(res[0][0].as_py(), pe, rtol=1e-5)
         assert res[1][0].as_py() == vc
 
-def test_expanding_fractal_dimensions():
-    import numpy as np
-    import pyarrow as pa
-    from tsfast._tsfast import ExpandingExtractor
-    from tsfel.feature_extraction.features import higuchi_fractal_dimension
-    import warnings
-    warnings.filterwarnings('ignore')
-
-    features = ["higuchi_fd"]
-    n_cols = 1
-    extractor = ExpandingExtractor(features, n_cols)
-
-    x1 = np.random.randn(150).astype(np.float32)
-    x2 = np.random.randn(100).astype(np.float32)
-
-    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
-    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
-
-    res1 = extractor.update(b1).to_pandas()
-    res2 = extractor.update(b2).to_pandas()
-
-    # After b1, length is 150
-    h1 = higuchi_fractal_dimension(x1)
-
-    # After b2, length is 250
-    full_x = np.concatenate([x1, x2])
-    h2 = higuchi_fractal_dimension(full_x)
-
-    assert np.allclose(res1.iloc[0, 0], h1, equal_nan=True, atol=5e-2)
-    assert np.allclose(res2.iloc[0, 0], h2, equal_nan=True, atol=1e-2)
-    print("test_expanding_fractal_dimensions passed!")
-
-def test_expanding_fractal_dimensions():
-    import numpy as np
-    import pyarrow as pa
-    from tsfast._tsfast import ExpandingExtractor
-    from tsfel.feature_extraction.features import higuchi_fractal_dimension
-    import warnings
-    warnings.filterwarnings('ignore')
-
-    features = ["higuchi_fd"]
-    n_cols = 1
-    extractor = ExpandingExtractor(features, n_cols)
-
-    x1 = np.random.randn(150).astype(np.float32)
-    x2 = np.random.randn(100).astype(np.float32)
-
-    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
-    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
-
-    res1 = extractor.update(b1).to_pandas()
-    res2 = extractor.update(b2).to_pandas()
-
-    # After b1, length is 150
-    h1 = higuchi_fractal_dimension(x1)
-
-    # After b2, length is 250
-    full_x = np.concatenate([x1, x2])
-    h2 = higuchi_fractal_dimension(full_x)
-
-    # Expanding with np array returns f32 NaN since tsfel will return NaN if N < max(K). Wait, here n_cols=1, length=150.
-    if np.isnan(h1):
-        assert False
-    else:
-        assert np.allclose(res1.iloc[0, 0], h1, atol=5e-2)
-
-    if np.isnan(h2):
-        assert False
-    else:
-        assert np.allclose(res2.iloc[0, 0], h2, atol=5e-2)
-    print("test_expanding_fractal_dimensions passed!")
-
-def test_expanding_fractal_dimensions():
-    import numpy as np
-    import pyarrow as pa
-    from tsfast._tsfast import ExpandingExtractor
-    from tsfel.feature_extraction.features import higuchi_fractal_dimension
-    import warnings
-    warnings.filterwarnings('ignore')
-
-    features = ["higuchi_fd"]
-    n_cols = 1
-    extractor = ExpandingExtractor(features, n_cols)
-
-    x1 = np.random.randn(150).astype(np.float32)
-    x2 = np.random.randn(100).astype(np.float32)
-
-    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
-    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
-
-    res1 = extractor.update(b1).to_pandas()
-    res2 = extractor.update(b2).to_pandas()
-
-    # After b1, length is 150
-    h1 = higuchi_fractal_dimension(x1)
-
-    # After b2, length is 250
-    full_x = np.concatenate([x1, x2])
-    h2 = higuchi_fractal_dimension(full_x)
-
-    # Expanding with np array returns f32 NaN since tsfel will return NaN if N < max(K). Wait, here n_cols=1, length=150.
-    if np.isnan(h1):
-        assert False
-    else:
-        assert np.allclose(res1.iloc[0, 0], h1, atol=5e-2)
-
-    if np.isnan(h2):
-        assert False
-    else:
-        assert np.allclose(res2.iloc[0, 0], h2, atol=5e-2)
-    print("test_expanding_fractal_dimensions passed!")
 
 def test_expanding_fractal_dimensions():
     import numpy as np
@@ -484,41 +345,16 @@ def test_expanding_fractal_dimensions():
         assert np.allclose(res2.iloc[0, 0], h2, atol=5e-2)
     print("test_expanding_fractal_dimensions passed!")
 
-def test_expanding_fractal_dimensions():
-    import numpy as np
-    import pyarrow as pa
-    from tsfast._tsfast import ExpandingExtractor
-    from tsfel.feature_extraction.features import higuchi_fractal_dimension
-    import warnings
-    warnings.filterwarnings('ignore')
 
-    features = ["higuchi_fd"]
-    n_cols = 1
-    extractor = ExpandingExtractor(features, n_cols)
+@pytest.mark.parametrize("case", ["randn", "exponential", "constant", "plateaus"])
+def test_shape_features_expanding(case):
+    from test_tsfast import SHAPE_CASES, SHAPE_FEATURES, shape_features_reference
 
-    x1 = np.random.randn(150).astype(np.float32)
-    x2 = np.random.randn(100).astype(np.float32)
-
-    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
-    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
-
-    res1 = extractor.update(b1).to_pandas()
-    res2 = extractor.update(b2).to_pandas()
-
-    # After b1, length is 150
-    h1 = higuchi_fractal_dimension(x1)
-
-    # After b2, length is 250
-    full_x = np.concatenate([x1, x2])
-    h2 = higuchi_fractal_dimension(full_x)
-
-    if np.isnan(h1):
-        pass
-    else:
-        assert np.allclose(res1.iloc[0, 0], h1, atol=5e-2)
-
-    if np.isnan(h2):
-        pass
-    else:
-        assert np.allclose(res2.iloc[0, 0], h2, atol=5e-2)
-    print("test_expanding_fractal_dimensions passed!")
+    x = SHAPE_CASES[case].astype(np.float32)
+    extractor = ExpandingExtractor(SHAPE_FEATURES, 1)
+    seen = np.array([], dtype=np.float32)
+    for chunk in np.array_split(x, 3):
+        seen = np.concatenate([seen, chunk])
+        batch = pa.RecordBatch.from_arrays([pa.array(chunk)], names=["c1"])
+        row = extractor.update(batch).to_pandas().iloc[-1].values
+        assert np.allclose(row, shape_features_reference(seen), atol=1e-5, equal_nan=True)

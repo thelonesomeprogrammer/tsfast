@@ -46,6 +46,17 @@ pub fn eval_crossings_peaks(
         Feature::PeakCount => state.peaks as f32,
         Feature::NegativeTurning => state.troughs as f32,
         Feature::PositiveTurning => state.peaks as f32,
+        // Strict local maxima + strict local minima.
+        Feature::TurningPoints => (state.peaks + state.troughs) as f32,
+        // EMG slope sign change (threshold 0): points where the slope changes
+        // sign or flattens, (x[i] - x[i-1]) * (x[i] - x[i+1]) >= 0.
+        Feature::SlopeSignChange => {
+            let values = context.values;
+            values
+                .windows(3)
+                .filter(|w| (w[1] - w[0]) * (w[1] - w[2]) >= 0.0)
+                .count() as f32
+        }
         Feature::NumberCrossingM(m_bits) => {
             let mut count = 0;
             let m = f32::from_bits(*m_bits);

@@ -10,3 +10,10 @@ __pycache__/
 prev-data
 *.so
 tsfast/*.so
+
+# Agent scratch files — keep plans/patch scripts out of the repo
+/plan.md
+/patch_*.py
+/revert_*.py
+/*_results*.txt
+/fix_*.py
