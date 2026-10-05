@@ -281,6 +281,22 @@ def test_median_diff_expanding():
     assert np.allclose(res2[0], tsfel.feature_extraction.features.median_diff(data))
     assert np.allclose(res2[1], tsfel.feature_extraction.features.median_abs_diff(data))
 
+def test_expanding_energy_ratio_by_chunks():
+    import tsfast
+    import numpy as np
+    import pyarrow as pa
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], dtype=np.float32)
+    features = [
+        "energy_ratio_by_chunks_num_segments_3__segment_focus_0",
+        "energy_ratio_by_chunks_num_segments_3__segment_focus_1",
+        "energy_ratio_by_chunks_num_segments_3__segment_focus_2"
+    ]
+    extractor = tsfast.ExpandingExtractor(features, n_cols=1)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    df = extractor.update(batch).to_pandas()
+    res = df.iloc[-1].values
+    assert np.isclose(res[0], (1**2 + 2**2 + 3**2) / sum([i**2 for i in range(1, 10)]))
+
 def test_expanding_permutation_entropy_and_value_count():
     import numpy as np
     import pyarrow as pa
@@ -308,6 +324,7 @@ def test_expanding_permutation_entropy_and_value_count():
         else:
             np.testing.assert_allclose(res[0][0].as_py(), pe, rtol=1e-5)
         assert res[1][0].as_py() == vc
+
 def test_expanding_fractal_dimensions():
     import numpy as np
     import pyarrow as pa

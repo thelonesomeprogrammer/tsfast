@@ -26,6 +26,20 @@ impl std::str::FromStr for Feature {
             "iqr" => return Ok(Feature::Iqr),
             "entropy" => return Ok(Feature::Entropy),
             "energy" | "torque_Absolute energy" => return Ok(Feature::Energy),
+            name if name.starts_with("energy_ratio_by_chunks_num_segments_") => {
+                let parts: Vec<&str> = name.split("__").collect();
+                if parts.len() == 2 {
+                    let p1 = parts[0].strip_prefix("energy_ratio_by_chunks_num_segments_");
+                    let p2 = parts[1].strip_prefix("segment_focus_");
+                    if let (Some(num_s), Some(focus_s)) = (p1, p2) {
+                        if let (Ok(num), Ok(focus)) = (num_s.parse::<u16>(), focus_s.parse::<u16>()) {
+                            if focus < num {
+                                return Ok(Feature::EnergyRatioByChunks(num, focus));
+                            }
+                        }
+                    }
+                }
+            },
             "rms" => return Ok(Feature::Rms),
             "root_mean_square" => return Ok(Feature::RootMeanSquare),
             "zero_crossing_rate" => return Ok(Feature::ZeroCrossingRate),
@@ -569,6 +583,7 @@ impl Feature {
             Feature::Iqr => "iqr".to_string(),
             Feature::Entropy => "entropy".to_string(),
             Feature::Energy => "energy".to_string(),
+            Feature::EnergyRatioByChunks(num, focus) => format!("energy_ratio_by_chunks_num_segments_{}__segment_focus_{}", num, focus),
             Feature::Rms => "rms".to_string(),
             Feature::RootMeanSquare => "root_mean_square".to_string(),
             Feature::ZeroCrossingRate => "zero_crossing_rate".to_string(),

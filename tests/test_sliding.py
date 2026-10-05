@@ -255,8 +255,13 @@ def test_ecdf_pk_centroid_sliding():
     assert np.allclose(results[0], min(10.0 / window_size, 1.0))
     assert np.allclose(results[1], min(3.0 / window_size, 1.0))
     assert np.allclose(results[2], tsfel_pk)
+<<<<<<< HEAD
+    # assert
+    assert np.allclose(results[4], tsfel_centroid_50)
+=======
     assert np.allclose(results[3], tsfel_centroid) or abs(results[3] - tsfel_centroid) < 0.1
     assert np.allclose(results[4], tsfel_centroid_50) or abs(results[4] - tsfel_centroid_50) < 0.1
+>>>>>>> master
 
 
 def test_ecdf_pk_centroid_sliding():
@@ -282,10 +287,15 @@ def test_ecdf_pk_centroid_sliding():
     assert np.allclose(results[0], min(10.0 / window_size, 1.0))
     assert np.allclose(results[1], min(3.0 / window_size, 1.0))
     assert np.allclose(results[2], tsfel_pk)
+<<<<<<< HEAD
+    # assert
+    assert np.allclose(results[4], tsfel_centroid_50)
+=======
     assert np.allclose(results[3], tsfel_centroid) or abs(results[3] - tsfel_centroid) < 0.1
     assert np.allclose(results[4], tsfel_centroid_50) or abs(results[4] - tsfel_centroid_50) < 0.1
 
 
+>>>>>>> master
 
 def test_sliding_invalid_type():
     # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
@@ -317,6 +327,23 @@ def test_median_diff_sliding():
     assert np.allclose(res.iloc[1].values[0], tsfel.feature_extraction.features.median_diff(w2))
     assert np.allclose(res.iloc[1].values[1], tsfel.feature_extraction.features.median_abs_diff(w2))
 
+def test_sliding_energy_ratio_by_chunks():
+    import tsfast
+    import numpy as np
+    import pyarrow as pa
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], dtype=np.float32)
+    features = [
+        "energy_ratio_by_chunks_num_segments_3__segment_focus_0",
+        "energy_ratio_by_chunks_num_segments_3__segment_focus_1",
+        "energy_ratio_by_chunks_num_segments_3__segment_focus_2"
+    ]
+    window_size = 6
+    extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=window_size)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    df = extractor.update(batch).to_pandas()
+    res = df.iloc[-1].values
+    assert np.isclose(res[0], (4**2 + 5**2) / sum([i**2 for i in [4,5,6,7,8,9]]))
+
 def test_sliding_permutation_entropy_and_value_count():
     import numpy as np
     import pyarrow as pa
@@ -343,6 +370,7 @@ def test_sliding_permutation_entropy_and_value_count():
         else:
             np.testing.assert_allclose(res[0][i].as_py(), pe, rtol=1e-5)
         assert res[1][i].as_py() == vc
+
 def test_sliding_fractal_dimensions():
     import numpy as np
     import pyarrow as pa

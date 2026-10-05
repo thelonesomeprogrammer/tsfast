@@ -43,6 +43,57 @@ pub fn eval_energy(
     let res = match feat {
                 Feature::Energy => state.energy as f32,
                 Feature::Rms | Feature::RootMeanSquare => (state.energy / n).sqrt(),
+                Feature::EnergyRatioByChunks(num_segments, segment_focus) => {
+                    let num_segments = *num_segments as usize;
+                    let segment_focus = *segment_focus as usize;
+                    if state.energy == 0.0 {
+                        f32::NAN
+                    } else if num_segments > 0 && segment_focus < num_segments {
+                        // tsfresh array_split logic: sizes are ceil(N / num_segments) for first remainder chunks,
+                        // and floor(N / num_segments) for the rest.
+                        let n = _values.len();
+                        let q = n / num_segments;
+                        let r = n % num_segments;
+
+                        let start_idx = if segment_focus < r {
+                            segment_focus * (q + 1)
+                        } else {
+                            r * (q + 1) + (segment_focus - r) * q
+                        };
+
+                        let end_idx = if segment_focus < r {
+                            start_idx + q + 1
+                        } else {
+                            start_idx + q
+                        };
+
+                        let chunk = &_values[start_idx..end_idx];
+                        let mut chunk_energy = 0.0;
+
+                        // Vectorized sum of squares
+                        let mut i = 0;
+                        use std::simd::num::SimdFloat;
+                        let mut sum_vec = std::simd::f32x4::splat(0.0);
+                        while i + 3 < chunk.len() {
+                            let v = std::simd::f32x4::from_slice(&chunk[i..i+4]);
+                            sum_vec += v * v;
+                            i += 4;
+                        }
+                        chunk_energy += sum_vec.reduce_sum();
+                        for &v in &chunk[i..] {
+                            chunk_energy += v * v;
+                        }
+
+                        let total: f32 = _values.iter().map(|&v| v * v).sum();
+                        if total == 0.0 {
+                            f32::NAN
+                        } else {
+                            chunk_energy / total
+                        }
+                    } else {
+                        f32::NAN
+                    }
+                },
                 Feature::HumanRangeEnergy(fs_bits) => {
                     if !spectrum.is_empty() {
                         let fs = f32::from_bits(*fs_bits);

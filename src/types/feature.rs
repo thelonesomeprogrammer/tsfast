@@ -22,6 +22,7 @@ pub enum Feature {
     HiguchiFd,
     BinnedEntropy(u32),
     Energy,
+    EnergyRatioByChunks(u16, u16),
     Rms,
     RootMeanSquare,
     ZeroCrossingRate,
@@ -177,6 +178,7 @@ impl Feature {
             }
             Self::BinnedEntropy(_) => C::MIN | C::MAX | C::BINNED_ENT,
             Self::Energy => C::ENERGY,
+            Self::EnergyRatioByChunks(_, _) => C::ENERGY,
             Self::Rms => C::ENERGY | C::RMS,
             Self::RootMeanSquare => C::ENERGY | C::ROOT_MEAN_SQ,
             Self::ZeroCrossingRate => C::ZERO_CROSS,

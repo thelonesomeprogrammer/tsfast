@@ -61,7 +61,7 @@ def test_spectral_roll_on_off():
 def test_new_features():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)
     import tsfresh.feature_extraction.feature_calculators as fc
-    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce", "sample_entropy", "binned_entropy__max_bins_5"]
+    features = ["mad", "iqr", "entropy", "mean_abs_change", "mean_change", "cid_ce", "sample_entropy", "binned_entropy__max_bins_5", "energy_ratio_by_chunks_num_segments_3__segment_focus_0", "energy_ratio_by_chunks_num_segments_3__segment_focus_1", "energy_ratio_by_chunks_num_segments_3__segment_focus_2"]
     
     extractor = tsfast.Extractor(features)
     batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
@@ -464,7 +464,6 @@ def test_change_quantiles():
     result_batch = extractor.process_2d_floats(batch)
     results = result_batch.to_pandas().iloc[0].values
 
-
     expected = [
         change_quantiles(x, 0.2, 0.8, True, "mean"),
         change_quantiles(x, 0.2, 0.8, False, "var"),
@@ -486,8 +485,6 @@ def test_change_quantiles():
     assert np.allclose(results[3], expected_4)
 
 from tsfresh.feature_extraction.feature_calculators import permutation_entropy, value_count
-import pyarrow as pa
-import tsfast
 
 def test_permutation_entropy_and_value_count():
     import numpy as np
@@ -525,26 +522,6 @@ def test_permutation_entropy_and_value_count():
     assert res_vc3 == ts_vc3
     assert res_vc6 == ts_vc6
     assert res_vcn == ts_vcn
-def test_fractal_dimensions():
-    import numpy as np
-    import pyarrow as pa
-    import tsfast
-    from tsfel.feature_extraction.features import higuchi_fractal_dimension
-    import warnings
-    warnings.filterwarnings('ignore')
-
-    x = np.random.randn(200).astype(np.float32)
-    features = ["higuchi_fd"]
-
-    extractor = tsfast.Extractor(features)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    result_batch = extractor.process_2d_floats(batch)
-    results = result_batch.to_pandas().iloc[0].values
-
-    hfd = higuchi_fractal_dimension(x)
-
-    assert np.allclose(results[0], hfd, atol=1e-2)
-    print("test_fractal_dimensions passed!")
 
 def test_fractal_dimensions():
     import numpy as np
@@ -567,47 +544,6 @@ def test_fractal_dimensions():
     assert np.allclose(results[0], hfd, atol=5e-2)
     print("test_fractal_dimensions passed!")
 
-def test_fractal_dimensions():
-    import numpy as np
-    import pyarrow as pa
-    import tsfast
-    from tsfel.feature_extraction.features import higuchi_fractal_dimension
-    import warnings
-    warnings.filterwarnings('ignore')
-
-    x = np.random.randn(200).astype(np.float32)
-    features = ["higuchi_fd"]
-
-    extractor = tsfast.Extractor(features)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    result_batch = extractor.process_2d_floats(batch)
-    results = result_batch.to_pandas().iloc[0].values
-
-    hfd = higuchi_fractal_dimension(x)
-
-    assert np.allclose(results[0], hfd, atol=1e-2)
-    print("test_fractal_dimensions passed!")
-
-def test_fractal_dimensions():
-    import numpy as np
-    import pyarrow as pa
-    import tsfast
-    from tsfel.feature_extraction.features import higuchi_fractal_dimension
-    import warnings
-    warnings.filterwarnings('ignore')
-
-    x = np.random.randn(200).astype(np.float32)
-    features = ["higuchi_fd"]
-
-    extractor = tsfast.Extractor(features)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    result_batch = extractor.process_2d_floats(batch)
-    results = result_batch.to_pandas().iloc[0].values
-
-    hfd = higuchi_fractal_dimension(x)
-
-    assert np.allclose(results[0], hfd, atol=5e-2)
-    print("test_fractal_dimensions passed!")
 def test_invalid_type():
     import pytest
     import pyarrow as pa
