@@ -8,6 +8,7 @@ impl std::str::FromStr for Feature {
         // 1. Exact matches (simple features)
         match s {
             "sample_entropy" => return Ok(Feature::SampleEntropy),
+            "higuchi_fd" => return Ok(Feature::HiguchiFd),
             "total_sum" | "value__sum_values" => return Ok(Feature::TotalSum),
             "mean" | "value__mean" => return Ok(Feature::Mean),
             "variance" | "value__variance" => return Ok(Feature::Variance),
@@ -25,6 +26,21 @@ impl std::str::FromStr for Feature {
             "iqr" => return Ok(Feature::Iqr),
             "entropy" => return Ok(Feature::Entropy),
             "energy" | "torque_Absolute energy" => return Ok(Feature::Energy),
+            name if name.starts_with("energy_ratio_by_chunks_num_segments_") => {
+                let parts: Vec<&str> = name.split("__").collect();
+                if parts.len() == 2 {
+                    let p1 = parts[0].strip_prefix("energy_ratio_by_chunks_num_segments_");
+                    let p2 = parts[1].strip_prefix("segment_focus_");
+                    if let (Some(num_s), Some(focus_s)) = (p1, p2) {
+                        if let (Ok(num), Ok(focus)) = (num_s.parse::<u16>(), focus_s.parse::<u16>())
+                        {
+                            if focus < num {
+                                return Ok(Feature::EnergyRatioByChunks(num, focus));
+                            }
+                        }
+                    }
+                }
+            }
             "rms" => return Ok(Feature::Rms),
             "root_mean_square" => return Ok(Feature::RootMeanSquare),
             "zero_crossing_rate" => return Ok(Feature::ZeroCrossingRate),
@@ -234,6 +250,9 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         }
         let attr = parse_agg_attr(parts[0])?;
         let chunk_len: u16 = parts[1].parse().ok()?;
+        if chunk_len == 0 {
+            return None;
+        }
         let func = parse_agg_func(parts[2])?;
         return Some(Feature::AggLinearTrend(attr, chunk_len, func));
     }
@@ -312,6 +331,16 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
 // ─── Legacy tsfresh / torque format parsers ─────────────────────────────────
 
 fn parse_legacy_format(s: &str) -> Option<Feature> {
+    if s.contains("number_crossing_m__m_") {
+        let pos = s.find("m_")?;
+        let m: f32 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::NumberCrossingM(m.to_bits()));
+    }
+    if s.contains("number_peaks__n_") {
+        let pos = s.find("n_")?;
+        let n: u16 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::NumberPeaks(n));
+    }
     if s.contains("c3__lag_") {
         let pos = s.find("lag_")?;
         let n: u16 = s[pos + 4..].parse().ok()?;
@@ -359,6 +388,9 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         } else {
             5
         };
+        if chunk_len == 0 {
+            return None;
+        }
         let func = if s.contains("f_agg_\"mean\"") {
             AggFunc::Mean
         } else if s.contains("f_agg_\"var\"") {
@@ -475,6 +507,21 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
             }
         }
     }
+
+    if let Some(arg) = s.strip_prefix("permutation_entropy-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.len() == 2 {
+            if let (Ok(tau), Ok(dim)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                return Some(Feature::PermutationEntropy(tau, dim));
+            }
+        }
+    }
+
+    if let Some(arg) = s.strip_prefix("value_count-") {
+        if let Ok(v) = arg.parse::<f32>() {
+            return Some(Feature::ValueCount(v.to_bits()));
+        }
+    }
     if let Some(arg) = s.strip_prefix("large_standard_deviation__r_") {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::LargeStandardDeviation(r.to_bits()));
@@ -539,12 +586,18 @@ impl Feature {
             Feature::Iqr => "iqr".to_string(),
             Feature::Entropy => "entropy".to_string(),
             Feature::Energy => "energy".to_string(),
+            Feature::EnergyRatioByChunks(num, focus) => format!(
+                "energy_ratio_by_chunks_num_segments_{}__segment_focus_{}",
+                num, focus
+            ),
             Feature::Rms => "rms".to_string(),
             Feature::RootMeanSquare => "root_mean_square".to_string(),
             Feature::ZeroCrossingRate => "zero_crossing_rate".to_string(),
             Feature::PeakCount => "peak_count".to_string(),
             Feature::NegativeTurning => "negative_turning".to_string(),
             Feature::PositiveTurning => "positive_turning".to_string(),
+            Feature::NumberCrossingM(m) => format!("number_crossing_m__m_{}", f32::from_bits(*m)),
+            Feature::NumberPeaks(n) => format!("number_peaks__n_{}", n),
             Feature::AutocorrLag1 => "autocorr_lag1".to_string(),
             Feature::AutocorrFirst1e => "autocorrelation".to_string(),
             Feature::MeanAbsChange => "mean_abs_change".to_string(),
@@ -594,9 +647,16 @@ impl Feature {
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
             Feature::SampleEntropy => "sample_entropy".to_string(),
+            Feature::HiguchiFd => "higuchi_fd".to_string(),
             Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
+            }
+            Feature::PermutationEntropy(tau, dim) => {
+                format!("permutation_entropy-{}-{}", tau, dim)
+            }
+            Feature::ValueCount(val_bits) => {
+                format!("value_count-{}", f32::from_bits(*val_bits))
             }
             Feature::LinearTrend(attr) => {
                 let attr_str = match attr {

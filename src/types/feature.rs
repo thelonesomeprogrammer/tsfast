@@ -19,14 +19,18 @@ pub enum Feature {
     Iqr,
     Entropy,
     SampleEntropy,
+    HiguchiFd,
     BinnedEntropy(u32),
     Energy,
+    EnergyRatioByChunks(u16, u16),
     Rms,
     RootMeanSquare,
     ZeroCrossingRate,
     PeakCount,
     NegativeTurning,
     PositiveTurning,
+    NumberCrossingM(u32),
+    NumberPeaks(u16),
     AutocorrLag1,    // Centered (tsfresh default)
     AutocorrFirst1e, // tsfel 'Autocorrelation' feature
     MeanAbsChange,
@@ -104,6 +108,8 @@ pub enum Feature {
     HasDuplicateMin,
     HasDuplicate,
     Ecdf(u32),
+    PermutationEntropy(u32, u32),
+    ValueCount(u32),
     CalcCentroid(u32),
     Mfcc(u16),
     Lpcc(u16),
@@ -174,12 +180,15 @@ impl Feature {
             }
             Self::BinnedEntropy(_) => C::MIN | C::MAX | C::BINNED_ENT,
             Self::Energy => C::ENERGY,
+            Self::EnergyRatioByChunks(_, _) => C::ENERGY,
             Self::Rms => C::ENERGY | C::RMS,
             Self::RootMeanSquare => C::ENERGY | C::ROOT_MEAN_SQ,
             Self::ZeroCrossingRate => C::ZERO_CROSS,
             Self::PeakCount => C::PEAKS,
             Self::NegativeTurning => C::TROUGHS,
             Self::PositiveTurning => C::PEAKS,
+            Self::NumberCrossingM(_) => C::NUMBER_PEAKS_CROSSINGS,
+            Self::NumberPeaks(_) => C::NUMBER_PEAKS_CROSSINGS,
             Self::AutocorrLag1 => C::SUM | C::MEAN | C::ENERGY | C::AUTOCORR_LAG1,
             Self::AutocorrFirst1e => {
                 C::SUM | C::MEAN | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
@@ -292,6 +301,8 @@ impl Feature {
             Self::ZeroCross => C::ZERO_CROSS,
             Self::MaxPowerSpectrum => C::ANY_FFT,
             Self::Ecdf(_) => C::LENGTH,
+            Self::PermutationEntropy(_, _) => C::empty(),
+            Self::ValueCount(_) => C::empty(),
             Self::CalcCentroid(_) => C::ENERGY | C::CALC_CENTROID,
             Self::Mfcc(_) => C::MFCC,
             Self::Lpcc(_) => C::LPCC | C::FULL_AUTOCORR,
@@ -301,6 +312,7 @@ impl Feature {
             Self::CwtCoefficients(_, _, _, _) => C::CWT,
             Self::NumberCwtPeaks(_) => C::CWT,
             Self::AugmentedDickeyFuller(_) => C::ADF | C::NEEDS_SORT,
+            Self::HiguchiFd => C::empty(),
         }
     }
 }

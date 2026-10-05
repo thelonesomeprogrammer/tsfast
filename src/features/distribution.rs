@@ -70,6 +70,15 @@ pub fn eval_distribution(
             let d_idx = *d as f32;
             if d_idx >= n { 1.0 } else { d_idx / n }
         }
+        Feature::ValueCount(val_bits) => {
+            let val = f32::from_bits(*val_bits);
+            let count = if val.is_nan() {
+                values.iter().filter(|&&v| v.is_nan()).count()
+            } else {
+                values.iter().filter(|&&v| v == val).count()
+            };
+            return Some(count as f32);
+        }
         Feature::BinnedEntropy(max_bins) => {
             let max_bins = *max_bins as usize;
             if max_bins == 0 || n == 0.0 {

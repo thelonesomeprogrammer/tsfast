@@ -28,6 +28,7 @@ bitflags! {
         const RMS                  = 1 << 13;
         const ROOT_MEAN_SQ         = 1 << 14;
         const ZERO_CROSS           = 1 << 15;
+        const NUMBER_PEAKS_CROSSINGS = 1 << 92;
         const PEAKS                = 1 << 16;
         const AUTOCORR_LAG1        = 1 << 17;  // lag-1 product
         const MAC                  = 1 << 18;  // mean abs change

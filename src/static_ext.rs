@@ -88,6 +88,21 @@ impl Extractor {
         let record_batch = batch.0;
         let n_cols = record_batch.num_columns();
         let n_rows = record_batch.num_rows();
+
+        if n_rows == 0 {
+            // Return empty batch with correct schema
+            let mut fields = Vec::with_capacity(self.features.len());
+            for feat in &self.features {
+                fields.push(Field::new(feat.name(), DataType::Float32, false));
+            }
+            let schema = Arc::new(Schema::new(fields));
+            let results: Vec<ArrayRef> = (0..self.features.len())
+                .map(|_| Arc::new(Float32Array::from(Vec::<f32>::new())) as ArrayRef)
+                .collect();
+            let empty_batch = RecordBatch::try_new(schema, results).unwrap();
+            return Ok(PyArrowType(empty_batch));
+        }
+
         let compute = self.compute;
         let features = &self.features;
         let unique_paa_totals = &self.unique_paa_totals;
