@@ -69,7 +69,6 @@ pub struct ColumnState {
     pub sum_quads_vec: f32x4,
     pub min_vec: f32x4,
     pub max_vec: f32x4,
-    pub abs_sum_vec: f32x4,
     pub abs_max_vec: f32x4,
     pub sum_sq_diff_vec: f32x4,
     pub sum_prod_vec: f32x4,
@@ -89,8 +88,6 @@ pub struct ColumnState {
     pub tra_sums: Vec<f32>,
     pub tra_sums_vec: Vec<f32x4>,
     pub prefix_sums: Vec<f32>,
-    pub mass_pointer: usize,
-    pub mass_cum_sum: f64,
     pub prev_last: f32,
     pub prev_val: f32,
     pub prev_prev_val: f32,
@@ -99,7 +96,6 @@ pub struct ColumnState {
     pub last_max_idx: usize,
     pub first_min_idx: usize,
     pub last_min_idx: usize,
-    pub abs_sum: f32,
     pub benford_counts: [usize; 9],
     pub min_queue: Vec<(usize, f32)>,
     pub min_q_head: usize,
@@ -152,8 +148,6 @@ pub struct ColumnState {
     pub welch_planner: Option<std::sync::Arc<std::sync::Mutex<realfft::RealFftPlanner<f32>>>>,
     pub cwt_wavelets: rustc_hash::FxHashMap<u16, Vec<f32>>,
     pub spectrum_buffer: Vec<f32>,
-    pub adf_cache_n: usize,
-    pub adf_cache_ptr: usize,
     pub adf_test_stat: f32,
     pub adf_p_value: f32,
     pub adf_used_lag: f32,
@@ -187,6 +181,17 @@ fn is_smooth(mut n: usize) -> bool {
 }
 
 impl ColumnState {
+    /// Drop results cached while evaluating the previous window. Values or
+    /// buffer addresses can't tell windows apart: the sliding engine reuses its
+    /// history buffer in place, so every window has the same pointer and length.
+    pub fn reset_window_caches(&mut self) {
+        self.friedrich_coeffs.clear();
+        self.max_langevin_fixed_point_cache.clear();
+        self.adf_test_stat = f32::NAN;
+        self.adf_p_value = f32::NAN;
+        self.adf_used_lag = f32::NAN;
+    }
+
     pub fn new(
         unique_paa_totals: &[u16],
         unique_c3_lags: &[u16],
@@ -215,7 +220,6 @@ impl ColumnState {
             sum_quads_vec: f32x4::splat(0.0),
             min_vec: f32x4::splat(f32::INFINITY),
             max_vec: f32x4::splat(f32::NEG_INFINITY),
-            abs_sum_vec: f32x4::splat(0.0),
             abs_max_vec: f32x4::splat(0.0),
             t_energy: 0.0,
             sum_sq_diff_vec: f32x4::splat(0.0),
@@ -238,8 +242,6 @@ impl ColumnState {
             tra_sums: vec![0.0; unique_tra_lags.len()],
             tra_sums_vec: vec![f32x4::splat(0.0); unique_tra_lags.len()],
             prefix_sums: Vec::new(),
-            mass_pointer: 0,
-            mass_cum_sum: 0.0,
             prev_last: first_val,
             prev_val: first_val,
             prev_prev_val: first_val,
@@ -248,7 +250,6 @@ impl ColumnState {
             last_max_idx: 0,
             first_min_idx: 0,
             last_min_idx: 0,
-            abs_sum: 0.0,
             benford_counts: [0; 9],
             min_queue: Vec::new(),
             min_q_head: 0,
@@ -299,8 +300,6 @@ impl ColumnState {
             welch_planner: None,
             cwt_wavelets: rustc_hash::FxHashMap::default(),
             spectrum_buffer: Vec::new(),
-            adf_cache_n: 0,
-            adf_cache_ptr: 0,
             adf_test_stat: std::f32::NAN,
             adf_p_value: std::f32::NAN,
             adf_used_lag: std::f32::NAN,

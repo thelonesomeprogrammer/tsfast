@@ -150,49 +150,22 @@ pub fn eval_distribution(
             }
         }
         Feature::IndexMassQuantile(q_bits) => {
+            // tsfresh: first index where the cumulative |x| mass reaches q.
             let q = f32::from_bits(*q_bits) as f64;
-            let target_mass = q * state.abs_sum as f64;
-
+            let total: f64 = values.iter().map(|v| v.abs() as f64).sum();
+            let target_mass = q * total;
             if target_mass <= 0.0 || values.is_empty() {
                 0.0
             } else {
-                // Check if we can resume (only if the array hasn't shrunk, e.g. expanding)
-                if state.mass_pointer < values.len() && state.mass_cum_sum < target_mass {
-                    let mut cum_sum = state.mass_cum_sum;
-                    let mut pointer = state.mass_pointer;
-                    while pointer < values.len() {
-                        cum_sum += values[pointer].abs() as f64;
-                        if cum_sum >= target_mass {
-                            state.mass_cum_sum = cum_sum;
-                            state.mass_pointer = pointer;
-                            break;
-                        }
-                        pointer += 1;
-                    }
-                    if pointer >= values.len() {
-                        pointer = values.len() - 1;
-                        state.mass_cum_sum = cum_sum;
-                        state.mass_pointer = pointer;
-                    }
-                    (state.mass_pointer + 1) as f32 / values.len() as f32
-                } else {
-                    // Sliding window or mass center shifted left
-                    let mut cum_sum = 0.0;
-                    let mut pointer = 0;
-                    while pointer < values.len() {
-                        cum_sum += values[pointer].abs() as f64;
-                        if cum_sum >= target_mass {
-                            break;
-                        }
-                        pointer += 1;
-                    }
-                    if pointer >= values.len() {
-                        pointer = values.len() - 1;
-                    }
-                    state.mass_cum_sum = cum_sum;
-                    state.mass_pointer = pointer;
-                    (pointer + 1) as f32 / values.len() as f32
-                }
+                let mut cum_sum = 0.0;
+                let idx = values
+                    .iter()
+                    .position(|v| {
+                        cum_sum += v.abs() as f64;
+                        cum_sum >= target_mass
+                    })
+                    .unwrap_or(values.len() - 1);
+                (idx + 1) as f32 / values.len() as f32
             }
         }
 

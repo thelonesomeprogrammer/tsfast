@@ -38,17 +38,6 @@ pub fn eval_stationarity(feat: &Feature, context: &mut crate::context::FeatureCo
 
     let state = &mut *context.state;
 
-    // Cache invalidation
-    let current_ptr = values.as_ptr() as usize;
-    if state.adf_cache_ptr != current_ptr || state.adf_cache_n != n {
-        state.adf_test_stat = std::f32::NAN;
-        state.adf_p_value = std::f32::NAN;
-        state.adf_used_lag = std::f32::NAN;
-
-        state.adf_cache_ptr = current_ptr;
-        state.adf_cache_n = n;
-    }
-
     match feat {
         Feature::AugmentedDickeyFuller(attr) => {
             if state.adf_test_stat.is_nan() {

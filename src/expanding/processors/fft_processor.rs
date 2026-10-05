@@ -11,6 +11,8 @@ impl FftProcessor {
     pub fn finalize(
         compute: Compute,
         full_series: &[f32],
+        mean: f32,
+        m2: f32,
         r2c_opt: &Option<Arc<dyn RealToComplex<f32>>>,
         fft_size: usize,
         fft_update_period: usize,
@@ -266,10 +268,8 @@ impl FftProcessor {
 
         let mut fft_autocorr = Vec::new();
         let n = full_series.len() as f32;
-        let mean = state.total_sum / n;
-        let m2 = state.sum_sq_diff;
 
-        if compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF | Compute::LPCC) && n > 1.0 {
+        if compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) && n > 1.0 {
             let n2 = full_series.len() * 2;
             let fft_size_ac = crate::common::next_good_fft_size(n2);
             let mut planner = realfft::RealFftPlanner::<f32>::new();
@@ -338,7 +338,7 @@ impl FftProcessor {
         let mut cwt_entropy = 0.0;
 
         if compute.intersects(Compute::LPCC) {
-            lpcc = crate::features::lpc::compute_lpcc(&fft_autocorr, full_series.len());
+            lpcc = crate::features::lpc::compute_lpcc(full_series);
         }
 
         if compute.intersects(Compute::MFCC) {

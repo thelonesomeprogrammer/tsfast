@@ -26,9 +26,8 @@ impl StatsProcessor {
             state.max_q_head = 0;
             state.max_q_tail = 0;
             state.max_q_len = 0;
+            state.abs_max = 0.0;
         }
-        state.abs_max = 0.0;
-        state.abs_sum = 0.0;
     }
 
     #[inline(always)]
@@ -167,14 +166,8 @@ impl StatsProcessor {
             }
         }
 
-        if compute.intersects(Compute::ABS_SUM | Compute::ABS_MAX) {
-            let abs = chunk.abs();
-            if compute.contains(Compute::ABS_SUM) {
-                state.abs_sum_vec += abs;
-            }
-            if compute.contains(Compute::ABS_MAX) {
-                state.abs_max_vec = state.abs_max_vec.simd_max(abs);
-            }
+        if compute.contains(Compute::ABS_MAX) {
+            state.abs_max_vec = state.abs_max_vec.simd_max(chunk.abs());
         }
 
         if compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
@@ -251,9 +244,6 @@ impl StatsProcessor {
             }
         }
 
-        if compute.contains(Compute::ABS_SUM) {
-            state.abs_sum += val.abs();
-        }
         if compute.contains(Compute::ABS_MAX) {
             state.abs_max = state.abs_max.max(val.abs());
         }
@@ -288,10 +278,6 @@ impl StatsProcessor {
         if compute.contains(Compute::ABS_MAX) {
             state.abs_max = state.abs_max.max(state.abs_max_vec.reduce_max());
             state.abs_max_vec = f32x4::splat(0.0);
-        }
-        if compute.contains(Compute::ABS_SUM) {
-            state.abs_sum += state.abs_sum_vec.reduce_sum();
-            state.abs_sum_vec = f32x4::splat(0.0);
         }
     }
 

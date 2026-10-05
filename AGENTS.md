@@ -75,7 +75,10 @@ and tells you where to look.
 6. Tests: `cargo test`, plus one Python test per engine (`test_tsfast.py`,
    `test_sliding.py`, `test_expanding.py`) comparing against the tsfresh/TSFEL
    reference implementation (both are installed). Include an edge case
-   (constant series or a short window).
+   (constant series or a short window). Also add a sample name to
+   `tests/feature_samples.txt` (`cargo test` fails until you do): it drives
+   `tests/test_engines.py`, which checks that all three engines agree and that
+   the feature gives the same value alone as alongside every other feature.
 7. Delete the feature's row from `missing.md`.
 
 Reference implementation: `EnergyRatioByChunks`. Before starting, grep

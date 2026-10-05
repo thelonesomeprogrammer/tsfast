@@ -53,7 +53,7 @@ impl FftProcessor {
         let mut spectral_roll_off = 0.0;
         let mut fft_autocorr = Vec::new();
 
-        if compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF | Compute::LPCC) && n > 1.0 {
+        if compute.intersects(Compute::FULL_AUTOCORR | Compute::PACF) && n > 1.0 {
             let n2 = values.len() * 2;
             let fft_size_ac = crate::common::next_good_fft_size(n2);
             let mut planner = realfft::RealFftPlanner::<f32>::new();
@@ -312,7 +312,7 @@ impl FftProcessor {
         let mut cwt_entropy = 0.0;
 
         if compute.intersects(Compute::LPCC) {
-            lpcc = crate::features::lpc::compute_lpcc(&fft_autocorr, values.len());
+            lpcc = crate::features::lpc::compute_lpcc(values);
         }
 
         if compute.intersects(Compute::MFCC) {

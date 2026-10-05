@@ -81,6 +81,7 @@ impl<'a> FeatureContext<'a> {
         unique_paa_totals: &'a [u16],
         paa_boundaries: &'a [Vec<usize>],
     ) -> Self {
+        state.reset_window_caches();
         Self {
             values,
             running_sorted,

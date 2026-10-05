@@ -187,6 +187,8 @@ impl<'a> ExpandingEngine<'a> {
         let mut fft_res = FftProcessor::finalize(
             self.compute,
             full_series,
+            base_metrics.mean,
+            base_metrics.m2,
             &self.r2c,
             self.fft_size,
             self.fft_update_period,
@@ -199,10 +201,10 @@ impl<'a> ExpandingEngine<'a> {
         let zc_metrics = DiffProcessor::finalize(self.compute, state);
 
         let sort_metrics = crate::metrics::SortMetrics {
-            first_max_idx: 0,
-            last_max_idx: 0,
-            first_min_idx: 0,
-            last_min_idx: 0,
+            first_max_idx: state.first_max_idx,
+            last_max_idx: state.last_max_idx,
+            first_min_idx: state.first_min_idx,
+            last_min_idx: state.last_min_idx,
             median,
             median_abs_dev,
             iqr,

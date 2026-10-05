@@ -64,7 +64,6 @@ compute_flags! {
     SLOPE,                // sum_ix
     INTERCEPT,
     PAA,
-    ABS_SUM_CHG,
     CNT_ABOVE_MEAN,
     CNT_BELOW_MEAN,
     STRIKE_ABOVE,
@@ -92,7 +91,6 @@ compute_flags! {
     APPROX_ENT,
     AGG_LIN_TREND,
     QUANTILE,
-    IDX_MASS_Q,
     BENFORD,
     LANGEVIN,
     REOCCUR_VAL,
@@ -103,7 +101,6 @@ compute_flags! {
     SIG_DISTANCE,
     WAVELET,
     SPECTROGRAM,
-    ABS_SUM,
     REOCCUR_DP,
     MEAN_N_ABS_MAX,
     HUMAN_RANGE_E,
