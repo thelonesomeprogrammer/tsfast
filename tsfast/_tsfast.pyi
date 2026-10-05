@@ -1,0 +1,61 @@
+"""Type stubs for the Rust extension (src/static_ext.rs, src/sliding.rs, src/expanding.rs).
+
+Feature names are tsfresh/TSFEL names, e.g. ``"mean"``,
+``"energy_ratio_by_chunks_num_segments_3__segment_focus_1"`` or
+``"human_range_energy-100"``. ``tests/feature_samples.txt`` lists one valid
+name per feature. An unknown or invalid name raises ``ValueError``.
+
+Input arrays are 2-D float32/float64 with one series per row; float32
+C-contiguous input is read without a copy. Output is always float32, with the
+last axis in ``feature_names`` order. Every extractor grows to accept more
+series (rows) than it was created with.
+"""
+
+import numpy as np
+import numpy.typing as npt
+
+_Values = npt.NDArray[np.float32] | npt.NDArray[np.float64]
+
+class Extractor:
+    """Features of whole series, one output row per input row."""
+
+    def __init__(self, feature_str: list[str], max_size: int | None = None) -> None:
+        """``max_size``: expected series length, used to pre-plan the FFT."""
+    @property
+    def feature_names(self) -> list[str]:
+        """Canonical names of the output columns, in order."""
+    def process_2d_floats(self, values: _Values) -> npt.NDArray[np.float32]:
+        """(n_series, n_samples) -> (n_series, n_features)."""
+
+class SlidingExtractor:
+    """Features of fixed-size windows over streaming series."""
+
+    def __init__(
+        self, feature_str: list[str], n_cols: int, window_size: int, stride: int = 1
+    ) -> None:
+        """``n_cols``: initial number of series; a window is emitted every ``stride`` samples once full."""
+    @property
+    def feature_names(self) -> list[str]:
+        """Canonical names of the last output axis, in order."""
+    def update(self, values: _Values) -> npt.NDArray[np.float32]:
+        """Append (n_series, n_new_samples); returns (n_series, n_windows, n_features)
+        for every window these samples completed, oldest first."""
+
+class ExpandingExtractor:
+    """Features of everything seen so far, updated incrementally."""
+
+    def __init__(
+        self,
+        feature_str: list[str],
+        n_cols: int,
+        max_size: int | None = None,
+        fft_update_period: int = 1,
+    ) -> None:
+        """``max_size``: expected final length, used to pre-plan the FFT.
+        ``fft_update_period``: recompute the FFT only after this many new samples
+        (1 = every update, exact)."""
+    @property
+    def feature_names(self) -> list[str]:
+        """Canonical names of the output columns, in order."""
+    def update(self, values: _Values) -> npt.NDArray[np.float32]:
+        """Append (n_series, n_new_samples); returns (n_series, n_features)."""
