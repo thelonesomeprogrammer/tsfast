@@ -344,3 +344,17 @@ def test_expanding_fractal_dimensions():
     else:
         assert np.allclose(res2.iloc[0, 0], h2, atol=5e-2)
     print("test_expanding_fractal_dimensions passed!")
+
+
+@pytest.mark.parametrize("case", ["randn", "exponential", "constant", "plateaus"])
+def test_shape_features_expanding(case):
+    from test_tsfast import SHAPE_CASES, SHAPE_FEATURES, shape_features_reference
+
+    x = SHAPE_CASES[case].astype(np.float32)
+    extractor = ExpandingExtractor(SHAPE_FEATURES, 1)
+    seen = np.array([], dtype=np.float32)
+    for chunk in np.array_split(x, 3):
+        seen = np.concatenate([seen, chunk])
+        batch = pa.RecordBatch.from_arrays([pa.array(chunk)], names=["c1"])
+        row = extractor.update(batch).to_pandas().iloc[-1].values
+        assert np.allclose(row, shape_features_reference(seen), atol=1e-5, equal_nan=True)

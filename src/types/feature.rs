@@ -212,8 +212,8 @@ impl Feature {
             }
             Self::C3(_) => C::C3,
             Self::Auc => C::AUC,
-            Self::SlopeSignChange => C::PEAKS | C::SLOPE_SIGN_CHG,
-            Self::TurningPoints => C::PEAKS | C::TURNING_PTS,
+            Self::SlopeSignChange => C::empty(),
+            Self::TurningPoints => C::PEAKS | C::TROUGHS,
             Self::ZeroCrossingMean => {
                 C::SUM | C::MEAN | C::ZERO_CROSS | C::ZC_STATS | C::ZC_INDICES | C::NEEDS_SORT
             }
@@ -284,7 +284,7 @@ impl Feature {
             Self::QuerySimilarityCount(_, _) => C::QUERY_SIMILARITY | C::NEEDS_SORT,
             Self::MatrixProfile(_, _) => C::MATRIX_PROFILE | C::NEEDS_SORT,
             Self::SpectrogramCoefficients(_, _) => C::SPECTROGRAM | C::NEEDS_SORT,
-            Self::MeanSecondDerivativeCentral => C::LENGTH | C::NEEDS_SORT,
+            Self::MeanSecondDerivativeCentral => C::empty(),
             Self::LargeStandardDeviation(_) => {
                 C::SUM | C::MEAN | C::VARIANCE | C::MIN | C::MAX | C::ENERGY | C::NEEDS_SORT
             }

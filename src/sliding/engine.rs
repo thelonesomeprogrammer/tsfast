@@ -163,7 +163,11 @@ impl<'a> SlidingEngine<'a> {
         StatsProcessor::reset_state(state, is_incremental);
         DiffProcessor::reset_state(state, values, is_incremental);
         ComplexityProcessor::reset_state(state);
-        QueueProcessor::reset_state(state, values.len());
+        // The min/max queues are maintained incrementally by update_batch /
+        // update_incremental; only rebuild them on a full recompute.
+        if !is_incremental {
+            QueueProcessor::reset_state(state, values.len());
+        }
 
         if !is_incremental
             && self
@@ -281,7 +285,9 @@ impl<'a> SlidingEngine<'a> {
                 }
             }
 
-            QueueProcessor::process_remainder(self.compute, val, i, window_size, state);
+            if !is_incremental {
+                QueueProcessor::process_remainder(self.compute, val, i, window_size, state);
+            }
 
             if i > 0 {
                 let prev = values[i - 1];

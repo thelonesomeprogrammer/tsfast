@@ -43,6 +43,16 @@ pub fn eval_changes(
     let res = match feat {
                 Feature::MeanAbsChange => if n > 1.0 { (mac_sum / (n - 1.0)) as f32 } else { 0.0 },
                 Feature::MeanChange => if n > 1.0 { (mc_sum / (n - 1.0)) as f32 } else { 0.0 },
+                // tsfresh: (x[-1] - x[-2] - x[1] + x[0]) / (2 * (n - 2))
+                Feature::MeanSecondDerivativeCentral => {
+                    let len = values.len();
+                    if len > 2 {
+                        (values[len - 1] - values[len - 2] - values[1] + values[0])
+                            / (2.0 * (len - 2) as f32)
+                    } else {
+                        f32::NAN
+                    }
+                }
                 Feature::MedianDiff | Feature::MedianAbsDiff => {
                     let mut diffs: Vec<f32> = std::mem::take(&mut state.diff_buffer);
                     diffs.clear();

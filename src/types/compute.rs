@@ -45,8 +45,6 @@ bitflags! {
         const VAR_COEFF            = 1 << 29;
         const C3                   = 1 << 30;
         const AUC                  = 1 << 31;
-        const SLOPE_SIGN_CHG       = 1 << 32;
-        const TURNING_PTS          = 1 << 33;
         const ZC_STATS             = 1 << 34;  // zero-crossing mean
         const ZC_STD               = 1 << 35;
         const ZC_INDICES           = 1 << 36;

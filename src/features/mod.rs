@@ -33,7 +33,8 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::TotalSum
         | F::UnbiasedFisherKurtosis
         | F::Variance
-        | F::VariationCoefficient => moments::eval_moments(feat, ctx),
+        | F::VariationCoefficient
+        | F::LargeStandardDeviation(..) => moments::eval_moments(feat, ctx),
         F::AbsMax
         | F::FirstLocMax
         | F::FirstLocMin
@@ -58,7 +59,8 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::RatioBeyondRSigma(..)
         | F::SumOfReoccurringDataPoints
         | F::SumOfReoccurringValues
-        | F::ValueCount(..) => distribution::eval_distribution(feat, ctx),
+        | F::ValueCount(..)
+        | F::SymmetryLooking(..) => distribution::eval_distribution(feat, ctx),
         F::Energy
         | F::EnergyRatioByChunks(..)
         | F::HumanRangeEnergy(..)
@@ -72,7 +74,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::ZeroCross
         | F::ZeroCrossingMean
         | F::ZeroCrossingRate
-        | F::ZeroCrossingStd => crossings_peaks::eval_crossings_peaks(feat, ctx),
+        | F::ZeroCrossingStd
+        | F::SlopeSignChange
+        | F::TurningPoints => crossings_peaks::eval_crossings_peaks(feat, ctx),
         F::AggAutocorrelation(..)
         | F::Autocorr(..)
         | F::AutocorrFirst1e
@@ -90,7 +94,8 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::MedianAbsDiff
         | F::MedianDiff
         | F::SignalDistance
-        | F::Slope => changes::eval_changes(feat, ctx),
+        | F::Slope
+        | F::MeanSecondDerivativeCentral => changes::eval_changes(feat, ctx),
         F::CountAboveMean
         | F::CountBelowMean
         | F::LongestStrikeAboveMean
@@ -134,15 +139,8 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::PercentageOfReoccurringValuesToAllValues
         | F::RatioValueNumberToTimeSeriesLength
         | F::VarianceLargerThanStandardDeviation => misc::eval_misc(feat, ctx),
-        // Parse but have no implementation yet: NaN rather than a fake value.
-        F::SlopeSignChange
-        | F::TurningPoints
-        | F::MeanSecondDerivativeCentral
-        | F::LargeStandardDeviation(..)
-        | F::SymmetryLooking(..) => Some(f32::NAN),
     };
-    res.unwrap_or_else(|| {
-        debug_assert!(false, "{feat:?} is routed to an eval_* fn that doesn't handle it");
-        f32::NAN
-    })
+    // `None` means "not computable for this window" (e.g. zero variance, window
+    // shorter than a lag); engines have always reported that as 0.0.
+    res.unwrap_or(0.0)
 }

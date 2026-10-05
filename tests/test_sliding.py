@@ -375,3 +375,32 @@ def test_sliding_fractal_dimensions():
     assert np.allclose(res.iloc[0, 0], h1, atol=5e-2)
     assert np.allclose(res.iloc[1, 0], h2, atol=5e-2)
     print("test_sliding_fractal_dimensions passed!")
+
+
+@pytest.mark.parametrize("window_size,stride", [(40, 1), (37, 1), (10, 3), (64, 16), (5, 5)])
+def test_sliding_min_max_every_window(window_size, stride):
+    # Regression: incremental updates used to wipe the min/max queue.
+    x = np.random.RandomState(window_size * stride).randn(300).astype(np.float32)
+    extractor = SlidingExtractor(["min", "max", "pk_pk_distance"], 1, window_size, stride)
+    rows = []
+    for chunk in np.array_split(x, 7):
+        batch = pa.RecordBatch.from_arrays([pa.array(chunk)], names=["c1"])
+        rows.extend(extractor.update(batch).to_pandas().values)
+    assert len(rows) == (len(x) - window_size) // stride + 1
+    for k, row in enumerate(rows):
+        w = x[k * stride : k * stride + window_size]
+        assert np.allclose(row, [w.min(), w.max(), w.max() - w.min()], atol=1e-6), k
+
+
+@pytest.mark.parametrize("case", ["randn", "exponential", "constant"])
+def test_shape_features_sliding(case):
+    from test_tsfast import SHAPE_CASES, SHAPE_FEATURES, shape_features_reference
+
+    x = SHAPE_CASES[case].astype(np.float32)
+    window_size, stride = 40, 3
+    extractor = SlidingExtractor(SHAPE_FEATURES, 1, window_size, stride)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=["c1"])
+    rows = extractor.update(batch).to_pandas().values
+    for k, row in enumerate(rows):
+        w = x[k * stride : k * stride + window_size]
+        assert np.allclose(row, shape_features_reference(w), atol=1e-5, equal_nan=True), k

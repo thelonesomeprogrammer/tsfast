@@ -64,6 +64,9 @@ and tells you where to look.
    route the variant to it in `features::eval` (`src/features/mod.rs`): **compile
    error** if missing. All three engines call `features::eval`, so this covers
    static, sliding and expanding.
+   Returning `None` from an `eval_*` arm means "not computable for this window"
+   and is reported as `0.0`; return `Some(f32::NAN)` if NaN is what the
+   reference library gives.
 5. Only if the feature needs new accumulated state: add a `Compute` flag in
    `compute.rs`, a field on `ColumnState` (`common.rs`), and update the relevant
    processor in **all three** engines (`*/processors/*.rs`). The sliding engine
