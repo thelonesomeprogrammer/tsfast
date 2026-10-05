@@ -46,7 +46,7 @@ def test_sliding_multiple_columns():
 
 def test_basic_features():
     features = [
-        "mean", "total_sum",
+        "mean", "total_sum", "min_value", "max_value",
         "energy", "root_mean_square",
         "length", "variance_larger_than_standard_deviation"
     ]
@@ -66,16 +66,16 @@ def test_basic_features():
     w1 = np.array([1.0, 2.0, 3.0])
     assert np.allclose(res.iloc[0]['mean'], np.mean(w1))
     assert np.allclose(res.iloc[0]['total_sum'], np.sum(w1))
-    # assert np.allclose(res.iloc[0]['min_value'], np.min(w1))
-    # assert np.allclose(res.iloc[0]['max_value'], np.max(w1))
+    assert np.allclose(res.iloc[0]['min_value'], np.min(w1))
+    assert np.allclose(res.iloc[0]['max_value'], np.max(w1))
     assert np.allclose(res.iloc[0]['energy'], np.sum(w1**2))
     assert np.allclose(res.iloc[0]['root_mean_square'], np.sqrt(np.mean(w1**2)))
 
     w2 = np.array([2.0, 3.0, 4.0])
     assert np.allclose(res.iloc[1]['mean'], np.mean(w2))
     assert np.allclose(res.iloc[1]['total_sum'], np.sum(w2))
-    # assert np.allclose(res.iloc[1]['min_value'], np.min(w2))
-    # assert np.allclose(res.iloc[1]['max_value'], np.max(w2))
+    assert np.allclose(res.iloc[1]['min_value'], np.min(w2))
+    assert np.allclose(res.iloc[1]['max_value'], np.max(w2))
     assert np.allclose(res.iloc[1]['energy'], np.sum(w2**2))
     assert np.allclose(res.iloc[1]['root_mean_square'], np.sqrt(np.mean(w2**2)))
 
@@ -251,8 +251,6 @@ def test_ecdf_pk_centroid_sliding():
     windowed_x = x[-window_size:]
     tsfel_neg = tsfel.feature_extraction.features.negative_turning(windowed_x)
     tsfel_pos = tsfel.feature_extraction.features.positive_turning(windowed_x)
-    tsfel_neg = tsfel.feature_extraction.features.negative_turning(windowed_x)
-    tsfel_pos = tsfel.feature_extraction.features.positive_turning(windowed_x)
     tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(windowed_x, d=10)
     tsfel_ecdf_3 = tsfel.feature_extraction.features.ecdf(windowed_x, d=3)
     tsfel_pk = tsfel.feature_extraction.features.pk_pk_distance(windowed_x)
@@ -262,16 +260,10 @@ def test_ecdf_pk_centroid_sliding():
     assert np.allclose(results[0], min(10.0 / window_size, 1.0))
     assert np.allclose(results[1], min(3.0 / window_size, 1.0))
     assert np.allclose(results[2], tsfel_pk)
-    # assert np.allclose(results[3], tsfel_centroid)
-    # assert np.allclose(results[4], tsfel_centroid_50)
-    assert np.allclose(results[5], tsfel_neg)
-    assert np.allclose(results[6], tsfel_pos)
-    assert np.allclose(results[5], tsfel_neg)
-    assert np.allclose(results[6], tsfel_pos)
-    # assert
+    assert np.allclose(results[3], tsfel_centroid)
     assert np.allclose(results[4], tsfel_centroid_50)
-    assert np.allclose(results[3], tsfel_centroid) or abs(results[3] - tsfel_centroid) < 0.1
-    assert np.allclose(results[4], tsfel_centroid_50) or abs(results[4] - tsfel_centroid_50) < 0.1
+    assert np.allclose(results[5], tsfel_neg)
+    assert np.allclose(results[6], tsfel_pos)
 
 def test_sliding_invalid_type():
     # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing

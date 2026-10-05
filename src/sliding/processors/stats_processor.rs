@@ -17,6 +17,8 @@ impl StatsProcessor {
             state.energy = 0.0;
             state.sum_cubes = 0.0;
             state.sum_quads = 0.0;
+            // Maintained incrementally by TrendProcessor; only a full recompute rebuilds it.
+            state.t_energy = 0.0;
 
             state.min_q_head = 0;
             state.min_q_tail = 0;
@@ -27,7 +29,6 @@ impl StatsProcessor {
         }
         state.abs_max = 0.0;
         state.abs_sum = 0.0;
-        state.t_energy = 0.0;
     }
 
     #[inline(always)]

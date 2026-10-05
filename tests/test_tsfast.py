@@ -374,6 +374,13 @@ def test_lpcc():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0, 2.0, 1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32)
     features = [f"lpcc-{i}" for i in range(12)]
 
+    import tsfel
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    results = extractor.process_2d_floats(batch).to_pandas().iloc[0].values
+    expected = np.array(tsfel.feature_extraction.features.lpcc(x))
+    assert np.allclose(results, expected, atol=1e-5)
+
 def test_augmented_dickey_fuller():
     import numpy as np
     import tsfast
@@ -413,6 +420,13 @@ def test_augmented_dickey_fuller():
 def test_median_diff_features():
     x = np.random.RandomState(42).randn(100).astype(np.float32)
     features = ["median_diff", "median_abs_diff"]
+
+    import tsfel
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    results = extractor.process_2d_floats(batch).to_pandas().iloc[0].values
+    assert np.allclose(results[0], tsfel.feature_extraction.features.median_diff(x))
+    assert np.allclose(results[1], tsfel.feature_extraction.features.median_abs_diff(x))
 
 def test_agg_autocorrelation():
     np.random.seed(42)

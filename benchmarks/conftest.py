@@ -26,10 +26,10 @@ def full_30_features():
         "longest_strike_above_mean", "longest_strike_below_mean",
         "abs_max", "first_loc_max", "last_loc_max", "first_loc_min", "last_loc_min",
         "length", "variance_larger_than_standard_deviation", "percentage_of_reoccurring_datapoints_to_all_datapoints", "percentage_of_reoccurring_values_to_all_values", "ratio_value_number_to_time_series_length",
-        "spectral_centroid", "spectral_spread", "spectral_entropy"
-        "linear_trend__attr_\"slope\"", "agg_linear_trend__attr_\"slope\"__chunk_len_5__f_agg_\"mean\"", "time_reversal_asymmetry_statistic__lag_1"
-        "spectral_slope", "spectral_roll_on", "spectral_roll_off"
-        "approx_entropy-2-0.2", "sample_entropy", "binned_entropy__max_bins_10"
+        "spectral_centroid", "spectral_spread", "spectral_entropy",
+        "linear_trend__attr_\"slope\"", "agg_linear_trend__attr_\"slope\"__chunk_len_5__f_agg_\"mean\"", "time_reversal_asymmetry_statistic__lag_1",
+        "spectral_slope", "spectral_roll_on", "spectral_roll_off",
+        "approx_entropy-2-0.2", "sample_entropy", "binned_entropy__max_bins_10",
         "ratio_beyond_r_sigma-2.0", "index_mass_quantile-0.5", "c3-2",
         "permutation_entropy-1-3", "value_count-3.0"
     ]
