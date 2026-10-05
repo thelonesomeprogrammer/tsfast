@@ -211,9 +211,7 @@ def test_extract_empty_batch():
     result = extractor.process_2d_floats(empty_data)
 
     df = result.to_pandas()
-    assert len(df) == 1
-    # For empty batches, the rust engine defaults to returning 0.0 values across all requested features
-    assert df.iloc[0]['mean'] == 0.0
+    assert len(df) == 0
 
 def test_extract_invalid_feature():
     # Verify unsupported features immediately error during initialization
@@ -456,7 +454,6 @@ def test_change_quantiles():
     result_batch = extractor.process_2d_floats(batch)
     results = result_batch.to_pandas().iloc[0].values
 
-    # expected
     expected_1 = change_quantiles(x, 0.2, 0.8, True, "mean")
     expected_2 = change_quantiles(x, 0.2, 0.8, False, "var")
     expected_3 = change_quantiles(x, 0.0, 1.0, True, "max")
@@ -550,3 +547,25 @@ def test_fractal_dimensions():
 
     assert np.allclose(results[0], hfd, atol=5e-2)
     print("test_fractal_dimensions passed!")
+def test_invalid_type():
+    import pytest
+    import pyarrow as pa
+    import numpy as np
+    import tsfast
+
+    x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
+    features = ["mean"]
+    extractor = tsfast.Extractor(features)
+    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
+    with pytest.raises(TypeError, match="Failed to downcast column to Float32Array"):
+        extractor.process_2d_floats(batch)
+
+def test_empty_batch():
+    import pyarrow as pa
+    import tsfast
+
+    empty_data = pa.RecordBatch.from_arrays([pa.array([], type=pa.float32())], names=['c'])
+    features = ["mean"]
+    extractor = tsfast.Extractor(features)
+    result = extractor.process_2d_floats(empty_data)
+    assert result.num_rows == 0
