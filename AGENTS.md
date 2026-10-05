@@ -11,6 +11,7 @@ uv sync                      # first time only; needs nightly Rust (rust-toolcha
 uv run pytest                # runs tests/ — rebuilds the extension automatically if src/ changed
 uv run pytest tests/test_sliding.py -k energy   # narrow it down while iterating
 cargo build                  # fast Rust-only type check
+cargo test                   # Rust unit tests: feature name round-trips, coverage
 uv run pytest benchmarks     # benchmarks (slow, not part of the normal test run)
 ```
 
@@ -27,10 +28,12 @@ uv run pytest benchmarks     # benchmarks (slow, not part of the normal test run
 | :--- | :--- |
 | `src/types/feature.rs` | `Feature` enum + `required_compute()` (which `Compute` flags a feature needs) |
 | `src/types/compute.rs` | `Compute` bitflags (`u128`, check the last used bit before adding one) |
-| `src/types/parse.rs` | `FromStr` (feature-name string → `Feature`) and `Feature::name()` (inverse) |
-| `src/features/*.rs` | `eval_*(feat, ctx) -> Option<f32>` — the actual feature math, grouped by domain |
+| `src/types/parse.rs` | `unit_features!` name table; `FromStr` and `Feature::name()` for parameterized features |
+| `src/types/tests.rs` | round-trip/coverage tests over every `Feature` variant |
+| `src/features/mod.rs` | `eval()`: exhaustive routing of every variant to its module |
+| `src/features/*.rs` | `eval_*(feat, ctx) -> Option<f32>`: the actual feature math, grouped by domain |
 | `src/common.rs` | `ColumnState`: per-column accumulators and reusable buffers |
-| `src/{static_ext,sliding,expanding}/engine.rs` | engine drivers; each calls every `eval_*` in turn |
+| `src/{static_ext,sliding,expanding}/engine.rs` | engine drivers; call `features::eval` per feature |
 | `src/{static_ext,sliding,expanding}/processors/` | accumulation passes (stats, diff, trend, sort, fft…) gated by `Compute` flags |
 | `tsfast/` | Python package (`__init__.py`, `selection.py`); the built `.so` lands here |
 | `tests/` | `test_tsfast.py` = static, `test_sliding.py`, `test_expanding.py`, plus topic files |
@@ -39,32 +42,42 @@ uv run pytest benchmarks     # benchmarks (slow, not part of the normal test run
 
 ## Adding a feature (checklist)
 
-Reference implementation: `EnergyRatioByChunks` (`git show b346306`).
+Each step is enforced: forget one and either the build or `cargo test` fails
+and tells you where to look.
 
 1. `src/types/feature.rs`: add the variant to `Feature`. Store float params as
    `u32` via `f32::to_bits()` (the enum must stay `Eq + Hash`), never `as u16`.
-2. Same file: add an arm to `required_compute()`. Use `C::empty()` if the
-   feature computes directly from the raw window values.
-3. `src/types/parse.rs`: add parsing in `from_str`/`parse_parameterized` **and**
-   the inverse in `Feature::name()`. **Validate parameters here** (zero lengths,
-   `index < total`, …) and reject them by returning an error. A bad parameter
-   that reaches the engine panics and crashes the Python interpreter.
-4. `src/features/<domain>.rs`: add a match arm in the matching `eval_*`
-   function. Every engine calls the same `eval_*` functions, so this one change
-   covers static, sliding and expanding. **If no `eval_*` handles a variant, the
-   engine silently returns `0.0`**, so a feature that always yields 0 isn't wired up.
+2. Same file: add an arm to `required_compute()` (**compile error** if missing).
+   Use `C::empty()` if the feature computes directly from the raw window values.
+3. Names, in `src/types/parse.rs`:
+   - **No parameters**: add one line to the `unit_features!` table:
+     `MyFeature => "my_feature", ["tsfresh_alias"];`. That's both parsing and naming done.
+   - **With parameters**: add parsing (`parse_parameterized` for `name-p1-p2`
+     style) **and** the `Feature::name()` arm, plus a sample instance in
+     `parameterized_samples()` in `src/types/tests.rs`. `cargo test` checks that
+     every variant has a sample and that `name()` parses back to the same value.
+   - **Validate parameters while parsing** (zero lengths, `index < total`, …) and
+     reject bad ones with `return None`. A bad parameter that reaches the engine
+     panics and crashes the Python interpreter. Add the bad string to
+     `invalid_parameters_are_rejected`.
+4. `src/features/<domain>.rs`: add a match arm in that module's `eval_*` fn, then
+   route the variant to it in `features::eval` (`src/features/mod.rs`): **compile
+   error** if missing. All three engines call `features::eval`, so this covers
+   static, sliding and expanding.
 5. Only if the feature needs new accumulated state: add a `Compute` flag in
    `compute.rs`, a field on `ColumnState` (`common.rs`), and update the relevant
    processor in **all three** engines (`*/processors/*.rs`). The sliding engine
-   must also handle values leaving the window.
-6. Tests: add one test per engine (`test_tsfast.py`, `test_sliding.py`,
-   `test_expanding.py`) comparing against the tsfresh/TSFEL reference
-   implementation (both are installed). Include an edge case (constant series or
-   a short window).
+   must also handle values leaving the window. Nothing enforces this step; the
+   Python tests are the only check.
+6. Tests: `cargo test`, plus one Python test per engine (`test_tsfast.py`,
+   `test_sliding.py`, `test_expanding.py`) comparing against the tsfresh/TSFEL
+   reference implementation (both are installed). Include an edge case
+   (constant series or a short window).
 7. Delete the feature's row from `missing.md`.
 
-Before starting, grep `src/types/parse.rs` for the feature name: several
-features have already been implemented twice by parallel agents.
+Reference implementation: `EnergyRatioByChunks`. Before starting, grep
+`src/types/parse.rs` for the feature name: several features have already been
+implemented twice by parallel agents.
 
 ## Rules
 
@@ -81,5 +94,5 @@ features have already been implemented twice by parallel agents.
   map errors to `PyValueError`/`PyTypeError`.
 - Hot loops: avoid per-column allocations. Reuse buffers on `ColumnState`
   (`std::mem::take` → use → put back).
-- Before finishing: `uv run pytest` passes, and the number of collected tests
+- Before finishing: `cargo test` and `uv run pytest` pass, and the number of collected tests
   (`uv run pytest --collect-only -q | tail -1`) has not gone down.

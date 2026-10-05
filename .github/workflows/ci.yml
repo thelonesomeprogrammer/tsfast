@@ -38,5 +38,8 @@ jobs:
             echo "Remove agent scratch files listed above"; exit 1
           fi
 
+      - name: Rust tests
+        run: cargo test
+
       - name: Build and test
         run: uv run pytest -q
