@@ -232,6 +232,9 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         }
         let attr = parse_agg_attr(parts[0])?;
         let chunk_len: u16 = parts[1].parse().ok()?;
+        if chunk_len == 0 {
+            return None;
+        }
         let func = parse_agg_func(parts[2])?;
         return Some(Feature::AggLinearTrend(attr, chunk_len, func));
     }
@@ -357,6 +360,9 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         } else {
             5
         };
+        if chunk_len == 0 {
+            return None;
+        }
         let func = if s.contains("f_agg_\"mean\"") {
             AggFunc::Mean
         } else if s.contains("f_agg_\"var\"") {
