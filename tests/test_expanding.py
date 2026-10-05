@@ -1,7 +1,7 @@
 import pytest
-import pyarrow as pa
 import numpy as np
 from tsfast._tsfast import ExpandingExtractor
+from helpers import frame
 
 def test_expanding_multiple_columns():
     features = ["mean", "max_value", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05', 'ratio_beyond_r_sigma-1.0', 'index_mass_quantile-0.5', 'c3-1']
@@ -9,12 +9,9 @@ def test_expanding_multiple_columns():
     extractor = ExpandingExtractor(features, n_cols)
     
     # Update 1
-    data1 = pa.RecordBatch.from_arrays([
-        pa.array([1.0, 2.0], type=pa.float32()),
-        pa.array([10.0, 20.0], type=pa.float32())
-    ], names=['col1', 'col2'])
+    data1 = np.stack([[1.0, 2.0], [10.0, 20.0]])
     
-    result1 = extractor.update(data1).to_pandas()
+    result1 = frame(extractor, extractor.update(data1))
     # col1 mean: 1.5, max: 2.0, sum: 3.0
     # col2 mean: 15.0, max: 20.0, sum: 30.0
     
@@ -22,12 +19,9 @@ def test_expanding_multiple_columns():
     assert np.allclose(result1.iloc[1].iloc[:3], [15.0, 20.0, 30.0])
     
     # Update 2
-    data2 = pa.RecordBatch.from_arrays([
-        pa.array([3.0], type=pa.float32()),
-        pa.array([30.0], type=pa.float32())
-    ], names=['col1', 'col2'])
+    data2 = np.stack([[3.0], [30.0]])
     
-    result2 = extractor.update(data2).to_pandas()
+    result2 = frame(extractor, extractor.update(data2))
     # col1 mean: (1+2+3)/3 = 2.0, max: 3.0, sum: 6.0
     # col2 mean: (10+20+30)/3 = 20.0, max: 30.0, sum: 60.0
     
@@ -46,8 +40,8 @@ def test_expanding_all_basic_features():
     x = []
     for val in [1.0, 2.0, -1.0, 5.0]:
         x.append(val)
-        data = pa.RecordBatch.from_arrays([pa.array([val], type=pa.float32())], names=['c'])
-        res = extractor.update(data).to_pandas().iloc[0]
+        data = np.stack([[val]])
+        res = frame(extractor, extractor.update(data)).iloc[0]
         
         arr = np.array(x)
         assert np.allclose(res['mean'], np.mean(arr))
@@ -65,9 +59,9 @@ def test_expanding_all_basic_features():
 def test_expanding_empty_batch():
     features = ["mean"]
     extractor = ExpandingExtractor(features, 1)
-    empty_data = pa.RecordBatch.from_arrays([pa.array([], type=pa.float32())], names=['c'])
+    empty_data = np.stack([[]])
     result = extractor.update(empty_data)
-    assert result.num_rows == 0
+    assert result.shape[0] == 0
 
 def test_expanding_paa():
     # PAA in expanding window is tricky because boundaries change.
@@ -76,14 +70,14 @@ def test_expanding_paa():
     extractor = ExpandingExtractor(features, 1)
     
     # Update 1: [1, 2] -> N=2. paa-2-0: [1], paa-2-1: [2]
-    data1 = pa.RecordBatch.from_arrays([pa.array([1.0, 2.0], type=pa.float32())], names=['c'])
-    res1 = extractor.update(data1).to_pandas().iloc[0]
+    data1 = np.stack([[1.0, 2.0]])
+    res1 = frame(extractor, extractor.update(data1)).iloc[0]
     assert np.allclose(res1['paa-2-0'], 1.0)
     assert np.allclose(res1['paa-2-1'], 2.0)
     
     # Update 2: add [3, 4] -> N=4. paa-2-0: [1, 2] -> mean 1.5, paa-2-1: [3, 4] -> mean 3.5
-    data2 = pa.RecordBatch.from_arrays([pa.array([3.0, 4.0], type=pa.float32())], names=['c'])
-    res2 = extractor.update(data2).to_pandas().iloc[0]
+    data2 = np.stack([[3.0, 4.0]])
+    res2 = frame(extractor, extractor.update(data2)).iloc[0]
     assert np.allclose(res2['paa-2-0'], 1.5)
     assert np.allclose(res2['paa-2-1'], 3.5)
 
@@ -95,24 +89,14 @@ def test_expanding_higher_moments():
     x = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], dtype=np.float32)
     
     # Update with whole array
-    data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
-    res = extractor.update(data).to_pandas().iloc[0]
+    data = np.stack([np.asarray(x, dtype=np.float32)])
+    res = frame(extractor, extractor.update(data)).iloc[0]
     
-    from scipy.stats import kurtosis
+    from scipy.stats import kurtosis, skew
     assert np.allclose(res['mean'], np.mean(x))
-    assert np.allclose(res['std_dev'], np.std(x, ddof=1))
-    # scipy skew/kurtosis might have different bias corrections, but let's check values are reasonable
-    # tsfast skewness: (m3 / n) / var.powf(1.5)
-    # tsfast kurtosis: (m4 / n) / (var * var) - 3.0
-    
-    m = np.mean(x)
-    v = np.var(x, ddof=1)
-    m3 = np.mean((x - m)**3)
-    expected_skew = m3 / (v**1.5)
+    assert np.allclose(res['std_dev'], np.std(x))  # ddof=0, as tsfresh/TSFEL
+    expected_skew = skew(x, bias=False)  # tsfresh (pandas) skewness
     expected_kurt = kurtosis(x, fisher=True, bias=False)
-    
-    # Wait, tsfast uses (m3/n) where m3 is sum of (x-mean)^3.
-    # So (m3/n) is exactly np.mean((x-m)**3).
     assert np.allclose(res['skewness'], expected_skew, atol=1e-5)
     assert np.allclose(res["kurtosis"], expected_kurt, atol=1e-5)
 
@@ -122,8 +106,8 @@ def test_expanding_c3():
     extractor = ExpandingExtractor(features, 1)
     
     x = np.array([1, 2, 3, 4, 5, 6], dtype=np.float32)
-    data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
-    res = extractor.update(data).to_pandas().iloc[0]
+    data = np.stack([np.asarray(x, dtype=np.float32)])
+    res = frame(extractor, extractor.update(data)).iloc[0]
     
     # c3-1: N=6. lags are at t=2, 3, 4, 5 (since we need t-2*lag >= 0)
     # t=2: x[2]*x[1]*x[0] = 3*2*1 = 6
@@ -153,15 +137,15 @@ def test_expanding_duplicate_features():
 
     # Update 1
     x1 = np.array([1.0, 5.0, 3.0], dtype=np.float32)
-    data1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
+    data1 = np.stack([x1])
 
-    result1 = extractor.update(data1).to_pandas()
+    result1 = frame(extractor, extractor.update(data1))
 
     # Update 2
     x2 = np.array([4.0, 5.0, 1.0, 2.0], dtype=np.float32)
-    data2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
+    data2 = np.stack([x2])
 
-    result2 = extractor.update(data2).to_pandas()
+    result2 = frame(extractor, extractor.update(data2))
 
     full_series = np.concatenate([x1, x2])
 
@@ -181,7 +165,6 @@ def test_expanding_duplicate_features():
     assert result2.iloc[0].iloc[2] == (1.0 if has_duplicate_min(series2) else 0.0)
 
 def test_reoccurring_ratios_expanding():
-    import pyarrow as pa
     import tsfast
     import numpy as np
 
@@ -194,9 +177,9 @@ def test_reoccurring_ratios_expanding():
     ]
 
     extractor = tsfast.ExpandingExtractor(features, 1)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    result_batch = extractor.update(batch)
-    results = result_batch.to_pandas()
+    batch = np.stack([x])
+    out = extractor.update(batch)
+    results = frame(extractor, out)
 
     # window 0 (idx 2): [1, 2, 2]
     # len=3, values={1,2} (2 unique), reoccur_dp=2 (two 2s), reoccur_val=1 (2)
@@ -207,13 +190,12 @@ def test_reoccurring_ratios_expanding():
 def test_ecdf_pk_centroid_expanding():
     import tsfel
     import tsfast
-    import pyarrow as pa
     x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0], dtype=np.float32)
     features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50", "negative_turning", "positive_turning"]
     extractor = tsfast.ExpandingExtractor(features, n_cols=1)
 
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    results = extractor.update(batch).to_pandas().iloc[-1].values
+    batch = np.stack([x])
+    results = frame(extractor, extractor.update(batch)).iloc[-1].values
 
     tsfel_neg = tsfel.feature_extraction.features.negative_turning(x)
     tsfel_pos = tsfel.feature_extraction.features.positive_turning(x)
@@ -232,12 +214,12 @@ def test_ecdf_pk_centroid_expanding():
     assert np.allclose(results[6], tsfel_pos)
 
 def test_expanding_invalid_type():
-    # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
+    # Verify that passing non-float arrays safely raises a TypeError instead of crashing
     x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
     features = ["mean", "std_dev"]
     extractor = ExpandingExtractor(features, 1)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    with pytest.raises(TypeError, match="Expected Float32Array"):
+    batch = np.stack([x])
+    with pytest.raises(TypeError, match="expected a float32 or float64 numpy array"):
         extractor.update(batch)
 
 def test_median_diff_expanding():
@@ -245,26 +227,25 @@ def test_median_diff_expanding():
     chunk1 = data[:100]
     chunk2 = data[100:]
 
-    batch1 = pa.RecordBatch.from_arrays([pa.array(chunk1)], names=["col"])
-    batch2 = pa.RecordBatch.from_arrays([pa.array(chunk2)], names=["col"])
+    batch1 = np.stack([chunk1])
+    batch2 = np.stack([chunk2])
 
     features = ["median_diff", "median_abs_diff"]
     import tsfast
     extractor = tsfast.ExpandingExtractor(features, 1)
 
     import tsfel
-    res1 = extractor.update(batch1).to_pandas().iloc[0].values
+    res1 = frame(extractor, extractor.update(batch1)).iloc[0].values
     assert np.allclose(res1[0], tsfel.feature_extraction.features.median_diff(chunk1))
     assert np.allclose(res1[1], tsfel.feature_extraction.features.median_abs_diff(chunk1))
 
-    res2 = extractor.update(batch2).to_pandas().iloc[0].values
+    res2 = frame(extractor, extractor.update(batch2)).iloc[0].values
     assert np.allclose(res2[0], tsfel.feature_extraction.features.median_diff(data))
     assert np.allclose(res2[1], tsfel.feature_extraction.features.median_abs_diff(data))
 
 def test_expanding_energy_ratio_by_chunks():
     import tsfast
     import numpy as np
-    import pyarrow as pa
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], dtype=np.float32)
     features = [
         "energy_ratio_by_chunks_num_segments_3__segment_focus_0",
@@ -272,14 +253,13 @@ def test_expanding_energy_ratio_by_chunks():
         "energy_ratio_by_chunks_num_segments_3__segment_focus_2"
     ]
     extractor = tsfast.ExpandingExtractor(features, n_cols=1)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    df = extractor.update(batch).to_pandas()
+    batch = np.stack([x])
+    df = frame(extractor, extractor.update(batch))
     res = df.iloc[-1].values
     assert np.isclose(res[0], (1**2 + 2**2 + 3**2) / sum([i**2 for i in range(1, 10)]))
 
 def test_expanding_permutation_entropy_and_value_count():
     import numpy as np
-    import pyarrow as pa
     import math
     import tsfast
     data = np.array([4.0, 7.0, 9.0, 10.0, 6.0, 11.0, 3.0, 3.0, np.nan, 3.0, np.nan], dtype=np.float32)
@@ -292,7 +272,7 @@ def test_expanding_permutation_entropy_and_value_count():
     from tsfresh.feature_extraction.feature_calculators import permutation_entropy, value_count
 
     for i in range(len(data)):
-        batch = pa.RecordBatch.from_arrays([pa.array([data[i]], type=pa.float32())], names=["col0"])
+        batch = np.stack([[data[i]]])
         res = extractor.update(batch)
 
         window = data[:i+1]
@@ -300,15 +280,14 @@ def test_expanding_permutation_entropy_and_value_count():
         vc = value_count(window, 3.0)
 
         if math.isnan(pe):
-            assert math.isnan(res[0][0].as_py())
+            assert math.isnan(res[0, 0])
         else:
-            np.testing.assert_allclose(res[0][0].as_py(), pe, rtol=1e-5)
-        assert res[1][0].as_py() == vc
+            np.testing.assert_allclose(res[0, 0], pe, rtol=1e-5)
+        assert res[0, 1] == vc
 
 
 def test_expanding_fractal_dimensions():
     import numpy as np
-    import pyarrow as pa
     from tsfast._tsfast import ExpandingExtractor
     from tsfel.feature_extraction.features import higuchi_fractal_dimension
     import warnings
@@ -321,11 +300,11 @@ def test_expanding_fractal_dimensions():
     x1 = np.random.randn(150).astype(np.float32)
     x2 = np.random.randn(100).astype(np.float32)
 
-    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
-    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
+    b1 = np.stack([x1])
+    b2 = np.stack([x2])
 
-    res1 = extractor.update(b1).to_pandas()
-    res2 = extractor.update(b2).to_pandas()
+    res1 = frame(extractor, extractor.update(b1))
+    res2 = frame(extractor, extractor.update(b2))
 
     # After b1, length is 150
     h1 = higuchi_fractal_dimension(x1)
@@ -355,6 +334,17 @@ def test_shape_features_expanding(case):
     seen = np.array([], dtype=np.float32)
     for chunk in np.array_split(x, 3):
         seen = np.concatenate([seen, chunk])
-        batch = pa.RecordBatch.from_arrays([pa.array(chunk)], names=["c1"])
-        row = extractor.update(batch).to_pandas().iloc[-1].values
+        batch = np.stack([chunk])
+        row = frame(extractor, extractor.update(batch)).iloc[-1].values
         assert np.allclose(row, shape_features_reference(seen), atol=1e-5, equal_nan=True)
+
+
+def test_expanding_output_shape_and_names():
+    features = ["mean", "max_value"]
+    extractor = ExpandingExtractor(features, 2)
+    assert extractor.feature_names == features
+    out = extractor.update(np.array([[1.0, 2.0], [10.0, 20.0]], dtype=np.float32))
+    assert out.dtype == np.float32 and out.shape == (2, 2)
+    np.testing.assert_allclose(out, [[1.5, 2.0], [15.0, 20.0]])
+    # float64 is accepted and converted; features cover everything seen so far.
+    np.testing.assert_allclose(extractor.update(np.array([[3.0], [30.0]])), [[2.0, 3.0], [20.0, 30.0]])

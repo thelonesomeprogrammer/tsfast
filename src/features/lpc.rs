@@ -1,16 +1,24 @@
 use std::f32::consts::PI;
 
-pub fn compute_lpcc(fft_autocorr: &[f32], values_len: usize) -> Vec<f32> {
+pub fn compute_lpcc(values: &[f32]) -> Vec<f32> {
     let order = 11;
     let n_coeff = 12;
 
-    if fft_autocorr.is_empty() || values_len == 0 {
+    if values.is_empty() {
         return vec![0.0; n_coeff];
     }
 
+    // Uncentred autocorrelation (as TSFEL), not the mean-centred FFT one other
+    // features share: that would make LPCC depend on which features are requested.
     let mut r = vec![0.0f32; order + 1];
-    let nx = std::cmp::min(order + 1, fft_autocorr.len());
-    r[..nx].copy_from_slice(&fft_autocorr[..nx]);
+    for (lag, r_lag) in r.iter_mut().enumerate().take(values.len()) {
+        let s: f64 = values[lag..]
+            .iter()
+            .zip(values)
+            .map(|(&a, &b)| a as f64 * b as f64)
+            .sum();
+        *r_lag = s as f32;
+    }
 
     let mut a = vec![0.0f32; order + 1];
     let mut e = r[0];

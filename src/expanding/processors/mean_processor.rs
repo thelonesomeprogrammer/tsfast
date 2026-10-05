@@ -15,8 +15,8 @@ impl MeanProcessor {
         full_series: &[f32],
         n: f32,
         mean: f32,
-        state: &ColumnState,
-    ) -> (MeanMetrics, f32) {
+        _state: &ColumnState,
+    ) -> MeanMetrics {
         let mut mad_sum = 0.0;
         let mut count_a = 0;
         let mut count_b = 0;
@@ -24,13 +24,8 @@ impl MeanProcessor {
         let mut current_strike_a = 0;
         let mut max_strike_b = 0;
         let mut current_strike_b = 0;
-        let mut entropy = 0.0;
 
-        if compute.intersects(Compute::MAD | Compute::ENTROPY | Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
-            let range = state.max_value - state.min_value;
-            let bins = 10;
-            let mut counts: [usize; 10] = [0; 10];
-
+        if compute.intersects(Compute::MAD | Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
             let mean_vec = f32x4::splat(mean);
             let mut mad_sum_vec = f32x4::splat(0.0);
 
@@ -48,10 +43,6 @@ impl MeanProcessor {
                 }
 
                 for &v in chunk {
-                    if compute.contains(Compute::ENTROPY) && range > 1e-9 {
-                        let b = (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
-                        counts[b.min(bins - 1)] += 1;
-                    }
 
                     if compute.intersects(Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
                         if v > mean {
@@ -76,10 +67,6 @@ impl MeanProcessor {
                 if compute.contains(Compute::MAD) {
                     mad_sum += (v - mean).abs();
                 }
-                if compute.contains(Compute::ENTROPY) && range > 1e-9 {
-                    let b = (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
-                    counts[b.min(bins - 1)] += 1;
-                }
                 if compute.contains(Compute::CNT_ABOVE_MEAN) && v > mean {
                     count_a += 1;
                 }
@@ -102,23 +89,14 @@ impl MeanProcessor {
                 }
             }
             mad_sum /= n;
-
-            if compute.contains(Compute::ENTROPY) && range > 1e-9 {
-                for &c in &counts {
-                    if c > 0 {
-                        let p = c as f32 / n;
-                        entropy -= p * p.ln();
-                    }
-                }
-            }
         }
 
-        (MeanMetrics {
+        MeanMetrics {
             mad_sum,
             count_a,
             count_b,
             max_strike_a,
             max_strike_b,
-        }, entropy)
+        }
     }
 }

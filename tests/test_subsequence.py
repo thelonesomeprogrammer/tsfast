@@ -1,5 +1,4 @@
 import tsfast
-import pyarrow as pa
 import numpy as np
 
 def test_subsequence_features():
@@ -31,9 +30,9 @@ def test_subsequence_features():
     ]
 
     extractor = tsfast.Extractor(features)
-    batch = pa.RecordBatch.from_arrays([pa.array(x.astype(np.float32))], names=['c1'])
-    result_batch = extractor.process_2d_floats(batch)
-    results = result_batch.to_pandas().iloc[0].values
+    batch = np.stack([x.astype(np.float32)])
+    out = extractor.process_2d_floats(batch)
+    results = out[0]
 
     assert np.allclose(results[0], mp_min, atol=1e-4)
     assert np.allclose(results[1], mp_max, atol=1e-4)

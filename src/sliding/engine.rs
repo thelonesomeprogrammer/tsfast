@@ -20,7 +20,6 @@ pub(crate) struct SlidingEngine<'a> {
     pub(crate) unique_tra_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn realfft::RealToComplex<f32>>>,
-    pub(crate) fft_size: usize,
 }
 
 impl<'a> SlidingEngine<'a> {
@@ -167,6 +166,11 @@ impl<'a> SlidingEngine<'a> {
         // update_incremental; only rebuild them on a full recompute.
         if !is_incremental {
             QueueProcessor::reset_state(state, values.len());
+        }
+        // The SIMD/remainder passes skip stats on incremental windows, and a
+        // maximum can't be updated as values leave, so rescan the window.
+        if is_incremental && self.compute.contains(crate::types::Compute::ABS_MAX) {
+            state.abs_max = values.iter().fold(0.0f32, |m, v| m.max(v.abs()));
         }
 
         if !is_incremental
@@ -343,7 +347,6 @@ impl<'a> SlidingEngine<'a> {
             n,
             base_metrics.mean,
             base_metrics.m2,
-            self.fft_size,
             &self.r2c,
             state,
         )?;

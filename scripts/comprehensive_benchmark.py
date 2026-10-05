@@ -1,7 +1,6 @@
 import tsfast
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import time
 from tsfresh.feature_extraction import extract_features
 import tsfel
@@ -92,11 +91,8 @@ def benchmark_static(data, features):
     n_samples, n_points = data.shape
     extractor = tsfast.Extractor(features)
     
-    # Pre-build RecordBatch with 1 column per series
-    batch = pa.RecordBatch.from_arrays(
-        [pa.array(data[i]) for i in range(n_samples)],
-        names=[f"s_{i}" for i in range(n_samples)]
-    )
+    # One series per row
+    batch = np.ascontiguousarray(data, dtype=np.float32)
     
     # Warmup
     _ = extractor.process_2d_floats(batch)
@@ -105,7 +101,7 @@ def benchmark_static(data, features):
     res = extractor.process_2d_floats(batch)
     tsfast_time = time.perf_counter() - start
     
-    tsfast_res = np.column_stack([res.column(f).to_numpy() for f in features])
+    tsfast_res = res  # (n_samples, n_features), columns in `features` order
 
     tsfresh_features = [f for f in features if FEATURE_MAPPING[f]["tsfresh"]]
     tsfresh_params = get_tsfresh_params(tsfresh_features)
@@ -138,10 +134,10 @@ def benchmark_expanding(data, features):
     extractor = tsfast.ExpandingExtractor(features, n_samples)
     for j in range(0, n_points, chunk_size):
         chunk = data[:, j:j+chunk_size]
-        batch = pa.RecordBatch.from_arrays([pa.array(chunk[i]) for i in range(n_samples)], names=[f"c{i}" for i in range(n_samples)])
+        batch = np.ascontiguousarray(chunk, dtype=np.float32)
         res = extractor.update(batch)
     tsfast_time = time.time() - start
-    tsfast_final = np.array([[res.column(f)[i].as_py() for f in features] for i in range(n_samples)])
+    tsfast_final = res
 
     tsfresh_features = [f for f in features if FEATURE_MAPPING[f]["tsfresh"]]
     tsfresh_params = get_tsfresh_params(tsfresh_features)
@@ -181,7 +177,7 @@ def benchmark_sliding(data, features, window_size):
     res = None
     for j in range(0, n_points, chunk_size):
         chunk = data[:, j:j+chunk_size]
-        batch = pa.RecordBatch.from_arrays([pa.array(chunk[i]) for i in range(n_samples)], names=[f"c{i}" for i in range(n_samples)])
+        batch = np.ascontiguousarray(chunk, dtype=np.float32)
         res = extractor.update(batch)
     tsfast_time = time.time() - start
     
@@ -190,11 +186,11 @@ def benchmark_sliding(data, features, window_size):
     # The subsequent updates come every stride.
     
     # If res is None or empty (e.g. n_points < window_size), handle it
-    if res is None or res.num_rows == 0:
+    if res is None or res.shape[1] == 0:
         tsfast_final = np.zeros((n_samples, len(features)))
     else:
-        # res has n_samples rows, one per column, representing the LAST window.
-        tsfast_final = np.array([[res.column(f)[i].as_py() for f in features] for i in range(n_samples)])
+        # res is (n_samples, n_windows, n_features); keep each series' LAST window.
+        tsfast_final = res[:, -1, :]
 
     tsfresh_features = [f for f in features if FEATURE_MAPPING[f]["tsfresh"]]
     tsfresh_params = get_tsfresh_params(tsfresh_features)

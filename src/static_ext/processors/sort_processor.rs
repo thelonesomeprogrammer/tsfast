@@ -11,7 +11,7 @@ impl SortProcessor {
     pub fn finalize(
         compute: Compute,
         values: &[f32],
-        n: f32,
+        _n: f32,
         state: &mut ColumnState,
     ) -> SortMetrics {
         let mut first_max_idx = 0;
@@ -20,7 +20,6 @@ impl SortProcessor {
         let mut last_min_idx = 0;
         let mut median = 0.0;
         let mut iqr = 0.0;
-        let mut entropy = 0.0;
         let mut median_abs_dev = 0.0;
 
         if compute.contains(Compute::NEEDS_SORT) {
@@ -49,7 +48,7 @@ impl SortProcessor {
                     }
                 }
             }
-            if compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::ENTROPY | Compute::MEDIAN_ABS_DEV) {
+            if compute.intersects(Compute::MEDIAN | Compute::IQR | Compute::MEDIAN_ABS_DEV) {
                 let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
                 copy.clear();
                 copy.extend_from_slice(values);
@@ -128,24 +127,6 @@ impl SortProcessor {
                     let q75 = get_percentile(q75_idx, &mut copy);
                     iqr = q75 - q25;
                 }
-                if compute.contains(Compute::ENTROPY) {
-                    let range = state.max_value - state.min_value;
-                    if range > 1e-9 {
-                        let bins = 10;
-                        let mut counts = [0usize; 10];
-                        for &v in values {
-                            let b =
-                                (((v - state.min_value) / range) * (bins as f32 - 1.0)) as usize;
-                            counts[b.min(bins - 1)] += 1;
-                        }
-                        for &c in &counts {
-                            if c > 0 {
-                                let p = c as f32 / n;
-                                entropy -= p * p.ln();
-                            }
-                        }
-                    }
-                }
 
                 if compute.contains(Compute::MEDIAN_ABS_DEV) {
                     let med_vec = f32x4::splat(median);
@@ -203,7 +184,6 @@ impl SortProcessor {
             median,
             median_abs_dev,
             iqr,
-            entropy,
         }
     }
 }

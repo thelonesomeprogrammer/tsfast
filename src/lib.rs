@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 
 pub mod common;
 pub mod expanding;
+mod numpy_io;
 pub mod sliding;
 pub mod static_ext;
 pub mod types;
@@ -21,3 +22,4 @@ fn _tsfast(m: &Bound<'_, PyModule>) -> PyResult<()> {
 pub mod metrics;
 pub mod context;
 pub mod features;
+pub mod spectral;

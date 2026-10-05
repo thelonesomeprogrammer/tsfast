@@ -1,7 +1,6 @@
 import argparse
 import time
 import numpy as np
-import pyarrow as pa
 import tsfast
 
 DEFAULT_FEATURES = [
@@ -31,25 +30,18 @@ def run_synthetic_benchmark(
     # Generate synthetic series
     np.random.seed(42)
     data = np.random.randn(n_cols, total_len).astype(np.float32)
-    col_names = [f"col_{i}" for i in range(n_cols)]
 
     exp_ext = tsfast.ExpandingExtractor(DEFAULT_FEATURES, n_cols)
 
     # Warmup
     if warmup:
-        warmup_batch = pa.RecordBatch.from_arrays(
-            [pa.array(data[i, :50]) for i in range(n_cols)],
-            names=col_names
-        )
+        warmup_batch = np.ascontiguousarray(data[:, :50])
         _ = exp_ext.update(warmup_batch)
         # Re-initialize after warmup
         exp_ext = tsfast.ExpandingExtractor(DEFAULT_FEATURES, n_cols)
 
     # Initial batch
-    batch_initial = pa.RecordBatch.from_arrays(
-        [pa.array(data[i, :initial_size]) for i in range(n_cols)],
-        names=col_names
-    )
+    batch_initial = np.ascontiguousarray(data[:, :initial_size])
     t0 = time.perf_counter()
     _ = exp_ext.update(batch_initial)
     initial_ms = (time.perf_counter() - t0) * 1000
@@ -59,10 +51,7 @@ def run_synthetic_benchmark(
     timings = []
     current_size = initial_size
     while current_size + increment_size <= total_len:
-        batch_inc = pa.RecordBatch.from_arrays(
-            [pa.array(data[i, current_size:current_size + increment_size]) for i in range(n_cols)],
-            names=col_names
-        )
+        batch_inc = np.ascontiguousarray(data[:, current_size:current_size + increment_size])
         t0 = time.perf_counter()
         _ = exp_ext.update(batch_inc)
         timings.append((time.perf_counter() - t0) * 1000)

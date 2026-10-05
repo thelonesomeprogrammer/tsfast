@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo check:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run python scripts/coach_benchmark.py:*)",
+      "Bash(uv sync)"
+    ],
+    "deny": [
+      "Bash(maturin develop:*)",
+      "Bash(uv run maturin develop:*)",
+      "Bash(pip install:*)",
+      "Bash(uv pip install:*)"
+    ]
+  }
+}

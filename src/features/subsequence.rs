@@ -140,7 +140,8 @@ fn stomp_matrix_profile(x: &[f32], m: usize) -> Vec<f32> {
     }
 
     let mut profile = vec![f32::INFINITY; l];
-    let exclusion_zone = m / 2;
+    // stumpy / matrixprofile: neighbours within ceil(m / 4) are trivial matches.
+    let exclusion_zone = m.div_ceil(4);
 
     for i in 0..l {
         for j in 0..l {

@@ -1,7 +1,6 @@
 import pytest
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import tsfast
 import tsfresh
 from tsfresh.feature_extraction import extract_features
@@ -33,11 +32,8 @@ def benchmark_data_50():
     return np.random.randn(n_samples, n_points).astype(np.float32)
 
 @pytest.fixture(scope="module")
-def tsfast_record_batch(benchmark_data_50):
-    n_samples, _ = benchmark_data_50.shape
-    arrays = [pa.array(benchmark_data_50[i]) for i in range(n_samples)]
-    names = [f"s_{i}" for i in range(n_samples)]
-    return pa.RecordBatch.from_arrays(arrays, names=names)
+def tsfast_input(benchmark_data_50):
+    return benchmark_data_50  # (n_samples, n_points): one series per row
 
 @pytest.fixture(scope="module")
 def tsfresh_dataframe(benchmark_data_50):
@@ -56,11 +52,11 @@ def tsfel_cfg():
     return filtered_cfg
 
 @pytest.mark.benchmark(group="cross_library_comparison")
-def test_bench_compare_tsfast(benchmark, tsfast_record_batch):
+def test_bench_compare_tsfast(benchmark, tsfast_input):
     extractor = tsfast.Extractor(COMMON_FEATURES_TSFAST)
     # Warmup
-    _ = extractor.process_2d_floats(tsfast_record_batch)
-    benchmark(extractor.process_2d_floats, tsfast_record_batch)
+    _ = extractor.process_2d_floats(tsfast_input)
+    benchmark(extractor.process_2d_floats, tsfast_input)
 
 @pytest.mark.benchmark(group="cross_library_comparison")
 def test_bench_compare_tsfresh(benchmark, tsfresh_dataframe):

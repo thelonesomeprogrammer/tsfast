@@ -22,7 +22,6 @@ pub fn eval_energy(
     let _last_min_idx = context.last_min_idx;
     let _median = context.median;
     let _iqr = context.iqr;
-    let _entropy = context.entropy;
     let _mad_sum = context.mad_sum;
     let _count_a = context.count_a;
     let _count_b = context.count_b;
@@ -94,21 +93,27 @@ pub fn eval_energy(
                         f32::NAN
                     }
                 },
+                // TSFEL: sum(|X|^2 over [argmin|f - 0.6|, argmin|f - 2.5|)) / sum(|X|^2).
                 Feature::HumanRangeEnergy(fs_bits) => {
-                    if !spectrum.is_empty() {
-                        let fs = f32::from_bits(*fs_bits);
-                        let n_fft = (spectrum.len() - 1) * 2;
-                        let freq_step = fs / n_fft as f32;
-                        let start_idx = (0.6 / freq_step).ceil() as usize;
-                        let end_idx = (2.5 / freq_step).floor() as usize;
+                    if !spectrum.is_empty() && context.dft_len > 0 {
+                        let fs = f32::from_bits(*fs_bits) as f64;
+                        let df = fs / context.dft_len as f64;
+                        // Nearest bin; np.argmin keeps the lower bin on a tie.
+                        let nearest = |hz: f64| {
+                            let pos = hz / df;
+                            let lo = pos.floor();
+                            let k = if pos - lo > 0.5 { lo + 1.0 } else { lo };
+                            (k as usize).min(spectrum.len() - 1)
+                        };
+                        let (start_idx, end_idx) = (nearest(0.6), nearest(2.5));
 
                         let total_energy: f32 = spectrum.iter().map(|&s| s * s).sum();
                         if total_energy > 0.0 {
                             let range_energy: f32 = spectrum
+                                .get(start_idx..end_idx)
+                                .unwrap_or(&[])
                                 .iter()
-                                .enumerate()
-                                .filter(|(i, _)| *i >= start_idx && *i <= end_idx)
-                                .map(|(_, &s)| s * s)
+                                .map(|&s| s * s)
                                 .sum();
                             range_energy / total_energy
                         } else {

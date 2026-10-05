@@ -22,7 +22,6 @@ pub fn eval_changes(
     let _last_min_idx = context.last_min_idx;
     let _median = context.median;
     let _iqr = context.iqr;
-    let _entropy = context.entropy;
     let _mad_sum = context.mad_sum;
     let _count_a = context.count_a;
     let _count_b = context.count_b;
@@ -145,13 +144,8 @@ pub fn eval_changes(
                                         0.0
                                     }
                                 } else {
-                                    // PValue
                                     let t = slope / (ss_res / (n - 2.0) / s_xx).sqrt();
-                                    // p-value of a two-sided t-test.
-                                    // Approximate using incomplete beta function or imported statistically.
-                                    // Since we don't have a full stats library, tsfast generally returns 0.0 for p-value if it's too complex or we implement a basic approximation if necessary. Wait, tsfast doesn't use scipy natively. Let's provide a basic approximation or leave 0.0 if that's acceptable in Rust? No, we must compute pvalue.
-                                    // Actually, standard tsfast just calculates the exact value if asked, but looking at AggLinearTrend... it returns 0.0 for PValue.
-                                    0.0 // Follow AggLinearTrend which also seems to return 0.0 for pvalue or we can check its implementation
+                                    two_sided_t_pvalue(t as f64, n as f64 - 2.0) as f32
                                 }
                             } else {
                                 0.0
@@ -160,73 +154,30 @@ pub fn eval_changes(
                     }
                 }
                 Feature::AbsSumChange => mac_sum as f32,
-                Feature::Auc => state.auc_sum as f32,
+                // TSFEL: trapezoid area of |x| with t = i / fs (fs = 100).
+                Feature::Auc => {
+                    let area: f32 = values.windows(2).map(|w| (w[0] + w[1]).abs()).sum();
+                    0.5 * area / 100.0
+                }
                 Feature::AggLinearTrend(attr, chunk_len, func)
                     if values.len() >= *chunk_len as usize =>
                 {
                     let cl = *chunk_len as usize;
                     let mut agg_series = std::mem::take(&mut state.agg_linear_trend_buffer);
                     agg_series.clear();
-                    for chunk in values.chunks_exact(cl) {
-                        let mut i = 0;
+                    // tsfresh aggregates with pandas over ceil(n / chunk_len) chunks,
+                    // so the last chunk may be partial and var is ddof=1.
+                    for chunk in values.chunks(cl) {
+                        let len = chunk.len() as f32;
+                        let mean = chunk.iter().sum::<f32>() / len;
                         let val = match func {
-                            crate::types::AggFunc::Max => {
-                                use std::simd::num::SimdFloat;
-                                let mut max_vec = std::simd::f32x4::splat(f32::NEG_INFINITY);
-                                while i + 3 < cl {
-                                    max_vec = max_vec.simd_max(std::simd::f32x4::from_slice(&chunk[i..i+4]));
-                                    i += 4;
-                                }
-                                let mut m = max_vec.reduce_max();
-                                for &v in &chunk[i..] { m = m.max(v); }
-                                m
+                            crate::types::AggFunc::Max => chunk.iter().copied().fold(f32::NEG_INFINITY, f32::max),
+                            crate::types::AggFunc::Min => chunk.iter().copied().fold(f32::INFINITY, f32::min),
+                            crate::types::AggFunc::Mean => mean,
+                            crate::types::AggFunc::Var if chunk.len() > 1 => {
+                                chunk.iter().map(|&v| (v - mean).powi(2)).sum::<f32>() / (len - 1.0)
                             }
-                            crate::types::AggFunc::Min => {
-                                use std::simd::num::SimdFloat;
-                                let mut min_vec = std::simd::f32x4::splat(f32::INFINITY);
-                                while i + 3 < cl {
-                                    min_vec = min_vec.simd_min(std::simd::f32x4::from_slice(&chunk[i..i+4]));
-                                    i += 4;
-                                }
-                                let mut m = min_vec.reduce_min();
-                                for &v in &chunk[i..] { m = m.min(v); }
-                                m
-                            }
-                            crate::types::AggFunc::Mean => {
-                                use std::simd::num::SimdFloat;
-                                let mut sum_vec = std::simd::f32x4::splat(0.0);
-                                while i + 3 < cl {
-                                    sum_vec += std::simd::f32x4::from_slice(&chunk[i..i+4]);
-                                    i += 4;
-                                }
-                                let mut s = sum_vec.reduce_sum();
-                                for &v in &chunk[i..] { s += v; }
-                                s / cl as f32
-                            }
-                            crate::types::AggFunc::Var => {
-                                use std::simd::num::SimdFloat;
-                                let mut sum_vec = std::simd::f32x4::splat(0.0);
-                                let mut i_mean = 0;
-                                while i_mean + 3 < cl {
-                                    sum_vec += std::simd::f32x4::from_slice(&chunk[i_mean..i_mean+4]);
-                                    i_mean += 4;
-                                }
-                                let mut s = sum_vec.reduce_sum();
-                                for &v in &chunk[i_mean..] { s += v; }
-                                let m = s / cl as f32;
-
-                                let mut var_vec = std::simd::f32x4::splat(0.0);
-                                let m_vec = std::simd::f32x4::splat(m);
-                                while i + 3 < cl {
-                                    let v = std::simd::f32x4::from_slice(&chunk[i..i+4]);
-                                    let diff = v - m_vec;
-                                    var_vec += diff * diff;
-                                    i += 4;
-                                }
-                                let mut var_sum = var_vec.reduce_sum();
-                                for &v in &chunk[i..] { var_sum += (v - m).powi(2); }
-                                var_sum / cl as f32
-                            }
+                            crate::types::AggFunc::Var => f32::NAN,
                         };
                         agg_series.push(val);
                     }
@@ -272,7 +223,21 @@ pub fn eval_changes(
                                     }
                                 }
                             }
-                            _ => 0.0,
+                            crate::types::AggAttr::PValue => {
+                                let m_y = m_sum_y / m_n;
+                                let ss_res: f32 = agg_series
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(i, &y)| (y - intercept - slope * i as f32).powi(2))
+                                    .sum();
+                                let ss_tot: f32 = agg_series.iter().map(|&y| (y - m_y).powi(2)).sum();
+                                if m_n > 2.0 && s_xx.abs() > 1e-9 && ss_tot > 1e-12 {
+                                    let t = slope / (ss_res / (m_n - 2.0) / s_xx).sqrt();
+                                    two_sided_t_pvalue(t as f64, m_n as f64 - 2.0) as f32
+                                } else {
+                                    1.0
+                                }
+                            }
                         };
                         state.agg_linear_trend_buffer = agg_series;
                         res
@@ -288,4 +253,16 @@ pub fn eval_changes(
         _ => return None,
     };
     Some(res)
+}
+
+/// scipy.stats.linregress p-value: two-sided Student-t test of slope == 0.
+fn two_sided_t_pvalue(t: f64, df: f64) -> f64 {
+    use statrs::distribution::{ContinuousCDF, StudentsT};
+    if !t.is_finite() {
+        return if t.is_nan() { f64::NAN } else { 0.0 };
+    }
+    match StudentsT::new(0.0, 1.0, df) {
+        Ok(dist) => 2.0 * dist.sf(t.abs()),
+        Err(_) => f64::NAN,
+    }
 }

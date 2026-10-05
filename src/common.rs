@@ -8,6 +8,8 @@ pub const LANES: usize = 4;
 #[derive(Clone, Debug)]
 pub struct SlidingDFT {
     pub n: usize,
+    /// Updates since the bins were last computed by a real FFT.
+    pub updates: usize,
     pub bins: Vec<Complex<f32>>,
     pub twiddles: Vec<Complex<f32>>,
 }
@@ -23,6 +25,7 @@ impl SlidingDFT {
         }
         Self {
             n,
+            updates: 0,
             bins: vec![Complex::new(0.0, 0.0); n_bins],
             twiddles,
         }
@@ -30,6 +33,7 @@ impl SlidingDFT {
 
     #[inline(always)]
     pub fn update(&mut self, old_val: f32, new_val: f32) {
+        self.updates += 1;
         let diff = new_val - old_val;
         for (k, twiddle) in self.twiddles.iter().enumerate() {
             // S_k(n+1) = twiddle_k * (S_k(n) + new - old)
@@ -55,9 +59,7 @@ pub struct ColumnState {
     pub mac_sum: f32,
     pub mc_sum: f32,
     pub sum_sq_diff: f32,
-    pub sum_prod: f32,
     pub sum_ix: f32,
-    pub auc_sum: f32,
     pub t_energy: f32,
     pub mac_sum_vec: f32x4,
     pub mc_sum_vec: f32x4,
@@ -69,11 +71,8 @@ pub struct ColumnState {
     pub sum_quads_vec: f32x4,
     pub min_vec: f32x4,
     pub max_vec: f32x4,
-    pub abs_sum_vec: f32x4,
     pub abs_max_vec: f32x4,
     pub sum_sq_diff_vec: f32x4,
-    pub sum_prod_vec: f32x4,
-    pub auc_sum_vec: f32x4,
     pub sum_ix_vec: f32x4,
     pub t_energy_vec: f32x4,
 
@@ -89,8 +88,6 @@ pub struct ColumnState {
     pub tra_sums: Vec<f32>,
     pub tra_sums_vec: Vec<f32x4>,
     pub prefix_sums: Vec<f32>,
-    pub mass_pointer: usize,
-    pub mass_cum_sum: f64,
     pub prev_last: f32,
     pub prev_val: f32,
     pub prev_prev_val: f32,
@@ -99,7 +96,6 @@ pub struct ColumnState {
     pub last_max_idx: usize,
     pub first_min_idx: usize,
     pub last_min_idx: usize,
-    pub abs_sum: f32,
     pub benford_counts: [usize; 9],
     pub min_queue: Vec<(usize, f32)>,
     pub min_q_head: usize,
@@ -119,20 +115,12 @@ pub struct ColumnState {
     pub cwt_final_energy: Vec<f32>,
     pub cwt_final_sum_abs: Vec<f32>,
     pub cwt_final_clnc: Vec<f32>,
-    pub cwt_kernels: Vec<Vec<f32>>,
-    pub mfcc_filter_banks: Vec<Vec<f32>>,
-    pub mfcc_dct_matrix: Vec<Vec<f32>>,
     pub value_counts: rustc_hash::FxHashMap<u32, u32>,
     pub reoccurring_datapoints: u32,
     pub reoccurring_values: u32,
     pub ar_coeffs: rustc_hash::FxHashMap<u16, Vec<f32>>,
-    pub ar_xtx: rustc_hash::FxHashMap<u16, ndarray::Array2<f64>>,
-    pub ar_xty: rustc_hash::FxHashMap<u16, ndarray::Array1<f64>>,
     pub friedrich_coeffs: rustc_hash::FxHashMap<(u8, u32), Vec<f32>>,
     pub max_langevin_fixed_point_cache: rustc_hash::FxHashMap<(u8, u32), f32>,
-    pub last_dynamic_n: usize,
-    pub last_dynamic_ptr: usize,
-    pub dynamic_val_cache: Vec<f32>,
 
     // Incremental moments (Welford's or similar)
     pub n: f32,
@@ -141,7 +129,6 @@ pub struct ColumnState {
     pub m3: f32,
     pub m4: f32,
     pub last_fft_n: usize,
-    pub last_spectrum: Vec<f32>,
     pub last_fft_complex: Vec<num_complex::Complex<f32>>,
     pub fft_in_buffer: Vec<f32>,
     pub fft_out_buffer: Vec<num_complex::Complex<f32>>,
@@ -149,11 +136,7 @@ pub struct ColumnState {
     pub sliding_dft: Option<SlidingDFT>,
     pub cwt_peaks: u16,
     pub welch_density: Vec<f32>,
-    pub welch_planner: Option<std::sync::Arc<std::sync::Mutex<realfft::RealFftPlanner<f32>>>>,
-    pub cwt_wavelets: rustc_hash::FxHashMap<u16, Vec<f32>>,
     pub spectrum_buffer: Vec<f32>,
-    pub adf_cache_n: usize,
-    pub adf_cache_ptr: usize,
     pub adf_test_stat: f32,
     pub adf_p_value: f32,
     pub adf_used_lag: f32,
@@ -187,6 +170,18 @@ fn is_smooth(mut n: usize) -> bool {
 }
 
 impl ColumnState {
+    /// Drop results cached while evaluating the previous window. Values or
+    /// buffer addresses can't tell windows apart: the sliding engine reuses its
+    /// history buffer in place, so every window has the same pointer and length.
+    pub fn reset_window_caches(&mut self) {
+        self.ar_coeffs.clear();
+        self.friedrich_coeffs.clear();
+        self.max_langevin_fixed_point_cache.clear();
+        self.adf_test_stat = f32::NAN;
+        self.adf_p_value = f32::NAN;
+        self.adf_used_lag = f32::NAN;
+    }
+
     pub fn new(
         unique_paa_totals: &[u16],
         unique_c3_lags: &[u16],
@@ -204,9 +199,7 @@ impl ColumnState {
             mac_sum: 0.0,
             mc_sum: 0.0,
             sum_sq_diff: 0.0,
-            sum_prod: 0.0,
             sum_ix: 0.0,
-            auc_sum: 0.0,
             mac_sum_vec: f32x4::splat(0.0),
             mc_sum_vec: f32x4::splat(0.0),
             sum_vec: f32x4::splat(0.0),
@@ -215,12 +208,9 @@ impl ColumnState {
             sum_quads_vec: f32x4::splat(0.0),
             min_vec: f32x4::splat(f32::INFINITY),
             max_vec: f32x4::splat(f32::NEG_INFINITY),
-            abs_sum_vec: f32x4::splat(0.0),
             abs_max_vec: f32x4::splat(0.0),
             t_energy: 0.0,
             sum_sq_diff_vec: f32x4::splat(0.0),
-            sum_prod_vec: f32x4::splat(0.0),
-            auc_sum_vec: f32x4::splat(0.0),
             sum_ix_vec: f32x4::splat(0.0),
             t_energy_vec: f32x4::splat(0.0),
             zcr_count: 0,
@@ -238,8 +228,6 @@ impl ColumnState {
             tra_sums: vec![0.0; unique_tra_lags.len()],
             tra_sums_vec: vec![f32x4::splat(0.0); unique_tra_lags.len()],
             prefix_sums: Vec::new(),
-            mass_pointer: 0,
-            mass_cum_sum: 0.0,
             prev_last: first_val,
             prev_val: first_val,
             prev_prev_val: first_val,
@@ -248,7 +236,6 @@ impl ColumnState {
             last_max_idx: 0,
             first_min_idx: 0,
             last_min_idx: 0,
-            abs_sum: 0.0,
             benford_counts: [0; 9],
             min_queue: Vec::new(),
             min_q_head: 0,
@@ -268,27 +255,18 @@ impl ColumnState {
             cwt_final_energy: Vec::new(),
             cwt_final_sum_abs: Vec::new(),
             cwt_final_clnc: Vec::new(),
-            cwt_kernels: Vec::new(),
-            mfcc_filter_banks: Vec::new(),
-            mfcc_dct_matrix: Vec::new(),
             value_counts: rustc_hash::FxHashMap::default(),
             reoccurring_datapoints: 0,
             reoccurring_values: 0,
             ar_coeffs: rustc_hash::FxHashMap::default(),
-            ar_xtx: rustc_hash::FxHashMap::default(),
-            ar_xty: rustc_hash::FxHashMap::default(),
             friedrich_coeffs: rustc_hash::FxHashMap::default(),
             max_langevin_fixed_point_cache: rustc_hash::FxHashMap::default(),
-            last_dynamic_n: 0,
-            last_dynamic_ptr: 0,
-            dynamic_val_cache: Vec::new(),
             n: 0.0,
             mean: 0.0,
             m2: 0.0,
             m3: 0.0,
             m4: 0.0,
             last_fft_n: 0,
-            last_spectrum: Vec::new(),
             last_fft_complex: Vec::new(),
             fft_in_buffer: Vec::new(),
             fft_out_buffer: Vec::new(),
@@ -296,11 +274,7 @@ impl ColumnState {
             sliding_dft: None,
             cwt_peaks: 0,
             welch_density: Vec::new(),
-            welch_planner: None,
-            cwt_wavelets: rustc_hash::FxHashMap::default(),
             spectrum_buffer: Vec::new(),
-            adf_cache_n: 0,
-            adf_cache_ptr: 0,
             adf_test_stat: std::f32::NAN,
             adf_p_value: std::f32::NAN,
             adf_used_lag: std::f32::NAN,
@@ -370,6 +344,15 @@ pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
                     a_count += 1;
                 }
             }
+        }
+    }
+
+    // B also uses the last length-m template (index n - m), which has no
+    // length-(m+1) extension, so the loop above didn't visit it.
+    let last = end_m;
+    for j in 0..last {
+        if (data[j] - data[last]).abs() <= r && (data[j + 1] - data[last + 1]).abs() <= r {
+            b_count += 1;
         }
     }
 

@@ -1,8 +1,4 @@
-use arrow::array::{Float32Array, RecordBatch};
-use arrow::datatypes::{DataType, Field, Schema};
-use arrow::pyarrow::PyArrowType;
 use criterion::{BatchSize, BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
-use std::sync::Arc;
 use std::time::Duration;
 use tsfast::{ExpandingExtractor, Extractor, SlidingExtractor};
 
@@ -79,13 +75,6 @@ const FEATURES: &[&str] = &[
     "augmented_dickey_fuller-pvalue",
 ];
 
-fn create_batch(data: &[f32]) -> RecordBatch {
-    let schema = Schema::new(vec![Field::new("c1", DataType::Float32, false)]);
-    let array = Float32Array::from(data.to_vec());
-    RecordBatch::try_new(Arc::new(schema), vec![Arc::new(array)])
-        .expect("Failed to build RecordBatch")
-}
-
 fn generate_synthetic_signal(n: usize) -> Vec<f32> {
     let mut data = Vec::with_capacity(n);
     for i in 0..n {
@@ -98,7 +87,6 @@ fn generate_synthetic_signal(n: usize) -> Vec<f32> {
 
 fn bench_static_features(c: &mut Criterion) {
     let data = generate_synthetic_signal(1000);
-    let batch = create_batch(&data);
 
     let mut group = c.benchmark_group("static_features");
     group.warm_up_time(Duration::from_millis(100));
@@ -109,7 +97,7 @@ fn bench_static_features(c: &mut Criterion) {
         if let Ok(extractor) = Extractor::new(vec![feat.to_string()], None) {
             group.bench_with_input(BenchmarkId::new("static", feat), &feat, |b, _| {
                 b.iter(|| {
-                    let _ = extractor.process_2d_floats(PyArrowType(black_box(batch.clone())));
+                    let _ = extractor.extract(&[black_box(&data)], data.len());
                 });
             });
         }
@@ -120,8 +108,6 @@ fn bench_static_features(c: &mut Criterion) {
 fn bench_expanding_features(c: &mut Criterion) {
     let prime_data = generate_synthetic_signal(500);
     let update_data = generate_synthetic_signal(100);
-    let prime_batch = create_batch(&prime_data);
-    let update_batch = create_batch(&update_data);
 
     let mut group = c.benchmark_group("expanding_features");
     group.warm_up_time(Duration::from_millis(100));
@@ -130,12 +116,12 @@ fn bench_expanding_features(c: &mut Criterion) {
 
     for &feat in FEATURES {
         if let Ok(mut ext) = ExpandingExtractor::new(vec![feat.to_string()], 1, None, 1) {
-            let _ = ext.update(PyArrowType(prime_batch.clone()));
+            let _ = ext.update_rows(&[&prime_data]);
             group.bench_with_input(BenchmarkId::new("expanding", feat), &feat, |b, _| {
                 b.iter_batched(
                     || ext.clone(),
                     |mut e| {
-                        let _ = e.update(PyArrowType(black_box(update_batch.clone())));
+                        let _ = e.update_rows(&[black_box(&update_data)]);
                     },
                     BatchSize::SmallInput,
                 );
@@ -148,8 +134,6 @@ fn bench_expanding_features(c: &mut Criterion) {
 fn bench_sliding_features(c: &mut Criterion) {
     let prime_data = generate_synthetic_signal(200);
     let update_data = generate_synthetic_signal(50);
-    let prime_batch = create_batch(&prime_data);
-    let update_batch = create_batch(&update_data);
 
     let mut group = c.benchmark_group("sliding_features");
     group.warm_up_time(Duration::from_millis(100));
@@ -158,12 +142,12 @@ fn bench_sliding_features(c: &mut Criterion) {
 
     for &feat in FEATURES {
         if let Ok(mut ext) = SlidingExtractor::new(vec![feat.to_string()], 1, 200, 50) {
-            let _ = ext.update(PyArrowType(prime_batch.clone()));
+            let _ = ext.update_rows(&[&prime_data]);
             group.bench_with_input(BenchmarkId::new("sliding", feat), &feat, |b, _| {
                 b.iter_batched(
                     || ext.clone(),
                     |mut e| {
-                        let _ = e.update(PyArrowType(black_box(update_batch.clone())));
+                        let _ = e.update_rows(&[black_box(&update_data)]);
                     },
                     BatchSize::SmallInput,
                 );

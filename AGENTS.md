@@ -13,6 +13,19 @@ uv run pytest tests/test_sliding.py -k energy   # narrow it down while iterating
 cargo build                  # fast Rust-only type check
 cargo test                   # Rust unit tests: feature name round-trips, coverage
 uv run pytest benchmarks     # benchmarks (slow, not part of the normal test run)
+uv run python scripts/coach_benchmark.py --skip-readme  # per-feature timings vs references -> .jules/feature_benchmarks.md
+```
+
+Expect `cargo build` ~5s, `cargo test` ~10s, and `uv run pytest` ~20s once the
+extension is built (~1600 tests). A full rebuild after a Rust change adds a
+minute or two to the first `uv run`. Of the 20s, ~15s is the `matrix_profile`
+reference test; add `-k "not matrix_profile"` while iterating.
+
+Try a feature by hand (valid names for every feature: `tests/feature_samples.txt`;
+Python API with shapes: `tsfast/_tsfast.pyi`):
+
+```sh
+uv run python -c "import numpy as np, tsfast; e = tsfast.Extractor(['mean', 'human_range_energy-100']); print(e.feature_names, e.process_2d_floats(np.random.rand(2, 500)))"
 ```
 
 - **Do not run `maturin develop` or `pip install`.** uv owns the build: it
@@ -20,7 +33,7 @@ uv run pytest benchmarks     # benchmarks (slow, not part of the normal test run
   `Cargo.*` or `pyproject.toml` file changes. A second build path leaves a stale
   or debug `.so` around and tests silently run against old code.
 - Nightly is required (`#![feature(portable_simd)]`). Don't try to make it build on stable.
-- `cargo build` emits ~60 pre-existing warnings; don't fix unrelated ones in a feature PR.
+- `cargo build` emits ~30 pre-existing warnings; don't fix unrelated ones in a feature PR.
 
 ## Layout
 
@@ -33,10 +46,15 @@ uv run pytest benchmarks     # benchmarks (slow, not part of the normal test run
 | `src/features/mod.rs` | `eval()`: exhaustive routing of every variant to its module |
 | `src/features/*.rs` | `eval_*(feat, ctx) -> Option<f32>`: the actual feature math, grouped by domain |
 | `src/common.rs` | `ColumnState`: per-column accumulators and reusable buffers |
+| `src/context.rs`, `src/metrics.rs` | `FeatureContext` (what an `eval_*` fn sees) and the metric structs processors fill it from |
+| `src/spectral.rs` | frequency-domain math shared by all engines (DFT, TSFEL spectral features) |
+| `src/{static_ext,sliding,expanding}.rs` | the `#[pyclass]` for each engine: Python constructor, `feature_names`, `update`/`process_2d_floats` |
+| `src/numpy_io.rs`, `src/lib.rs` | numpy in/out at the FFI boundary; module registration |
 | `src/{static_ext,sliding,expanding}/engine.rs` | engine drivers; call `features::eval` per feature |
 | `src/{static_ext,sliding,expanding}/processors/` | accumulation passes (stats, diff, trend, sort, fft…) gated by `Compute` flags |
-| `tsfast/` | Python package (`__init__.py`, `selection.py`); the built `.so` lands here |
-| `tests/` | `test_tsfast.py` = static, `test_sliding.py`, `test_expanding.py`, plus topic files |
+| `tsfast/` | Python package (`__init__.py`, `selection.py`, `_tsfast.pyi` stubs); the built `.so` lands here |
+| `tests/` | `test_tsfast.py` = static, `test_sliding.py`, `test_expanding.py`, plus topic files; `helpers.py` for shared helpers |
+| `tests/feature_samples.txt`, `tests/references.py` | one valid name per feature; its tsfresh/TSFEL reference function |
 | `missing.md` | backlog of unimplemented tsfresh/TSFEL features |
 | `.jules/*.md` | historical learning journals; may mention files that no longer exist |
 
@@ -53,7 +71,8 @@ and tells you where to look.
    - **No parameters**: add one line to the `unit_features!` table:
      `MyFeature => "my_feature", ["tsfresh_alias"];`. That's both parsing and naming done.
    - **With parameters**: add parsing (`parse_parameterized` for `name-p1-p2`
-     style) **and** the `Feature::name()` arm, plus a sample instance in
+     style; tsfresh-style `name_a_1__b_2` names are parsed by hand in `FromStr`,
+     see `energy_ratio_by_chunks`) **and** the `Feature::name()` arm, plus a sample instance in
      `parameterized_samples()` in `src/types/tests.rs`. `cargo test` checks that
      every variant has a sample and that `name()` parses back to the same value.
    - **Validate parameters while parsing** (zero lengths, `index < total`, …) and
@@ -75,7 +94,15 @@ and tells you where to look.
 6. Tests: `cargo test`, plus one Python test per engine (`test_tsfast.py`,
    `test_sliding.py`, `test_expanding.py`) comparing against the tsfresh/TSFEL
    reference implementation (both are installed). Include an edge case
-   (constant series or a short window).
+   (constant series or a short window). Also add a sample name to
+   `tests/feature_samples.txt` (`cargo test` fails until you do): it drives
+   `tests/test_engines.py`, which checks that all three engines agree and that
+   the feature gives the same value alone as alongside every other feature.
+   Then map it to its tsfresh/TSFEL function in `tests/references.py`
+   (`REFERENCES`, or `NO_REFERENCE` with a reason): `tests/test_references.py`
+   requires every feature within 1% of its reference. If tsfresh and TSFEL
+   define the same quantity differently, add one feature per definition
+   (e.g. `skewness` / `biased_skewness`) rather than picking one.
 7. Delete the feature's row from `missing.md`.
 
 Reference implementation: `EnergyRatioByChunks`. Before starting, grep
@@ -92,7 +119,10 @@ implemented twice by parallel agents.
   stop running.
 - Append new tests at the end of the file. Don't rewrite or reorder others.
 - Don't commit scratch files: no `plan.md`, `patch_*.py`, helper scripts or
-  result dumps in the repo root. Edit source files directly.
+  result dumps in the repo root. Edit source files directly. CI only allows the
+  root files listed in `.github/workflows/ci.yml`.
+- Changed a Python-facing signature in `src/{static_ext,sliding,expanding}.rs`?
+  Update `tsfast/_tsfast.pyi` to match.
 - No `.unwrap()`/`.expect()` on user-controlled input across the FFI boundary;
   map errors to `PyValueError`/`PyTypeError`.
 - Hot loops: avoid per-column allocations. Reuse buffers on `ColumnState`

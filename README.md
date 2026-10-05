@@ -2,11 +2,32 @@
 
 TSFast is a high-performance time-series feature extraction library written in Rust with Python bindings. It is designed for extreme speed, efficient memory usage, and interoperability with Apache Arrow.
 
+## Purpose: Deploying TSFresh and TSFEL Features
+
+TSFast is meant for **deploying** features, not for finding them. Use
+[tsfresh](https://github.com/blue-yonder/tsfresh) or
+[TSFEL](https://github.com/fraunhoferportugal/tsfel) during research to explore
+and select features. Then pass the selected feature names to TSFast to compute
+the same values in production.
+
+- **Same names, same values**: features use the tsfresh/TSFEL names and are
+  tested against both libraries, so a model trained on their output gets the
+  same inputs at inference time.
+- **Built for production**: the Rust engines are orders of magnitude faster
+  (see the benchmarks below). The sliding and expanding engines update
+  incrementally as new data arrives, which suits streaming and low-latency
+  serving.
+- **Small footprint**: the runtime doesn't need tsfresh, TSFEL or their
+  dependency trees.
+
+TSFast implements a subset of tsfresh and TSFEL. See `missing.md` for features
+that are not supported yet.
+
 ## Key Features
 
 - **Blazing Fast**: Core engine implemented in Rust with SIMD (Portable SIMD) for maximum performance.
 - **O(n) Expanding Windows**: Highly optimized algorithms for expanding window feature extraction (prefix statistics).
-- **Arrow Integration**: Uses Apache Arrow for efficient, zero-copy-ready data handling via `pyarrow`.
+- **NumPy In, NumPy Out**: Takes a 2-D array with one series per row (float32 is read in place, no copy) and returns a float32 feature array; `feature_names` labels its columns.
 - **Selective Execution**: Only computes the features you request, using a bitmask-based engine to skip unnecessary calculations.
 - **Python-Friendly**: Simple API based on `Extractor` and `ExpandingExtractor` classes.
 

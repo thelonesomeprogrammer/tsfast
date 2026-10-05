@@ -15,7 +15,6 @@ pub struct SortMetrics {
     pub median: f32,
     pub median_abs_dev: f32,
     pub iqr: f32,
-    pub entropy: f32,
 }
 
 pub struct MeanMetrics {
@@ -31,7 +30,9 @@ pub struct ZcMetrics {
     pub zc_std: f32,
 }
 
+#[derive(Default)]
 pub struct FftResult {
+    pub dft_len: usize,
     pub fft_complex: Vec<realfft::num_complex::Complex<f32>>,
     pub spectrum: Vec<f32>,
     pub freq_centroid: f32,

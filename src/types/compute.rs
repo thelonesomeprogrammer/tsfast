@@ -49,7 +49,6 @@ compute_flags! {
     KURTOSIS,             // sum_quads
     MAD,
     IQR,
-    ENTROPY,
     ENERGY,               // sum of squares
     RMS,
     ROOT_MEAN_SQ,
@@ -57,21 +56,18 @@ compute_flags! {
     PEAKS,
     TROUGHS,
     NUMBER_PEAKS_CROSSINGS,
-    AUTOCORR_LAG1,        // lag-1 product
     MAC,                  // mean abs change
     MC,                   // mean change
     CID_CE,
     SLOPE,                // sum_ix
     INTERCEPT,
     PAA,
-    ABS_SUM_CHG,
     CNT_ABOVE_MEAN,
     CNT_BELOW_MEAN,
     STRIKE_ABOVE,
     STRIKE_BELOW,
     VAR_COEFF,
     C3,
-    AUC,
     ZC_STATS,             // zero-crossing mean
     ZC_STD,
     ZC_INDICES,
@@ -92,7 +88,6 @@ compute_flags! {
     APPROX_ENT,
     AGG_LIN_TREND,
     QUANTILE,
-    IDX_MASS_Q,
     BENFORD,
     LANGEVIN,
     REOCCUR_VAL,
@@ -103,7 +98,6 @@ compute_flags! {
     SIG_DISTANCE,
     WAVELET,
     SPECTROGRAM,
-    ABS_SUM,
     REOCCUR_DP,
     MEAN_N_ABS_MAX,
     HUMAN_RANGE_E,
@@ -160,10 +154,8 @@ impl Compute {
 
     pub const ANY_DIFF: Self = Self::from_bits_retain(
         Self::ZERO_CROSS.bits()
-            | Self::AUTOCORR_LAG1.bits()
             | Self::MAC.bits()
             | Self::MC.bits()
-            | Self::CID_CE.bits()
-            | Self::AUC.bits(),
+            | Self::CID_CE.bits(),
     );
 }

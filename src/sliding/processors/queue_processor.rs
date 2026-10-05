@@ -24,7 +24,7 @@ impl QueueProcessor {
         window_size: usize,
         state: &mut ColumnState,
     ) {
-        if compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
+        if compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR) {
             for (i, &val) in new_slice.iter().enumerate() {
                 let idx = global_start_idx + i;
 
@@ -93,7 +93,7 @@ impl QueueProcessor {
         window_size: usize,
         state: &mut ColumnState,
     ) {
-        if compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
+        if compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR) {
             if state.min_queue.is_empty() {
                 state.min_queue = vec![(0, 0.0); window_size];
                 state.max_queue = vec![(0, 0.0); window_size];
@@ -164,7 +164,7 @@ impl QueueProcessor {
         window_size: usize,
         state: &mut ColumnState,
     ) {
-        if compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR | Compute::ENTROPY) {
+        if compute.intersects(Compute::MIN | Compute::MAX | Compute::IQR) {
             // Min Queue
             while state.min_q_len > 0 {
                 let prev_tail = if state.min_q_tail == 0 {

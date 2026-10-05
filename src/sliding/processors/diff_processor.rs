@@ -14,9 +14,7 @@ impl DiffProcessor {
             state.mac_sum = 0.0;
             state.mc_sum = 0.0;
             state.sum_sq_diff = 0.0;
-            state.sum_prod = 0.0;
             state.sum_ix = 0.0;
-            state.auc_sum = 0.0;
             state.zcr_count = 0;
         }
 
@@ -60,8 +58,6 @@ impl DiffProcessor {
             Compute::MAC
                 | Compute::MC
                 | Compute::CID_CE
-                | Compute::AUTOCORR_LAG1
-                | Compute::AUC
                 | Compute::ZERO_CROSS,
         ) {
             // Remove effect of diffs starting within or at boundary of old_slice
@@ -76,12 +72,6 @@ impl DiffProcessor {
                 }
                 if compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff -= diff * diff;
-                }
-                if compute.contains(Compute::AUTOCORR_LAG1) {
-                    state.sum_prod -= old_slice[0] * prev;
-                }
-                if compute.contains(Compute::AUC) {
-                    state.auc_sum -= (old_slice[0] + prev) * 0.5;
                 }
                 if compute.contains(Compute::ZERO_CROSS) && (old_slice[0] < 0.0) != (prev < 0.0) {
                     state.zcr_count -= 1;
@@ -99,12 +89,6 @@ impl DiffProcessor {
                 }
                 if compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff -= diff * diff;
-                }
-                if compute.contains(Compute::AUTOCORR_LAG1) {
-                    state.sum_prod -= old_slice[i] * old_slice[i - 1];
-                }
-                if compute.contains(Compute::AUC) {
-                    state.auc_sum -= (old_slice[i] + old_slice[i - 1]) * 0.5;
                 }
                 if compute.contains(Compute::ZERO_CROSS)
                     && (old_slice[i] < 0.0) != (old_slice[i - 1] < 0.0)
@@ -124,12 +108,6 @@ impl DiffProcessor {
             if compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff -= diff_after * diff_after;
             }
-            if compute.contains(Compute::AUTOCORR_LAG1) {
-                state.sum_prod -= value_after_old * old_slice[y - 1];
-            }
-            if compute.contains(Compute::AUC) {
-                state.auc_sum -= (value_after_old + old_slice[y - 1]) * 0.5;
-            }
             if compute.contains(Compute::ZERO_CROSS)
                 && (value_after_old < 0.0) != (old_slice[y - 1] < 0.0)
             {
@@ -148,12 +126,6 @@ impl DiffProcessor {
             if compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff += diff_new_start * diff_new_start;
             }
-            if compute.contains(Compute::AUTOCORR_LAG1) {
-                state.sum_prod += new_slice[0] * value_before_new;
-            }
-            if compute.contains(Compute::AUC) {
-                state.auc_sum += (new_slice[0] + value_before_new) * 0.5;
-            }
             if compute.contains(Compute::ZERO_CROSS)
                 && (new_slice[0] < 0.0) != (value_before_new < 0.0)
             {
@@ -171,12 +143,6 @@ impl DiffProcessor {
                 }
                 if compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff += diff * diff;
-                }
-                if compute.contains(Compute::AUTOCORR_LAG1) {
-                    state.sum_prod += new_slice[i] * new_slice[i - 1];
-                }
-                if compute.contains(Compute::AUC) {
-                    state.auc_sum += (new_slice[i] + new_slice[i - 1]) * 0.5;
                 }
                 if compute.contains(Compute::ZERO_CROSS)
                     && (new_slice[i] < 0.0) != (new_slice[i - 1] < 0.0)
@@ -197,7 +163,7 @@ impl DiffProcessor {
         state: &mut ColumnState,
     ) {
         if compute.intersects(
-            Compute::MAC | Compute::MC | Compute::CID_CE | Compute::AUTOCORR_LAG1 | Compute::AUC,
+            Compute::MAC | Compute::MC | Compute::CID_CE,
         ) {
             // Remove effect of (old_val, old_val_next)
             let old_diff = old_val_next - old_val;
@@ -210,12 +176,6 @@ impl DiffProcessor {
             if compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff -= old_diff * old_diff;
             }
-            if compute.contains(Compute::AUTOCORR_LAG1) {
-                state.sum_prod -= old_val_next * old_val;
-            }
-            if compute.contains(Compute::AUC) {
-                state.auc_sum -= (old_val + old_val_next) * 0.5;
-            }
 
             // Add effect of (old_last, new_val)
             let new_diff = new_val - old_last;
@@ -227,12 +187,6 @@ impl DiffProcessor {
             }
             if compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff += new_diff * new_diff;
-            }
-            if compute.contains(Compute::AUTOCORR_LAG1) {
-                state.sum_prod += new_val * old_last;
-            }
-            if compute.contains(Compute::AUC) {
-                state.auc_sum += (new_val + old_last) * 0.5;
             }
         }
 
@@ -261,11 +215,9 @@ impl DiffProcessor {
 
         if compute.intersects(
             Compute::ZERO_CROSS
-                | Compute::AUTOCORR_LAG1
                 | Compute::MAC
                 | Compute::MC
-                | Compute::CID_CE
-                | Compute::AUC,
+                | Compute::CID_CE,
         ) {
             let shifted = if global_idx == 0 {
                 std::simd::f32x4::from_array([state.prev_last, chunk[0], chunk[1], chunk[2]])
@@ -286,12 +238,6 @@ impl DiffProcessor {
                 }
                 if compute.contains(Compute::CID_CE) {
                     state.sum_sq_diff_vec += diff * diff;
-                }
-                if compute.contains(Compute::AUTOCORR_LAG1) {
-                    state.sum_prod_vec += chunk * shifted;
-                }
-                if compute.contains(Compute::AUC) {
-                    state.auc_sum_vec += (chunk + shifted) * f32x4::splat(0.5);
                 }
                 if compute.contains(Compute::ZERO_CROSS) {
                     let signs = chunk.simd_lt(std::simd::f32x4::splat(0.0));
@@ -334,12 +280,6 @@ impl DiffProcessor {
             if compute.contains(Compute::CID_CE) {
                 state.sum_sq_diff += diff * diff;
             }
-            if compute.contains(Compute::AUTOCORR_LAG1) {
-                state.sum_prod += val * prev;
-            }
-            if compute.contains(Compute::AUC) {
-                state.auc_sum += (val + prev) * 0.5;
-            }
             if compute.contains(Compute::ZERO_CROSS) && (val < 0.0) != (prev < 0.0) {
                 state.zcr_count += 1;
             }
@@ -366,14 +306,6 @@ impl DiffProcessor {
         if compute.contains(Compute::CID_CE) {
             state.sum_sq_diff += state.sum_sq_diff_vec.reduce_sum();
             state.sum_sq_diff_vec = f32x4::splat(0.0);
-        }
-        if compute.contains(Compute::AUTOCORR_LAG1) {
-            state.sum_prod += state.sum_prod_vec.reduce_sum();
-            state.sum_prod_vec = f32x4::splat(0.0);
-        }
-        if compute.contains(Compute::AUC) {
-            state.auc_sum += state.auc_sum_vec.reduce_sum();
-            state.auc_sum_vec = f32x4::splat(0.0);
         }
     }
 

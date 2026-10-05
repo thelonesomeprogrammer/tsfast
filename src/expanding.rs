@@ -1,8 +1,7 @@
 use crate::common::{ColumnState, map_features_to_indices, next_good_fft_size};
 use crate::types::{Compute, Feature};
-use arrow::array::{ArrayRef, Float32Array, RecordBatch};
-use arrow::datatypes::{DataType, Field, Schema};
-use arrow::pyarrow::PyArrowType;
+use crate::numpy_io;
+use numpy::PyArray2;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use realfft::RealFftPlanner;
@@ -117,16 +116,39 @@ impl ExpandingExtractor {
         })
     }
 
-    pub fn update(
-        &mut self,
-        batch: PyArrowType<RecordBatch>,
-    ) -> PyResult<PyArrowType<RecordBatch>> {
-        let record_batch = batch.0;
-        let n_cols = record_batch.num_columns();
-        let n_rows = record_batch.num_rows();
+    /// Canonical names of the output columns, in order.
+    #[getter]
+    pub fn feature_names(&self) -> Vec<String> {
+        self.features.iter().map(Feature::name).collect()
+    }
 
-        if n_rows == 0 {
-            return Ok(PyArrowType(record_batch));
+    /// Append `values`, a 2-D float32/float64 numpy array of shape
+    /// (n_series, n_new_samples), to each series. Returns a float32 array of
+    /// shape (n_series, n_features): the features of everything seen so far.
+    /// No new samples gives zero rows.
+    pub fn update<'py>(
+        &mut self,
+        py: Python<'py>,
+        values: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyArray2<f32>>> {
+        let (n_series, data) = numpy_io::with_rows(values, |rows, n_samples| {
+            let n_series = if n_samples == 0 { 0 } else { rows.len() };
+            let data = py
+                .detach(|| self.update_rows(&rows[..n_series]))
+                .map_err(PyTypeError::new_err)?;
+            Ok((n_series, data))
+        })?;
+        numpy_io::to_numpy_2d(py, n_series, self.features.len(), data)
+    }
+}
+
+impl ExpandingExtractor {
+    /// Append one row of new samples per series (all the same length). Returns
+    /// each series' features, flattened row-major.
+    pub fn update_rows(&mut self, rows: &[&[f32]]) -> Result<Vec<f32>, String> {
+        let n_cols = rows.len();
+        if n_cols == 0 || rows[0].is_empty() {
+            return Ok(Vec::new());
         }
 
         if self.states.len() < n_cols {
@@ -144,7 +166,7 @@ impl ExpandingExtractor {
         }
 
         // Pre-calculate PAA boundaries once for all columns
-        let total_n = self.histories[0].len() + n_rows;
+        let total_n = self.histories[0].len() + rows[0].len();
         let current_paa_boundaries: Vec<Vec<usize>> = self
             .unique_paa_totals
             .iter()
@@ -157,12 +179,8 @@ impl ExpandingExtractor {
             })
             .collect();
 
-        // Ensure we have a plan for the current total_n or max_size
-        let fft_size = if let Some(ms) = self.max_size {
-            next_good_fft_size(ms.max(total_n))
-        } else {
-            total_n
-        };
+        // Exact-length FFT: padding would change the spectrum (see spectral::rfft).
+        let fft_size = total_n;
 
         let r2c = if self.compute.intersects(Compute::ANY_FFT) && fft_size > 0 {
             let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
@@ -177,14 +195,8 @@ impl ExpandingExtractor {
             .par_iter_mut()
             .zip(self.histories[..n_cols].par_iter_mut())
             .zip(self.sorted_histories[..n_cols].par_iter_mut())
-            .zip(record_batch.columns().par_iter())
-            .map(|(((state, history), sorted_history), column)| {
-                let array = column
-                    .as_any()
-                    .downcast_ref::<Float32Array>()
-                    .ok_or_else(|| "Expected Float32Array".to_string())?;
-
-                let values = array.values();
+            .zip(rows.par_iter())
+            .map(|(((state, history), sorted_history), &values)| {
 
                 if history.is_empty() {
                     *state = ColumnState::new(
@@ -205,7 +217,6 @@ impl ExpandingExtractor {
                     unique_tra_lags: &self.unique_tra_lags,
                     paa_boundaries: &current_paa_boundaries,
                     r2c: r2c.as_ref().cloned(),
-                    fft_size,
                     fft_update_period: self.fft_update_period,
                 };
 
@@ -213,24 +224,6 @@ impl ExpandingExtractor {
             })
             .collect();
 
-        let column_results = column_results.map_err(|e| PyTypeError::new_err(e))?;
-
-        let mut fields = Vec::with_capacity(self.features.len());
-        for feat in &self.features {
-            fields.push(Field::new(feat.name(), DataType::Float32, false));
-        }
-        let schema = Arc::new(Schema::new(fields));
-
-        let results: Vec<ArrayRef> = (0..self.features.len())
-            .map(|feat_idx| {
-                let col_data: Vec<f32> = column_results.iter().map(|res| res[feat_idx]).collect();
-                Arc::new(Float32Array::from(col_data)) as ArrayRef
-            })
-            .collect();
-
-        let return_batch = RecordBatch::try_new(schema, results)
-            .map_err(|e| PyTypeError::new_err(format!("Failed to create RecordBatch: {}", e)))?;
-
-        Ok(PyArrowType(return_batch))
+        Ok(column_results?.concat())
     }
 }

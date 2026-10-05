@@ -2,7 +2,6 @@ import time
 import warnings
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import tsfast
 import tsfel
 from tsfresh.feature_extraction import extract_features
@@ -50,21 +49,16 @@ def benchmark_tsfast_batched(X):
     n_samples, n_points = X.shape
     extractor = tsfast.Extractor(ALL_TOP)
     
-    # Pre-build RecordBatch with 1 column per series
-    arrays = [pa.array(X[i]) for i in range(n_samples)]
-    names = [f"s_{i}" for i in range(n_samples)]
-    batch = pa.RecordBatch.from_arrays(arrays, names=names)
+    # One series per row
+    batch = np.ascontiguousarray(X, dtype=np.float32)
 
     # Warmup
     _ = extractor.process_2d_floats(batch)
 
     # Timed extraction
     t0 = time.perf_counter()
-    res_batch = extractor.process_2d_floats(batch)
+    extracted = extractor.process_2d_floats(batch)  # columns in ALL_TOP order
     extraction_time = time.perf_counter() - t0
-
-    # Convert to numpy array outside the core extraction timer
-    extracted = np.column_stack([res_batch.column(f).to_numpy() for f in ALL_TOP])
     return extracted, extraction_time
 
 def benchmark_tsfast_iterative(X):
@@ -73,13 +67,13 @@ def benchmark_tsfast_iterative(X):
     extractor = tsfast.Extractor(ALL_TOP)
 
     # Pre-build single-series batches to measure extractor throughput
-    batches = [pa.RecordBatch.from_arrays([pa.array(X[i])], names=["v"]) for i in range(n_samples)]
+    batches = [np.ascontiguousarray(X[i:i + 1], dtype=np.float32) for i in range(n_samples)]
 
     t0 = time.perf_counter()
     results = [extractor.process_2d_floats(b) for b in batches]
     extraction_time = time.perf_counter() - t0
 
-    extracted = np.array([[res.column(f)[0].as_py() for f in ALL_TOP] for res in results])
+    extracted = np.concatenate(results)
     return extracted, extraction_time
 
 def benchmark_tsfresh(X):

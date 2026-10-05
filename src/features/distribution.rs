@@ -42,7 +42,6 @@ pub fn eval_distribution(
     let _last_min_idx = context.last_min_idx;
     let median = context.median;
     let _iqr = context.iqr;
-    let entropy = context.entropy;
     let min_val = state.min_value;
     let max_val = state.max_value;
     let _mad_sum = context.mad_sum;
@@ -70,7 +69,21 @@ pub fn eval_distribution(
             ((context.mean - median).abs() < r * (max_val - min_val)) as u8 as f32
         }
         Feature::MedianAbsDeviation => context.median_abs_dev,
-        Feature::Entropy => entropy,
+        // TSFEL: entropy of the distinct-value distribution, normalised by log2(n).
+        Feature::Entropy => {
+            let mut sorted = std::mem::take(&mut state.sort_buffer);
+            sorted.clear();
+            sorted.extend_from_slice(values);
+            sorted.sort_unstable_by(f32::total_cmp);
+            let n_f = sorted.len() as f64;
+            let mut h = 0.0f64;
+            for run in sorted.chunk_by(|a, b| a == b) {
+                let p = run.len() as f64 / n_f;
+                h -= p * p.log2();
+            }
+            state.sort_buffer = sorted;
+            if values.len() <= 2 { 0.0 } else { (h / n_f.log2()) as f32 }
+        }
         Feature::Ecdf(d) => {
             let d_idx = *d as f32;
             if d_idx >= n { 1.0 } else { d_idx / n }
@@ -150,49 +163,22 @@ pub fn eval_distribution(
             }
         }
         Feature::IndexMassQuantile(q_bits) => {
+            // tsfresh: first index where the cumulative |x| mass reaches q.
             let q = f32::from_bits(*q_bits) as f64;
-            let target_mass = q * state.abs_sum as f64;
-
+            let total: f64 = values.iter().map(|v| v.abs() as f64).sum();
+            let target_mass = q * total;
             if target_mass <= 0.0 || values.is_empty() {
                 0.0
             } else {
-                // Check if we can resume (only if the array hasn't shrunk, e.g. expanding)
-                if state.mass_pointer < values.len() && state.mass_cum_sum < target_mass {
-                    let mut cum_sum = state.mass_cum_sum;
-                    let mut pointer = state.mass_pointer;
-                    while pointer < values.len() {
-                        cum_sum += values[pointer].abs() as f64;
-                        if cum_sum >= target_mass {
-                            state.mass_cum_sum = cum_sum;
-                            state.mass_pointer = pointer;
-                            break;
-                        }
-                        pointer += 1;
-                    }
-                    if pointer >= values.len() {
-                        pointer = values.len() - 1;
-                        state.mass_cum_sum = cum_sum;
-                        state.mass_pointer = pointer;
-                    }
-                    (state.mass_pointer + 1) as f32 / values.len() as f32
-                } else {
-                    // Sliding window or mass center shifted left
-                    let mut cum_sum = 0.0;
-                    let mut pointer = 0;
-                    while pointer < values.len() {
-                        cum_sum += values[pointer].abs() as f64;
-                        if cum_sum >= target_mass {
-                            break;
-                        }
-                        pointer += 1;
-                    }
-                    if pointer >= values.len() {
-                        pointer = values.len() - 1;
-                    }
-                    state.mass_cum_sum = cum_sum;
-                    state.mass_pointer = pointer;
-                    (pointer + 1) as f32 / values.len() as f32
-                }
+                let mut cum_sum = 0.0;
+                let idx = values
+                    .iter()
+                    .position(|v| {
+                        cum_sum += v.abs() as f64;
+                        cum_sum >= target_mass
+                    })
+                    .unwrap_or(values.len() - 1);
+                (idx + 1) as f32 / values.len() as f32
             }
         }
 

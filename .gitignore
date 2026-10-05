@@ -17,3 +17,6 @@ tsfast/*.so
 /revert_*.py
 /*_results*.txt
 /fix_*.py
+
+# Personal Claude Code settings (the shared ones are .claude/settings.json)
+.claude/settings.local.json

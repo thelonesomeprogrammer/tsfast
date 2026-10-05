@@ -30,9 +30,6 @@ impl StatsProcessor {
         if compute.contains(Compute::ABS_MAX) {
             state.abs_max_vec = state.abs_max_vec.simd_max(chunk.abs());
         }
-        if compute.contains(Compute::ABS_SUM) {
-            state.abs_sum_vec += chunk.abs();
-        }
     }
 
     #[inline(always)]
@@ -66,10 +63,6 @@ impl StatsProcessor {
             state.abs_max = state.abs_max.max(state.abs_max_vec.reduce_max());
             state.abs_max_vec = f32x4::splat(0.0);
         }
-        if compute.contains(Compute::ABS_SUM) {
-            state.abs_sum += state.abs_sum_vec.reduce_sum();
-            state.abs_sum_vec = f32x4::splat(0.0);
-        }
     }
 
     #[inline(always)]
@@ -85,9 +78,6 @@ impl StatsProcessor {
         }
         if compute.contains(Compute::ABS_MAX) {
             state.abs_max = state.abs_max.max(val.abs());
-        }
-        if compute.contains(Compute::ABS_SUM) {
-            state.abs_sum += val.abs();
         }
         if compute.contains(Compute::ENERGY) {
             let sq = val * val;
@@ -108,7 +98,8 @@ impl StatsProcessor {
         let m4 = state.sum_quads - 4.0 * mean * state.sum_cubes + 6.0 * mean * mean * state.energy
             - 3.0 * mean * mean * mean * state.total_sum;
 
-        let var = if n > 1.0 { m2 / (n - 1.0) } else { 0.0 };
+        // Population variance (ddof=0), as tsfresh and TSFEL.
+        let var = if n > 0.0 { m2 / n } else { 0.0 };
         let std_dev = var.sqrt();
 
         crate::metrics::BaseMetrics {

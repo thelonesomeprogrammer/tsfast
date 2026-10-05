@@ -14,6 +14,7 @@ pub enum Feature {
     Median,
     MedianAbsDeviation,
     Skew,
+    BiasedSkew,
     UnbiasedFisherKurtosis, // tsfresh default
     BiasedFisherKurtosis,   // tsfel default
     Mad,
@@ -169,13 +170,14 @@ impl Feature {
             Self::Max => C::MAX,
             Self::Median => C::MEDIAN | C::NEEDS_SORT,
             Self::MedianAbsDeviation => C::MEDIAN | C::MEDIAN_ABS_DEV | C::NEEDS_SORT,
-            Self::Skew => C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT,
+            Self::Skew | Self::BiasedSkew => C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT,
+            // The 4th central moment needs the sum of cubes, accumulated under SKEW.
             Self::UnbiasedFisherKurtosis | Self::BiasedFisherKurtosis => {
-                C::SUM | C::MEAN | C::VARIANCE | C::KURTOSIS | C::ENERGY | C::NEEDS_SORT
+                C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::KURTOSIS | C::ENERGY | C::NEEDS_SORT
             }
             Self::Mad => C::SUM | C::MEAN | C::MAD | C::NEEDS_SORT,
             Self::Iqr => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::NEEDS_SORT,
-            Self::Entropy => C::MIN | C::MAX | C::MEDIAN | C::IQR | C::ENTROPY | C::NEEDS_SORT,
+            Self::Entropy => C::empty(),
             Self::SampleEntropy => {
                 C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::SAMP_ENT | C::NEEDS_SORT
             }
@@ -190,7 +192,7 @@ impl Feature {
             Self::PositiveTurning => C::PEAKS,
             Self::NumberCrossingM(_) => C::NUMBER_PEAKS_CROSSINGS,
             Self::NumberPeaks(_) => C::NUMBER_PEAKS_CROSSINGS,
-            Self::AutocorrLag1 => C::SUM | C::MEAN | C::ENERGY | C::AUTOCORR_LAG1,
+            Self::AutocorrLag1 => C::SUM | C::MEAN | C::ENERGY,
             Self::AutocorrFirst1e => {
                 C::SUM | C::MEAN | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
             }
@@ -201,8 +203,8 @@ impl Feature {
             Self::CidCe => C::SUM | C::MEAN | C::CID_CE,
             Self::Slope => C::SUM | C::MEAN | C::SLOPE,
             Self::Intercept => C::SUM | C::MEAN | C::SLOPE | C::INTERCEPT,
-            Self::Paa(_, _) => C::PAA,
-            Self::AbsSumChange => C::ABS_SUM_CHG,
+            Self::Paa(_, _) => C::empty(),
+            Self::AbsSumChange => C::MAC,
             Self::CountAboveMean => C::SUM | C::MEAN | C::CNT_ABOVE_MEAN | C::NEEDS_SORT,
             Self::CountBelowMean => C::SUM | C::MEAN | C::CNT_BELOW_MEAN | C::NEEDS_SORT,
             Self::LongestStrikeAboveMean => C::SUM | C::MEAN | C::STRIKE_ABOVE | C::NEEDS_SORT,
@@ -211,7 +213,7 @@ impl Feature {
                 C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::VAR_COEFF | C::NEEDS_SORT
             }
             Self::C3(_) => C::C3,
-            Self::Auc => C::AUC,
+            Self::Auc => C::empty(),
             Self::SlopeSignChange => C::empty(),
             Self::TurningPoints => C::PEAKS | C::TROUGHS,
             Self::ZeroCrossingMean => {
@@ -231,12 +233,8 @@ impl Feature {
             Self::LastLocMax => C::MAX | C::NEEDS_SORT | C::LAST_LOC_MAX,
             Self::FirstLocMin => C::MIN | C::NEEDS_SORT | C::FIRST_LOC_MIN,
             Self::LastLocMin => C::MIN | C::NEEDS_SORT | C::LAST_LOC_MIN,
-            Self::Autocorr(lag) => {
-                if *lag == 1 {
-                    C::SUM | C::MEAN | C::ENERGY | C::AUTOCORR_LAG1 | C::NEEDS_SORT
-                } else {
-                    C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
-                }
+            Self::Autocorr(_) => {
+                C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
             }
             Self::AggAutocorrelation(_, _) => {
                 C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::FULL_AUTOCORR | C::NEEDS_SORT
@@ -251,7 +249,7 @@ impl Feature {
             Self::AggLinearTrend(_, _, _) => C::AGG_LIN_TREND | C::NEEDS_SORT,
             Self::Quantile(_) => C::QUANTILE | C::NEEDS_SORT,
             Self::ChangeQuantiles(_, _, _, _) => C::QUANTILE | C::NEEDS_SORT,
-            Self::IndexMassQuantile(_) => C::ABS_SUM | C::IDX_MASS_Q | C::NEEDS_SORT,
+            Self::IndexMassQuantile(_) => C::empty(),
             Self::BenfordCorrelation => C::BENFORD | C::NEEDS_SORT,
             Self::MaxLangevinFixedPoint(_, _) => C::LANGEVIN | C::NEEDS_SORT,
             Self::ArCoefficient(_, _) => C::AR_COEFF | C::NEEDS_SORT,
@@ -299,13 +297,13 @@ impl Feature {
             Self::HasDuplicate => C::HAS_DUPLICATE | C::NEEDS_SORT,
             Self::PkPkDistance => C::MIN | C::MAX,
             Self::ZeroCross => C::ZERO_CROSS,
-            Self::MaxPowerSpectrum => C::ANY_FFT,
+            Self::MaxPowerSpectrum => C::empty(),
             Self::Ecdf(_) => C::LENGTH,
             Self::PermutationEntropy(_, _) => C::empty(),
             Self::ValueCount(_) => C::empty(),
             Self::CalcCentroid(_) => C::ENERGY | C::CALC_CENTROID,
             Self::Mfcc(_) => C::MFCC,
-            Self::Lpcc(_) => C::LPCC | C::FULL_AUTOCORR,
+            Self::Lpcc(_) => C::LPCC,
             Self::WaveletEnergy(_) => C::CWT_MEXH,
             Self::WaveletEntropy => C::CWT_MEXH,
             Self::SpktWelchDensity(_) => C::WELCH,

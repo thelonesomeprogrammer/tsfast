@@ -24,7 +24,6 @@ pub struct FeatureContext<'a> {
     pub median: f32,
     pub median_abs_dev: f32,
     pub iqr: f32,
-    pub entropy: f32,
 
     // MeanMetrics
     pub mad_sum: f32,
@@ -50,6 +49,8 @@ pub struct FeatureContext<'a> {
     pub fft_autocorr: &'a [f32],
     pub fft_complex: &'a [realfft::num_complex::Complex<f32>],
     pub spectrum: &'a [f32],
+    /// Length of the series the DFT was taken over (rfft input length).
+    pub dft_len: usize,
     pub mfcc: &'a [f32],
     pub lpcc: &'a [f32],
     pub cwt_energy: &'a [f32],
@@ -81,6 +82,7 @@ impl<'a> FeatureContext<'a> {
         unique_paa_totals: &'a [u16],
         paa_boundaries: &'a [Vec<usize>],
     ) -> Self {
+        state.reset_window_caches();
         Self {
             values,
             running_sorted,
@@ -100,7 +102,6 @@ impl<'a> FeatureContext<'a> {
             median: sort.median,
             median_abs_dev: sort.median_abs_dev,
             iqr: sort.iqr,
-            entropy: sort.entropy,
             mad_sum: mean.mad_sum,
             count_a: mean.count_a,
             count_b: mean.count_b,
@@ -124,6 +125,7 @@ impl<'a> FeatureContext<'a> {
             cwt_entropy: fft.cwt_entropy,
             fft_complex: &fft.fft_complex,
             spectrum: &fft.spectrum,
+            dft_len: fft.dft_len,
             cwt_peaks: fft.cwt_peaks,
             welch_density: &fft.welch_density,
 

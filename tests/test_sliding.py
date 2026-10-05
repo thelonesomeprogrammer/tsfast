@@ -1,7 +1,7 @@
 import pytest
-import pyarrow as pa
 import numpy as np
 from tsfast._tsfast import SlidingExtractor
+from helpers import frame
 
 def test_sliding_multiple_columns():
     features = ["mean", "total_sum", 'mean_second_derivative_central', 'large_standard_deviation-0.05', 'symmetry_looking-0.05', 'ratio_beyond_r_sigma-1.0', 'index_mass_quantile-0.5', 'c3-1']
@@ -13,24 +13,17 @@ def test_sliding_multiple_columns():
     # Update 1: 3 rows
     # Col 1: [1.0, 2.0, 3.0]
     # Col 2: [10.0, 20.0, 30.0]
-    data1 = pa.RecordBatch.from_arrays([
-        pa.array([1.0, 2.0, 3.0], type=pa.float32()),
-        pa.array([10.0, 20.0, 30.0], type=pa.float32())
-    ], names=['col1', 'col2'])
+    data1 = np.stack([[1.0, 2.0, 3.0], [10.0, 20.0, 30.0]])
 
-    result1 = extractor.update(data1).to_pandas()
+    result1 = frame(extractor, extractor.update(data1))
     # Output rows expected:
     # 1. Window [1.0, 2.0], [10.0, 20.0] -> col1 mean: 1.5, max: 2.0, sum: 3.0
     #                                      col2 mean: 15.0, max: 20.0, sum: 30.0
     # 2. Window [2.0, 3.0], [20.0, 30.0] -> col1 mean: 2.5, max: 3.0, sum: 5.0
     #                                      col2 mean: 25.0, max: 30.0, sum: 50.0
 
-    # In sliding.rs, it creates a flattened output per column? Let's check how the output is formatted.
-    # The output of SlidingExtractor gives results per column flattened or interleaved?
-    # Actually, in sliding.rs: "let mut flat_data = Vec::with_capacity(n_cols * n_results);"
-    # And it loops: for col_res in &column_results { for slide_res in col_res { flat_data.push(...) } }
-    # So the output has size n_cols * n_results.
-    # Col1 outputs then Col2 outputs?
+    # update() returns (n_series, n_windows, n_features); frame() flattens it
+    # series-major: every window of col1, then every window of col2.
 
     # Let's just calculate expected flattened values
     # result1 will have n_cols * 2 rows = 4 rows
@@ -46,7 +39,7 @@ def test_sliding_multiple_columns():
 
 def test_basic_features():
     features = [
-        "mean", "total_sum",
+        "mean", "total_sum", "min_value", "max_value",
         "energy", "root_mean_square",
         "length", "variance_larger_than_standard_deviation"
     ]
@@ -56,8 +49,8 @@ def test_basic_features():
     extractor = SlidingExtractor(features, n_cols, window_size, stride)
 
     x = [1.0, 2.0, 3.0, 4.0]
-    data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
-    res = extractor.update(data).to_pandas()
+    data = np.stack([np.asarray(x, dtype=np.float32)])
+    res = frame(extractor, extractor.update(data))
 
     # Window 1: [1.0, 2.0, 3.0]
     # Window 2: [2.0, 3.0, 4.0]
@@ -66,25 +59,25 @@ def test_basic_features():
     w1 = np.array([1.0, 2.0, 3.0])
     assert np.allclose(res.iloc[0]['mean'], np.mean(w1))
     assert np.allclose(res.iloc[0]['total_sum'], np.sum(w1))
-    # assert np.allclose(res.iloc[0]['min_value'], np.min(w1))
-    # assert np.allclose(res.iloc[0]['max_value'], np.max(w1))
+    assert np.allclose(res.iloc[0]['min_value'], np.min(w1))
+    assert np.allclose(res.iloc[0]['max_value'], np.max(w1))
     assert np.allclose(res.iloc[0]['energy'], np.sum(w1**2))
     assert np.allclose(res.iloc[0]['root_mean_square'], np.sqrt(np.mean(w1**2)))
 
     w2 = np.array([2.0, 3.0, 4.0])
     assert np.allclose(res.iloc[1]['mean'], np.mean(w2))
     assert np.allclose(res.iloc[1]['total_sum'], np.sum(w2))
-    # assert np.allclose(res.iloc[1]['min_value'], np.min(w2))
-    # assert np.allclose(res.iloc[1]['max_value'], np.max(w2))
+    assert np.allclose(res.iloc[1]['min_value'], np.min(w2))
+    assert np.allclose(res.iloc[1]['max_value'], np.max(w2))
     assert np.allclose(res.iloc[1]['energy'], np.sum(w2**2))
     assert np.allclose(res.iloc[1]['root_mean_square'], np.sqrt(np.mean(w2**2)))
 
 def test_empty_batch():
     features = ["mean"]
     extractor = SlidingExtractor(features, 1, 2, 1)
-    empty_data = pa.RecordBatch.from_arrays([pa.array([], type=pa.float32())], names=['c'])
+    empty_data = np.stack([[]])
     result = extractor.update(empty_data)
-    assert result.num_rows == 0
+    assert result.shape[1] == 0
 
 def test_stride_behavior():
     features = ["mean"]
@@ -97,8 +90,8 @@ def test_stride_behavior():
     # Window 1 (len 4): [0, 1, 2, 3]
     # Window 2 (len 4, strided by 2): [2, 3, 4, 5]
     x = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
-    data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
-    res = extractor.update(data).to_pandas()
+    data = np.stack([np.asarray(x, dtype=np.float32)])
+    res = frame(extractor, extractor.update(data))
 
     assert len(res) == 2
     assert np.allclose(res.iloc[0]['mean'], np.mean([0.0, 1.0, 2.0, 3.0]))
@@ -119,8 +112,8 @@ def test_sliding_paa():
     extractor = SlidingExtractor(features, n_cols, window_size, stride)
 
     x = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
-    data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
-    res = extractor.update(data).to_pandas()
+    data = np.stack([np.asarray(x, dtype=np.float32)])
+    res = frame(extractor, extractor.update(data))
 
     # window 1: [1, 2, 3, 4] -> paa-2-0 is mean(1,2)=1.5, paa-2-1 is mean(3,4)=3.5
     # window 2: [2, 3, 4, 5] -> paa-2-0 is mean(2,3)=2.5, paa-2-1 is mean(4,5)=4.5
@@ -135,20 +128,17 @@ def test_sliding_higher_moments():
     extractor = SlidingExtractor(features, 1, 5, 1)
 
     x = np.array([1, 2, 3, 4, 5, 6, 7], dtype=np.float32)
-    data = pa.RecordBatch.from_arrays([pa.array(x, type=pa.float32())], names=['c'])
-    res = extractor.update(data).to_pandas()
+    data = np.stack([np.asarray(x, dtype=np.float32)])
+    res = frame(extractor, extractor.update(data))
 
     assert len(res) == 3
     # window 1: [1, 2, 3, 4, 5]
     w1 = x[:5]
     assert np.allclose(res.iloc[0]['mean'], np.mean(w1))
-    assert np.allclose(res.iloc[0]['std_dev'], np.std(w1, ddof=1))
+    assert np.allclose(res.iloc[0]['std_dev'], np.std(w1))  # ddof=0, as tsfresh/TSFEL
 
-    from scipy.stats import kurtosis
-    v = np.var(w1, ddof=1)
-    m = np.mean(w1)
-    m3 = np.mean((w1 - m)**3)
-    expected_skew = m3 / (v**1.5)
+    from scipy.stats import kurtosis, skew
+    expected_skew = skew(w1, bias=False)  # tsfresh (pandas) skewness
     expected_kurt = kurtosis(w1, fisher=True, bias=False)
 
     assert np.allclose(res.iloc[0]['skewness'], expected_skew, atol=1e-5)
@@ -167,9 +157,9 @@ def test_sliding_duplicate_features():
 
     # 5 rows total
     x = np.array([1.0, 5.0, 3.0, 5.0, 1.0], dtype=np.float32)
-    data = pa.RecordBatch.from_arrays([pa.array(x)], names=['col1'])
+    data = np.stack([x])
 
-    result = extractor.update(data).to_pandas()
+    result = frame(extractor, extractor.update(data))
 
     # Windows:
     # 1: [1.0, 5.0, 3.0]
@@ -201,7 +191,6 @@ def test_sliding_duplicate_features():
     np.testing.assert_allclose(result['has_duplicate_min'].values, expected_has_duplicate_min)
 
 def test_reoccurring_ratios_sliding():
-    import pyarrow as pa
     import tsfast
     import numpy as np
 
@@ -214,9 +203,9 @@ def test_reoccurring_ratios_sliding():
     ]
 
     extractor = tsfast.SlidingExtractor(features, 1, 5, 1)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    result_batch = extractor.update(batch)
-    results = result_batch.to_pandas()
+    batch = np.stack([x])
+    out = extractor.update(batch)
+    results = frame(extractor, out)
 
 
     # window 0: [1, 2, 2, 3, 3]
@@ -238,19 +227,16 @@ def test_reoccurring_ratios_sliding():
 def test_ecdf_pk_centroid_sliding():
     import tsfel
     import tsfast
-    import pyarrow as pa
     x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0, 5.0, -1.0, 3.0], dtype=np.float32)
     features = ["ecdf-10", "ecdf-3", "pk_pk_distance", "calc_centroid-100", "calc_centroid-50", "negative_turning", "positive_turning"]
     window_size = 7
     extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=window_size)
 
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    df = extractor.update(batch).to_pandas()
+    batch = np.stack([x])
+    df = frame(extractor, extractor.update(batch))
     results = df.iloc[-1].values
 
     windowed_x = x[-window_size:]
-    tsfel_neg = tsfel.feature_extraction.features.negative_turning(windowed_x)
-    tsfel_pos = tsfel.feature_extraction.features.positive_turning(windowed_x)
     tsfel_neg = tsfel.feature_extraction.features.negative_turning(windowed_x)
     tsfel_pos = tsfel.feature_extraction.features.positive_turning(windowed_x)
     tsfel_ecdf_10 = tsfel.feature_extraction.features.ecdf(windowed_x, d=10)
@@ -262,36 +248,30 @@ def test_ecdf_pk_centroid_sliding():
     assert np.allclose(results[0], min(10.0 / window_size, 1.0))
     assert np.allclose(results[1], min(3.0 / window_size, 1.0))
     assert np.allclose(results[2], tsfel_pk)
-    # assert np.allclose(results[3], tsfel_centroid)
-    # assert np.allclose(results[4], tsfel_centroid_50)
-    assert np.allclose(results[5], tsfel_neg)
-    assert np.allclose(results[6], tsfel_pos)
-    assert np.allclose(results[5], tsfel_neg)
-    assert np.allclose(results[6], tsfel_pos)
-    # assert
+    assert np.allclose(results[3], tsfel_centroid)
     assert np.allclose(results[4], tsfel_centroid_50)
-    assert np.allclose(results[3], tsfel_centroid) or abs(results[3] - tsfel_centroid) < 0.1
-    assert np.allclose(results[4], tsfel_centroid_50) or abs(results[4] - tsfel_centroid_50) < 0.1
+    assert np.allclose(results[5], tsfel_neg)
+    assert np.allclose(results[6], tsfel_pos)
 
 def test_sliding_invalid_type():
-    # Verify that passing non-float32 arrays safely raises a TypeError instead of crashing
+    # Verify that passing non-float arrays safely raises a TypeError instead of crashing
     x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
     features = ["mean", "std_dev"]
     extractor = SlidingExtractor(features, 1, 2, 1)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    with pytest.raises(TypeError, match="Expected Float32Array"):
+    batch = np.stack([x])
+    with pytest.raises(TypeError, match="expected a float32 or float64 numpy array"):
         extractor.update(batch)
 
 def test_median_diff_sliding():
     import tsfast
     data = np.random.randn(200).astype(np.float32)
-    batch = pa.RecordBatch.from_arrays([pa.array(data)], names=["col"])
+    batch = np.stack([data])
 
     features = ["median_diff", "median_abs_diff"]
     extractor = tsfast.SlidingExtractor(features, 1, 100, 50)
 
     import tsfel
-    res = extractor.update(batch).to_pandas()
+    res = frame(extractor, extractor.update(batch))
 
     # First window
     w1 = data[:100]
@@ -306,7 +286,6 @@ def test_median_diff_sliding():
 def test_sliding_energy_ratio_by_chunks():
     import tsfast
     import numpy as np
-    import pyarrow as pa
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], dtype=np.float32)
     features = [
         "energy_ratio_by_chunks_num_segments_3__segment_focus_0",
@@ -315,14 +294,13 @@ def test_sliding_energy_ratio_by_chunks():
     ]
     window_size = 6
     extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=window_size)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['c1'])
-    df = extractor.update(batch).to_pandas()
+    batch = np.stack([x])
+    df = frame(extractor, extractor.update(batch))
     res = df.iloc[-1].values
     assert np.isclose(res[0], (4**2 + 5**2) / sum([i**2 for i in [4,5,6,7,8,9]]))
 
 def test_sliding_permutation_entropy_and_value_count():
     import numpy as np
-    import pyarrow as pa
     import math
     import tsfast
     data = np.array([4.0, 7.0, 9.0, 10.0, 6.0, 11.0, 3.0, 3.0, np.nan, 3.0, np.nan], dtype=np.float32)
@@ -331,7 +309,7 @@ def test_sliding_permutation_entropy_and_value_count():
         "value_count-3.0"
     ]
 
-    batch = pa.RecordBatch.from_arrays([pa.array(data)], names=["col0"])
+    batch = np.stack([data])
     extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=5, stride=1)
     res = extractor.update(batch)
 
@@ -342,15 +320,14 @@ def test_sliding_permutation_entropy_and_value_count():
         vc = value_count(window, 3.0)
 
         if math.isnan(pe):
-            assert math.isnan(res[0][i].as_py())
+            assert math.isnan(res[0, i, 0])
         else:
-            np.testing.assert_allclose(res[0][i].as_py(), pe, rtol=1e-5)
-        assert res[1][i].as_py() == vc
+            np.testing.assert_allclose(res[0, i, 0], pe, rtol=1e-5)
+        assert res[0, i, 1] == vc
 
 
 def test_sliding_fractal_dimensions():
     import numpy as np
-    import pyarrow as pa
     from tsfast._tsfast import SlidingExtractor
     from tsfel.feature_extraction.features import higuchi_fractal_dimension
     import warnings
@@ -363,9 +340,9 @@ def test_sliding_fractal_dimensions():
     extractor = SlidingExtractor(features, n_cols, window_size, stride)
 
     x = np.random.randn(300).astype(np.float32)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=['col1'])
+    batch = np.stack([x])
 
-    res = extractor.update(batch).to_pandas()
+    res = frame(extractor, extractor.update(batch))
 
     # Window 1: x[0:200]
     # Window 2: x[100:300]
@@ -384,8 +361,8 @@ def test_sliding_min_max_every_window(window_size, stride):
     extractor = SlidingExtractor(["min", "max", "pk_pk_distance"], 1, window_size, stride)
     rows = []
     for chunk in np.array_split(x, 7):
-        batch = pa.RecordBatch.from_arrays([pa.array(chunk)], names=["c1"])
-        rows.extend(extractor.update(batch).to_pandas().values)
+        batch = np.stack([chunk])
+        rows.extend(frame(extractor, extractor.update(batch)).values)
     assert len(rows) == (len(x) - window_size) // stride + 1
     for k, row in enumerate(rows):
         w = x[k * stride : k * stride + window_size]
@@ -399,8 +376,23 @@ def test_shape_features_sliding(case):
     x = SHAPE_CASES[case].astype(np.float32)
     window_size, stride = 40, 3
     extractor = SlidingExtractor(SHAPE_FEATURES, 1, window_size, stride)
-    batch = pa.RecordBatch.from_arrays([pa.array(x)], names=["c1"])
-    rows = extractor.update(batch).to_pandas().values
+    batch = np.stack([x])
+    rows = frame(extractor, extractor.update(batch)).values
     for k, row in enumerate(rows):
         w = x[k * stride : k * stride + window_size]
         assert np.allclose(row, shape_features_reference(w), atol=1e-5, equal_nan=True), k
+
+
+def test_sliding_output_shape_and_names():
+    features = ["mean", "max_value"]
+    extractor = SlidingExtractor(features, 2, 3, 1)
+    assert extractor.feature_names == features
+    data = np.arange(10, dtype=np.float32).reshape(2, 5)
+    out = extractor.update(data)
+    # 5 samples in a window of 3: windows end at samples 3, 4 and 5.
+    assert out.dtype == np.float32 and out.shape == (2, 3, 2)
+    np.testing.assert_allclose(out[1, :, 0], [6.0, 7.0, 8.0])
+    np.testing.assert_array_equal(out[1, :, 1], [7.0, 8.0, 9.0])
+    assert extractor.update(np.zeros((2, 0), dtype=np.float32)).shape == (2, 0, 2)
+    # float64 is accepted and converted.
+    np.testing.assert_array_equal(extractor.update(np.array([[5.0], [10.0]]))[:, 0, 1], [5.0, 10.0])

@@ -22,7 +22,6 @@ pub fn eval_complexity(
     let _last_min_idx = context.last_min_idx;
     let _median = context.median;
     let _iqr = context.iqr;
-    let _entropy = context.entropy;
     let _mad_sum = context.mad_sum;
     let _count_a = context.count_a;
     let _count_b = context.count_b;
@@ -43,11 +42,13 @@ pub fn eval_complexity(
     let res = match feat {
         Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
             let m_val = *m as usize;
-            let r = f32::from_bits(*r_bits);
-            crate::common::approx_entropy_simd(m_val, r, values)
-                - crate::common::approx_entropy_simd(m_val + 1, r, values)
+            // tsfresh: r is relative to the population std.
+            let r = f32::from_bits(*r_bits) * population_std(values);
+            (crate::common::approx_entropy_simd(m_val, r, values)
+                - crate::common::approx_entropy_simd(m_val + 1, r, values))
+            .abs()
         }
-        Feature::SampleEntropy => crate::common::sample_entropy_simd(values, _std_dev),
+        Feature::SampleEntropy => crate::common::sample_entropy_simd(values, population_std(values)),
         Feature::PermutationEntropy(tau, dimension) => {
             crate::common::permutation_entropy(values, *tau, *dimension)
         }
@@ -65,8 +66,9 @@ fn calc_higuchi_fd(values: &[f32]) -> f32 {
         return f32::NAN;
     }
 
-    let k_max = n / 10;
-    if k_max < 1 {
+    // TSFEL: k in np.arange(1, n // 10), i.e. n / 10 excluded; polyfit needs 2 points.
+    let k_max = n / 10 - 1;
+    if k_max < 2 {
         return f32::NAN;
     }
 
@@ -117,4 +119,16 @@ fn calc_higuchi_fd(values: &[f32]) -> f32 {
     }
 
     (num / den) as f32
+}
+
+/// np.std(x): computed here so the O(n^2) entropies don't depend on which
+/// accumulation flags other requested features happen to enable.
+fn population_std(values: &[f32]) -> f32 {
+    let n = values.len() as f64;
+    if n == 0.0 {
+        return 0.0;
+    }
+    let mean = values.iter().map(|&v| v as f64).sum::<f64>() / n;
+    let var = values.iter().map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / n;
+    var.sqrt() as f32
 }

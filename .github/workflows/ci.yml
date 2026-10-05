@@ -34,8 +34,15 @@ jobs:
 
       - name: No scratch files in repo root
         run: |
-          if ls plan.md patch_*.py revert_*.py fix_*.py 2>/dev/null; then
-            echo "Remove agent scratch files listed above"; exit 1
+          # Every tracked top-level entry must be listed here. A new one is
+          # usually an agent's scratch file (plan.md, patch_*.py, result dumps):
+          # delete it. If it really belongs at the root, add it to this list.
+          allowed=" .claude .github .gitignore .jules AGENTS.md CLAUDE.md Cargo.lock Cargo.toml README.md benches benchmarks missing.md pyproject.toml rust-toolchain.toml scripts src tests tsfast uv.lock "
+          bad=$(git ls-files | cut -d/ -f1 | sort -u | while read -r f; do
+            case "$allowed" in *" $f "*) ;; *) echo "$f" ;; esac
+          done)
+          if [ -n "$bad" ]; then
+            echo "Unexpected files in repo root (see comment in ci.yml):"; echo "$bad"; exit 1
           fi
 
       - name: Rust tests

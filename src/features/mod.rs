@@ -2,6 +2,7 @@ pub mod autocorrelation;
 pub mod changes;
 pub mod complexity;
 pub mod crossings_peaks;
+pub mod cwt;
 pub mod distribution;
 pub mod dynamic;
 pub mod energy;
@@ -29,6 +30,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::Mad
         | F::Mean
         | F::Skew
+        | F::BiasedSkew
         | F::Std
         | F::TotalSum
         | F::UnbiasedFisherKurtosis
