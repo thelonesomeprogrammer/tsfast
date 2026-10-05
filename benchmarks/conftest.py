@@ -30,7 +30,8 @@ def full_30_features():
         "linear_trend__attr_\"slope\"", "agg_linear_trend__attr_\"slope\"__chunk_len_5__f_agg_\"mean\"", "time_reversal_asymmetry_statistic__lag_1"
         "spectral_slope", "spectral_roll_on", "spectral_roll_off"
         "approx_entropy-2-0.2", "sample_entropy", "binned_entropy__max_bins_10"
-        "ratio_beyond_r_sigma-2.0", "index_mass_quantile-0.5", "c3-2"
+        "ratio_beyond_r_sigma-2.0", "index_mass_quantile-0.5", "c3-2",
+        "permutation_entropy-1-3", "value_count-3.0"
     ]
 
 @pytest.fixture(scope="session")

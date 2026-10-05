@@ -280,3 +280,31 @@ def test_median_diff_expanding():
     res2 = extractor.update(batch2).to_pandas().iloc[0].values
     assert np.allclose(res2[0], tsfel.feature_extraction.features.median_diff(data))
     assert np.allclose(res2[1], tsfel.feature_extraction.features.median_abs_diff(data))
+
+def test_expanding_permutation_entropy_and_value_count():
+    import numpy as np
+    import pyarrow as pa
+    import math
+    import tsfast
+    data = np.array([4.0, 7.0, 9.0, 10.0, 6.0, 11.0, 3.0, 3.0, np.nan, 3.0, np.nan], dtype=np.float32)
+    features = [
+        "permutation_entropy-1-3",
+        "value_count-3.0"
+    ]
+
+    extractor = tsfast.ExpandingExtractor(features, n_cols=1)
+    from tsfresh.feature_extraction.feature_calculators import permutation_entropy, value_count
+
+    for i in range(len(data)):
+        batch = pa.RecordBatch.from_arrays([pa.array([data[i]], type=pa.float32())], names=["col0"])
+        res = extractor.update(batch)
+
+        window = data[:i+1]
+        pe = permutation_entropy(window, tau=1, dimension=3)
+        vc = value_count(window, 3.0)
+
+        if math.isnan(pe):
+            assert math.isnan(res[0][0].as_py())
+        else:
+            np.testing.assert_allclose(res[0][0].as_py(), pe, rtol=1e-5)
+        assert res[1][0].as_py() == vc

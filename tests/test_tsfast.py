@@ -468,3 +468,44 @@ def test_change_quantiles():
     assert np.allclose(results[1], expected_2)
     assert np.allclose(results[2], expected_3)
     assert np.allclose(results[3], expected_4)
+
+from tsfresh.feature_extraction.feature_calculators import permutation_entropy, value_count
+import pyarrow as pa
+import tsfast
+
+def test_permutation_entropy_and_value_count():
+    import numpy as np
+    data = np.array([4.0, 7.0, 9.0, 10.0, 6.0, 11.0, 3.0, 3.0, np.nan, 3.0, np.nan], dtype=np.float32)
+    batch = pa.RecordBatch.from_arrays([pa.array(data)], names=["col0"])
+
+    features = [
+        "permutation_entropy-1-3",
+        "permutation_entropy-2-3",
+        "value_count-3.0",
+        "value_count-6.0",
+        "value_count-nan"
+    ]
+
+    extractor = tsfast.Extractor(features)
+    res = extractor.process_2d_floats(batch)
+
+    assert res is not None
+    assert res.num_columns == len(features)
+
+    res_pe1 = res[0][0].as_py()
+    res_pe2 = res[1][0].as_py()
+    res_vc3 = res[2][0].as_py()
+    res_vc6 = res[3][0].as_py()
+    res_vcn = res[4][0].as_py()
+
+    ts_pe1 = permutation_entropy(data, tau=1, dimension=3)
+    ts_pe2 = permutation_entropy(data, tau=2, dimension=3)
+    ts_vc3 = value_count(data, 3.0)
+    ts_vc6 = value_count(data, 6.0)
+    ts_vcn = value_count(data, np.nan)
+
+    np.testing.assert_allclose(res_pe1, ts_pe1, rtol=1e-5)
+    np.testing.assert_allclose(res_pe2, ts_pe2, rtol=1e-5)
+    assert res_vc3 == ts_vc3
+    assert res_vc6 == ts_vc6
+    assert res_vcn == ts_vcn

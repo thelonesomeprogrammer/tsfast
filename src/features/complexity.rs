@@ -51,6 +51,9 @@ pub fn eval_complexity(
                 Feature::SampleEntropy => {
                     crate::common::sample_entropy_simd(values, _std_dev)
                 }
+                Feature::PermutationEntropy(tau, dimension) => {
+                    crate::common::permutation_entropy(values, *tau, *dimension)
+                }
         _ => return None,
     };
     Some(res)
