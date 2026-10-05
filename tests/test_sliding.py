@@ -317,6 +317,32 @@ def test_median_diff_sliding():
     assert np.allclose(res.iloc[1].values[0], tsfel.feature_extraction.features.median_diff(w2))
     assert np.allclose(res.iloc[1].values[1], tsfel.feature_extraction.features.median_abs_diff(w2))
 
+def test_sliding_permutation_entropy_and_value_count():
+    import numpy as np
+    import pyarrow as pa
+    import math
+    import tsfast
+    data = np.array([4.0, 7.0, 9.0, 10.0, 6.0, 11.0, 3.0, 3.0, np.nan, 3.0, np.nan], dtype=np.float32)
+    features = [
+        "permutation_entropy-1-3",
+        "value_count-3.0"
+    ]
+
+    batch = pa.RecordBatch.from_arrays([pa.array(data)], names=["col0"])
+    extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=5, stride=1)
+    res = extractor.update(batch)
+
+    from tsfresh.feature_extraction.feature_calculators import permutation_entropy, value_count
+    for i in range(len(data) - 5 + 1):
+        window = data[i:i+5]
+        pe = permutation_entropy(window, tau=1, dimension=3)
+        vc = value_count(window, 3.0)
+
+        if math.isnan(pe):
+            assert math.isnan(res[0][i].as_py())
+        else:
+            np.testing.assert_allclose(res[0][i].as_py(), pe, rtol=1e-5)
+        assert res[1][i].as_py() == vc
 def test_sliding_fractal_dimensions():
     import numpy as np
     import pyarrow as pa

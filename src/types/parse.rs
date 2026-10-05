@@ -490,6 +490,21 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
             }
         }
     }
+
+    if let Some(arg) = s.strip_prefix("permutation_entropy-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.len() == 2 {
+            if let (Ok(tau), Ok(dim)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                return Some(Feature::PermutationEntropy(tau, dim));
+            }
+        }
+    }
+
+    if let Some(arg) = s.strip_prefix("value_count-") {
+        if let Ok(v) = arg.parse::<f32>() {
+            return Some(Feature::ValueCount(v.to_bits()));
+        }
+    }
     if let Some(arg) = s.strip_prefix("large_standard_deviation__r_") {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::LargeStandardDeviation(r.to_bits()));
@@ -613,6 +628,12 @@ impl Feature {
             Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
+            }
+            Feature::PermutationEntropy(tau, dim) => {
+                format!("permutation_entropy-{}-{}", tau, dim)
+            }
+            Feature::ValueCount(val_bits) => {
+                format!("value_count-{}", f32::from_bits(*val_bits))
             }
             Feature::LinearTrend(attr) => {
                 let attr_str = match attr {
