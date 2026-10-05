@@ -21,7 +21,6 @@ pub(crate) struct ExpandingEngine<'a> {
     pub(crate) unique_tra_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
-    pub(crate) fft_size: usize,
     pub(crate) fft_update_period: usize,
 }
 
@@ -190,10 +189,10 @@ impl<'a> ExpandingEngine<'a> {
             base_metrics.mean,
             base_metrics.m2,
             &self.r2c,
-            self.fft_size,
             self.fft_update_period,
             state,
-        );
+        )
+        .unwrap_or_default();
 
         let mean_metrics =
             MeanProcessor::finalize(self.compute, full_series, n, base_metrics.mean, state);

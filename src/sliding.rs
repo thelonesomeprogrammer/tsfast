@@ -1,4 +1,4 @@
-use crate::common::{ColumnState, map_features_to_indices, next_good_fft_size};
+use crate::common::{ColumnState, map_features_to_indices};
 use crate::types::{Compute, Feature};
 use arrow::array::{ArrayRef, Float32Array, RecordBatch};
 use arrow::datatypes::{DataType, Field, Schema};
@@ -81,7 +81,7 @@ impl SlidingExtractor {
 
         if compute.intersects(Compute::ANY_FFT) {
             let mut p = planner_arc.lock().unwrap_or_else(|e| e.into_inner());
-            p.plan_fft_forward(next_good_fft_size(window_size));
+            p.plan_fft_forward(window_size);
         }
 
         Ok(Self {
@@ -147,10 +147,9 @@ impl SlidingExtractor {
             })
             .collect();
 
-        let fft_size = next_good_fft_size(self.window_size);
         let r2c = if self.compute.intersects(Compute::ANY_FFT) {
             let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
-            Some(p.plan_fft_forward(fft_size))
+            Some(p.plan_fft_forward(self.window_size))
         } else {
             None
         };
@@ -180,7 +179,6 @@ impl SlidingExtractor {
                         unique_tra_lags: &self.unique_tra_lags,
                         paa_boundaries: &paa_boundaries,
                         r2c: r2c.as_ref().cloned(),
-                        fft_size,
                     };
 
                     let mut batch_res = Vec::new();

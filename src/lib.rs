@@ -21,3 +21,4 @@ fn _tsfast(m: &Bound<'_, PyModule>) -> PyResult<()> {
 pub mod metrics;
 pub mod context;
 pub mod features;
+pub mod spectral;

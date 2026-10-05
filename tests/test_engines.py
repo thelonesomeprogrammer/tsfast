@@ -32,31 +32,10 @@ ATOL = 1e-4
 
 # Known engine disagreements. strict=True: once fixed, the XPASS fails the run
 # so the entry gets removed.
-_PAA = "engines round PAA segment boundaries differently when len % segments != 0"
-_EXP_SPECTRAL = "expanding FFT processor never computes spectral skewness/kurtosis (always 0)"
-_EXP_CWT = "expanding CWT (wavelet_energy/wavelet_entropy) differs from static"
-_CONST_FFT = "constant series: FFT round-off leaves ~1e-7 bins and spectral ratios blow up"
 KNOWN_FAILURES = {
-    "sliding": {
-        "paa-3-2": _PAA,
-    },
-    "expanding": {
-        "paa-3-2": _PAA,
-        "paa-4-1": _PAA,
-        "spectral_kurtosis": _EXP_SPECTRAL,
-        "spectral_skewness": _EXP_SPECTRAL,
-        "wavelet_energy-0": _EXP_CWT,
-        "wavelet_energy-3": _EXP_CWT,
-        "wavelet_entropy": _EXP_CWT,
-    },
-    "constant": {
-        "spectral_decrease": _CONST_FFT,
-        "spectral_kurtosis": _CONST_FFT,
-        "spectral_skewness": _CONST_FFT,
-        "wavelet_energy-0": _EXP_CWT,
-        "wavelet_energy-3": _EXP_CWT,
-        "wavelet_entropy": _EXP_CWT,
-    },
+    "sliding": {},
+    "expanding": {},
+    "constant": {},
 }
 
 
@@ -100,14 +79,16 @@ def _chunks(x, sizes):
     assert start == len(x)
 
 
+# 37 is prime: exercises the exact-length sliding DFT and its periodic re-sync.
+@pytest.mark.parametrize("window", [WINDOW, 37])
 @pytest.mark.parametrize("feature", _params("sliding"))
-def test_sliding_matches_static(feature):
+def test_sliding_matches_static(feature, window):
     x = _series()
-    extractor = tsfast.SlidingExtractor([feature], 1, WINDOW)
+    extractor = tsfast.SlidingExtractor([feature], 1, window)
     got = np.concatenate(
         [extractor.update(_batch(c)).column(0).to_numpy() for c in _chunks(x, SLIDING_CHUNKS)]
     )
-    windows = [x[i:i + WINDOW] for i in range(len(x) - WINDOW + 1)]
+    windows = [x[i:i + window] for i in range(len(x) - window + 1)]
     np.testing.assert_allclose(got, _static(feature, windows), rtol=RTOL, atol=ATOL, equal_nan=True)
 
 

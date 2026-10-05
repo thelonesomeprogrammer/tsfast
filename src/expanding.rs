@@ -157,12 +157,8 @@ impl ExpandingExtractor {
             })
             .collect();
 
-        // Ensure we have a plan for the current total_n or max_size
-        let fft_size = if let Some(ms) = self.max_size {
-            next_good_fft_size(ms.max(total_n))
-        } else {
-            total_n
-        };
+        // Exact-length FFT: padding would change the spectrum (see spectral::rfft).
+        let fft_size = total_n;
 
         let r2c = if self.compute.intersects(Compute::ANY_FFT) && fft_size > 0 {
             let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
@@ -205,7 +201,6 @@ impl ExpandingExtractor {
                     unique_tra_lags: &self.unique_tra_lags,
                     paa_boundaries: &current_paa_boundaries,
                     r2c: r2c.as_ref().cloned(),
-                    fft_size,
                     fft_update_period: self.fft_update_period,
                 };
 

@@ -118,12 +118,8 @@ impl Extractor {
             })
             .collect();
 
-        // If FFT is needed, ensure we have a plan for the current size or max_size
-        let fft_size = if let Some(ms) = self.max_size {
-            next_good_fft_size(ms.max(n_rows))
-        } else {
-            n_rows
-        };
+        // Exact-length FFT: padding would change the spectrum (see spectral::rfft).
+        let fft_size = n_rows;
 
         let r2c = if compute.intersects(Compute::ANY_FFT) && fft_size > 0 {
             let mut p = self.planner.lock().unwrap_or_else(|e| e.into_inner());
@@ -149,7 +145,6 @@ impl Extractor {
                     unique_tra_lags,
                     paa_boundaries: &paa_boundaries,
                     r2c: r2c.as_ref().cloned(),
-                    fft_size,
                 };
                 Ok(processor.process_column(float_array.values()))
             })

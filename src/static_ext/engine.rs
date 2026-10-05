@@ -19,7 +19,6 @@ pub(crate) struct StaticEngine<'a> {
     pub(crate) unique_tra_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
-    pub(crate) fft_size: usize,
 }
 
 impl<'a> StaticEngine<'a> {
@@ -132,30 +131,10 @@ impl<'a> StaticEngine<'a> {
             n,
             base_metrics.mean,
             base_metrics.m2,
-            self.fft_size,
             &self.r2c,
             &mut state,
         )
-        .unwrap_or(crate::metrics::FftResult {
-            spectrum: Vec::new(),
-            fft_complex: Vec::new(),
-            freq_centroid: 0.0,
-            spectral_decrease: 0.0,
-            spectral_slope: 0.0,
-            spectral_spread: 0.0,
-            spectral_entropy: 0.0,
-            spectral_roll_on: 0.0,
-            spectral_roll_off: 0.0,
-            spectral_skewness: 0.0,
-            spectral_kurtosis: 0.0,
-            fft_autocorr: Vec::new(),
-            mfcc: Vec::new(),
-            lpcc: Vec::new(),
-            cwt_energy: Vec::new(),
-            cwt_entropy: 0.0,
-            cwt_peaks: 0,
-            welch_density: Vec::new(),
-        });
+        .unwrap_or_default();
 
         let zc_metrics = DiffProcessor::finalize(self.compute, &state);
 

@@ -20,7 +20,6 @@ pub(crate) struct SlidingEngine<'a> {
     pub(crate) unique_tra_lags: &'a [u16],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn realfft::RealToComplex<f32>>>,
-    pub(crate) fft_size: usize,
 }
 
 impl<'a> SlidingEngine<'a> {
@@ -348,7 +347,6 @@ impl<'a> SlidingEngine<'a> {
             n,
             base_metrics.mean,
             base_metrics.m2,
-            self.fft_size,
             &self.r2c,
             state,
         )?;

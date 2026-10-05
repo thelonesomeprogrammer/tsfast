@@ -314,11 +314,9 @@ def test_spectral_shape():
     tsfel_spread = spectral_spread(data, fs)
     tsfel_entropy = spectral_entropy(data, fs)
 
-    # tsfast calculates spectral centroid and spread as bin indices (e.g., 0, 1, 2, ... N/2)
-    # to match tsfel we must multiply by (fs / len(data))
-    freq_resolution = fs / len(data)
-    assert result_rust.column("spectral_centroid")[0].as_py() * freq_resolution == pytest.approx(tsfel_centroid, rel=1e-5)
-    assert result_rust.column("spectral_spread")[0].as_py() * freq_resolution == pytest.approx(tsfel_spread, rel=1e-5)
+    # Centroid and spread are in Hz, as TSFEL (fs = 100).
+    assert result_rust.column("spectral_centroid")[0].as_py() == pytest.approx(tsfel_centroid, rel=1e-5)
+    assert result_rust.column("spectral_spread")[0].as_py() == pytest.approx(tsfel_spread, rel=1e-5)
     assert result_rust.column("spectral_entropy")[0].as_py() == pytest.approx(tsfel_entropy, rel=1e-5)
 
 def test_dynamic_features():

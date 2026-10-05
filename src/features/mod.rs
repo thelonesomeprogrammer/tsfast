@@ -2,6 +2,7 @@ pub mod autocorrelation;
 pub mod changes;
 pub mod complexity;
 pub mod crossings_peaks;
+pub mod cwt;
 pub mod distribution;
 pub mod dynamic;
 pub mod energy;

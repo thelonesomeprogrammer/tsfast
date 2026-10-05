@@ -8,6 +8,8 @@ pub const LANES: usize = 4;
 #[derive(Clone, Debug)]
 pub struct SlidingDFT {
     pub n: usize,
+    /// Updates since the bins were last computed by a real FFT.
+    pub updates: usize,
     pub bins: Vec<Complex<f32>>,
     pub twiddles: Vec<Complex<f32>>,
 }
@@ -23,6 +25,7 @@ impl SlidingDFT {
         }
         Self {
             n,
+            updates: 0,
             bins: vec![Complex::new(0.0, 0.0); n_bins],
             twiddles,
         }
@@ -30,6 +33,7 @@ impl SlidingDFT {
 
     #[inline(always)]
     pub fn update(&mut self, old_val: f32, new_val: f32) {
+        self.updates += 1;
         let diff = new_val - old_val;
         for (k, twiddle) in self.twiddles.iter().enumerate() {
             // S_k(n+1) = twiddle_k * (S_k(n) + new - old)
@@ -111,9 +115,6 @@ pub struct ColumnState {
     pub cwt_final_energy: Vec<f32>,
     pub cwt_final_sum_abs: Vec<f32>,
     pub cwt_final_clnc: Vec<f32>,
-    pub cwt_kernels: Vec<Vec<f32>>,
-    pub mfcc_filter_banks: Vec<Vec<f32>>,
-    pub mfcc_dct_matrix: Vec<Vec<f32>>,
     pub value_counts: rustc_hash::FxHashMap<u32, u32>,
     pub reoccurring_datapoints: u32,
     pub reoccurring_values: u32,
@@ -128,7 +129,6 @@ pub struct ColumnState {
     pub m3: f32,
     pub m4: f32,
     pub last_fft_n: usize,
-    pub last_spectrum: Vec<f32>,
     pub last_fft_complex: Vec<num_complex::Complex<f32>>,
     pub fft_in_buffer: Vec<f32>,
     pub fft_out_buffer: Vec<num_complex::Complex<f32>>,
@@ -137,7 +137,6 @@ pub struct ColumnState {
     pub cwt_peaks: u16,
     pub welch_density: Vec<f32>,
     pub welch_planner: Option<std::sync::Arc<std::sync::Mutex<realfft::RealFftPlanner<f32>>>>,
-    pub cwt_wavelets: rustc_hash::FxHashMap<u16, Vec<f32>>,
     pub spectrum_buffer: Vec<f32>,
     pub adf_test_stat: f32,
     pub adf_p_value: f32,
@@ -257,9 +256,6 @@ impl ColumnState {
             cwt_final_energy: Vec::new(),
             cwt_final_sum_abs: Vec::new(),
             cwt_final_clnc: Vec::new(),
-            cwt_kernels: Vec::new(),
-            mfcc_filter_banks: Vec::new(),
-            mfcc_dct_matrix: Vec::new(),
             value_counts: rustc_hash::FxHashMap::default(),
             reoccurring_datapoints: 0,
             reoccurring_values: 0,
@@ -272,7 +268,6 @@ impl ColumnState {
             m3: 0.0,
             m4: 0.0,
             last_fft_n: 0,
-            last_spectrum: Vec::new(),
             last_fft_complex: Vec::new(),
             fft_in_buffer: Vec::new(),
             fft_out_buffer: Vec::new(),
@@ -281,7 +276,6 @@ impl ColumnState {
             cwt_peaks: 0,
             welch_density: Vec::new(),
             welch_planner: None,
-            cwt_wavelets: rustc_hash::FxHashMap::default(),
             spectrum_buffer: Vec::new(),
             adf_test_stat: std::f32::NAN,
             adf_p_value: std::f32::NAN,

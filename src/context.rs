@@ -49,6 +49,8 @@ pub struct FeatureContext<'a> {
     pub fft_autocorr: &'a [f32],
     pub fft_complex: &'a [realfft::num_complex::Complex<f32>],
     pub spectrum: &'a [f32],
+    /// Length of the series the DFT was taken over (rfft input length).
+    pub dft_len: usize,
     pub mfcc: &'a [f32],
     pub lpcc: &'a [f32],
     pub cwt_energy: &'a [f32],
@@ -123,6 +125,7 @@ impl<'a> FeatureContext<'a> {
             cwt_entropy: fft.cwt_entropy,
             fft_complex: &fft.fft_complex,
             spectrum: &fft.spectrum,
+            dft_len: fft.dft_len,
             cwt_peaks: fft.cwt_peaks,
             welch_density: &fft.welch_density,
 
