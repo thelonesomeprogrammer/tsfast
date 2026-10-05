@@ -19,6 +19,7 @@ pub enum Feature {
     Iqr,
     Entropy,
     SampleEntropy,
+    HiguchiFd,
     BinnedEntropy(u32),
     Energy,
     Rms,
@@ -297,6 +298,7 @@ impl Feature {
             Self::CwtCoefficients(_, _, _, _) => C::CWT,
             Self::NumberCwtPeaks(_) => C::CWT,
             Self::AugmentedDickeyFuller(_) => C::ADF | C::NEEDS_SORT,
+            Self::HiguchiFd => C::empty(),
         }
     }
 }

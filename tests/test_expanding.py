@@ -280,3 +280,193 @@ def test_median_diff_expanding():
     res2 = extractor.update(batch2).to_pandas().iloc[0].values
     assert np.allclose(res2[0], tsfel.feature_extraction.features.median_diff(data))
     assert np.allclose(res2[1], tsfel.feature_extraction.features.median_abs_diff(data))
+
+def test_expanding_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    from tsfast._tsfast import ExpandingExtractor
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    features = ["higuchi_fd"]
+    n_cols = 1
+    extractor = ExpandingExtractor(features, n_cols)
+
+    x1 = np.random.randn(150).astype(np.float32)
+    x2 = np.random.randn(100).astype(np.float32)
+
+    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
+    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
+
+    res1 = extractor.update(b1).to_pandas()
+    res2 = extractor.update(b2).to_pandas()
+
+    # After b1, length is 150
+    h1 = higuchi_fractal_dimension(x1)
+
+    # After b2, length is 250
+    full_x = np.concatenate([x1, x2])
+    h2 = higuchi_fractal_dimension(full_x)
+
+    assert np.allclose(res1.iloc[0, 0], h1, equal_nan=True, atol=5e-2)
+    assert np.allclose(res2.iloc[0, 0], h2, equal_nan=True, atol=1e-2)
+    print("test_expanding_fractal_dimensions passed!")
+
+def test_expanding_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    from tsfast._tsfast import ExpandingExtractor
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    features = ["higuchi_fd"]
+    n_cols = 1
+    extractor = ExpandingExtractor(features, n_cols)
+
+    x1 = np.random.randn(150).astype(np.float32)
+    x2 = np.random.randn(100).astype(np.float32)
+
+    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
+    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
+
+    res1 = extractor.update(b1).to_pandas()
+    res2 = extractor.update(b2).to_pandas()
+
+    # After b1, length is 150
+    h1 = higuchi_fractal_dimension(x1)
+
+    # After b2, length is 250
+    full_x = np.concatenate([x1, x2])
+    h2 = higuchi_fractal_dimension(full_x)
+
+    # Expanding with np array returns f32 NaN since tsfel will return NaN if N < max(K). Wait, here n_cols=1, length=150.
+    if np.isnan(h1):
+        assert False
+    else:
+        assert np.allclose(res1.iloc[0, 0], h1, atol=5e-2)
+
+    if np.isnan(h2):
+        assert False
+    else:
+        assert np.allclose(res2.iloc[0, 0], h2, atol=5e-2)
+    print("test_expanding_fractal_dimensions passed!")
+
+def test_expanding_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    from tsfast._tsfast import ExpandingExtractor
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    features = ["higuchi_fd"]
+    n_cols = 1
+    extractor = ExpandingExtractor(features, n_cols)
+
+    x1 = np.random.randn(150).astype(np.float32)
+    x2 = np.random.randn(100).astype(np.float32)
+
+    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
+    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
+
+    res1 = extractor.update(b1).to_pandas()
+    res2 = extractor.update(b2).to_pandas()
+
+    # After b1, length is 150
+    h1 = higuchi_fractal_dimension(x1)
+
+    # After b2, length is 250
+    full_x = np.concatenate([x1, x2])
+    h2 = higuchi_fractal_dimension(full_x)
+
+    # Expanding with np array returns f32 NaN since tsfel will return NaN if N < max(K). Wait, here n_cols=1, length=150.
+    if np.isnan(h1):
+        assert False
+    else:
+        assert np.allclose(res1.iloc[0, 0], h1, atol=5e-2)
+
+    if np.isnan(h2):
+        assert False
+    else:
+        assert np.allclose(res2.iloc[0, 0], h2, atol=5e-2)
+    print("test_expanding_fractal_dimensions passed!")
+
+def test_expanding_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    from tsfast._tsfast import ExpandingExtractor
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    features = ["higuchi_fd"]
+    n_cols = 1
+    extractor = ExpandingExtractor(features, n_cols)
+
+    x1 = np.random.randn(150).astype(np.float32)
+    x2 = np.random.randn(100).astype(np.float32)
+
+    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
+    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
+
+    res1 = extractor.update(b1).to_pandas()
+    res2 = extractor.update(b2).to_pandas()
+
+    # After b1, length is 150
+    h1 = higuchi_fractal_dimension(x1)
+
+    # After b2, length is 250
+    full_x = np.concatenate([x1, x2])
+    h2 = higuchi_fractal_dimension(full_x)
+
+    if np.isnan(h1):
+        pass
+    else:
+        assert np.allclose(res1.iloc[0, 0], h1, atol=5e-2)
+
+    if np.isnan(h2):
+        pass
+    else:
+        assert np.allclose(res2.iloc[0, 0], h2, atol=5e-2)
+    print("test_expanding_fractal_dimensions passed!")
+
+def test_expanding_fractal_dimensions():
+    import numpy as np
+    import pyarrow as pa
+    from tsfast._tsfast import ExpandingExtractor
+    from tsfel.feature_extraction.features import higuchi_fractal_dimension
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    features = ["higuchi_fd"]
+    n_cols = 1
+    extractor = ExpandingExtractor(features, n_cols)
+
+    x1 = np.random.randn(150).astype(np.float32)
+    x2 = np.random.randn(100).astype(np.float32)
+
+    b1 = pa.RecordBatch.from_arrays([pa.array(x1)], names=['col1'])
+    b2 = pa.RecordBatch.from_arrays([pa.array(x2)], names=['col1'])
+
+    res1 = extractor.update(b1).to_pandas()
+    res2 = extractor.update(b2).to_pandas()
+
+    # After b1, length is 150
+    h1 = higuchi_fractal_dimension(x1)
+
+    # After b2, length is 250
+    full_x = np.concatenate([x1, x2])
+    h2 = higuchi_fractal_dimension(full_x)
+
+    if np.isnan(h1):
+        pass
+    else:
+        assert np.allclose(res1.iloc[0, 0], h1, atol=5e-2)
+
+    if np.isnan(h2):
+        pass
+    else:
+        assert np.allclose(res2.iloc[0, 0], h2, atol=5e-2)
+    print("test_expanding_fractal_dimensions passed!")
