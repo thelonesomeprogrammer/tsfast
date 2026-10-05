@@ -310,6 +310,16 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
 // ─── Legacy tsfresh / torque format parsers ─────────────────────────────────
 
 fn parse_legacy_format(s: &str) -> Option<Feature> {
+    if s.contains("number_crossing_m__m_") {
+        let pos = s.find("m_")?;
+        let m: f32 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::NumberCrossingM(m.to_bits()));
+    }
+    if s.contains("number_peaks__n_") {
+        let pos = s.find("n_")?;
+        let n: u16 = s[pos + 2..].parse().ok()?;
+        return Some(Feature::NumberPeaks(n));
+    }
     if s.contains("c3__lag_") {
         let pos = s.find("lag_")?;
         let n: u16 = s[pos + 4..].parse().ok()?;
@@ -541,6 +551,8 @@ impl Feature {
             Feature::RootMeanSquare => "root_mean_square".to_string(),
             Feature::ZeroCrossingRate => "zero_crossing_rate".to_string(),
             Feature::PeakCount => "peak_count".to_string(),
+            Feature::NumberCrossingM(m) => format!("number_crossing_m__m_{}", f32::from_bits(*m)),
+            Feature::NumberPeaks(n) => format!("number_peaks__n_{}", n),
             Feature::AutocorrLag1 => "autocorr_lag1".to_string(),
             Feature::AutocorrFirst1e => "autocorrelation".to_string(),
             Feature::MeanAbsChange => "mean_abs_change".to_string(),
