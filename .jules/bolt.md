@@ -15,3 +15,7 @@ Action: Reused fft_in_buffer and fft_out_buffer for realfft processing and remov
 ## 2026-10-03 - Avoiding to_vec() and fill() on reused buffers
 **Learning:** When reusing buffers in `ColumnState` (like `fft_out_buffer` via `std::mem::take`), calling `.to_vec()` to satisfy an ownership requirement (e.g., `SlidingDFT::from_fft()`) triggers a deep copy allocation anyway, causing a massive performance regression. Furthermore, calling `.fill(0.0)` on a fully expanded buffer size is slower than zeroing only the required padding.
 **Action:** Use careful slicing `[..len]` to interact with processing functions and only explicitly zero-fill the padding index ranges to maintain true zero-allocation pooling.
+
+## 2024-10-25 - [Single-Pass Covariance]
+**Learning:** Calculating standard variance/covariance linear regression elements directly via `Σ(x_i * y_i) - n * x̄ * ȳ` dynamically inside a loop avoids allocating massive inner-loop temporary data `Vec`s required by two-pass map-reduce algorithms.
+**Action:** Replace sequential linear-regression math with dynamic one-pass sums to save allocations.

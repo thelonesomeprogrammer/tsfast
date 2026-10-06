@@ -13,6 +13,7 @@ Outputs:
 
     uv run python scripts/coach_benchmark.py [--quick] [--skip-readme]
 """
+
 import argparse
 import csv
 import datetime
@@ -43,13 +44,26 @@ FEATURES = [
 
 def get_git_hash():
     try:
-        return subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()[:7]
+        return (
+            subprocess.check_output(["git", "rev-parse", "HEAD"])
+            .decode("utf-8")
+            .strip()[:7]
+        )
     except:
-        return 'unknown'
+        return "unknown"
+
 
 def append_to_csv(filepath, new_rows):
     import csv
-    header = ["Date", "CommitHash", "Benchmark_Name", "Metric_Value", "Unit", "Delta_From_Last"]
+
+    header = [
+        "Date",
+        "CommitHash",
+        "Benchmark_Name",
+        "Metric_Value",
+        "Unit",
+        "Delta_From_Last",
+    ]
     # Ensure directory exists
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     file_exists = os.path.exists(filepath)
@@ -62,7 +76,7 @@ def append_to_csv(filepath, new_rows):
     date_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     commit_hash = get_git_hash()
 
-    with open(filepath, 'a', newline='') as csvfile:
+    with open(filepath, "a", newline="") as csvfile:
         writer = csv.writer(csvfile)
         if not file_exists:
             writer.writerow(header)
@@ -70,14 +84,17 @@ def append_to_csv(filepath, new_rows):
         for row in new_rows:
             bench_name, metric_val, unit = row
             # Calculate Delta_From_Last
-            past_runs = df[df['Benchmark_Name'] == bench_name]
+            past_runs = df[df["Benchmark_Name"] == bench_name]
             delta = 0.0
             if not past_runs.empty:
-                last_val = past_runs.iloc[-1]['Metric_Value']
+                last_val = past_runs.iloc[-1]["Metric_Value"]
                 if last_val != 0:
                     delta = ((metric_val - last_val) / last_val) * 100.0
 
-            writer.writerow([date_str, commit_hash, bench_name, metric_val, unit, round(delta, 2)])
+            writer.writerow(
+                [date_str, commit_hash, bench_name, metric_val, unit, round(delta, 2)]
+            )
+
 
 def generate_chart():
     """Trend of the all-features-in-one-extractor timings and feature counts."""
@@ -105,7 +122,10 @@ def generate_chart():
     ax1.legend(loc="center left", bbox_to_anchor=(1, 0.5))
 
     ax2.set_title("Feature count", fontweight="bold")
-    for label, name in [("tsfast", "tsfast_features"), ("with reference", "referenced_features")]:
+    for label, name in [
+        ("tsfast", "tsfast_features"),
+        ("with reference", "referenced_features"),
+    ]:
         values = df[df["Benchmark_Name"] == name]["Metric_Value"].values
         if len(values):
             ax2.plot(range(1, len(values) + 1), values, marker="o", label=label)
@@ -121,9 +141,9 @@ def generate_chart():
 
 
 def update_readme():
-    df = pd.read_csv('.jules/benchmarks.csv')
-    latest_date = df['Date'].max()
-    latest_df = df[df['Date'] == latest_date].copy()
+    df = pd.read_csv(".jules/benchmarks.csv")
+    latest_date = df["Date"].max()
+    latest_df = df[df["Date"] == latest_date].copy()
 
     # Add emojis
     def get_emoji(val, unit):
@@ -139,24 +159,39 @@ def update_readme():
             return "🟢" if lower_is_better else "🔴"
         return "⚪"
 
-    latest_df['Direction'] = latest_df.apply(lambda row: get_emoji(row['Delta_From_Last'], row['Unit']), axis=1)
+    latest_df["Direction"] = latest_df.apply(
+        lambda row: get_emoji(row["Delta_From_Last"], row["Unit"]), axis=1
+    )
 
-    md_table = latest_df[['Date', 'CommitHash', 'Benchmark_Name', 'Metric_Value', 'Unit', 'Delta_From_Last', 'Direction']].to_markdown(index=False)
+    md_table = latest_df[
+        [
+            "Date",
+            "CommitHash",
+            "Benchmark_Name",
+            "Metric_Value",
+            "Unit",
+            "Delta_From_Last",
+            "Direction",
+        ]
+    ].to_markdown(index=False)
 
     try:
-        with open('README.md', 'r') as f:
+        with open("README.md", "r") as f:
             readme_content = f.read()
     except FileNotFoundError:
         readme_content = "## Latest Results\n"
 
-    start_index = readme_content.find('## Latest Results')
+    start_index = readme_content.find("## Latest Results")
     if start_index != -1:
-        new_content = readme_content[:start_index] + "## Latest Results\n" + md_table + "\n"
-        with open('README.md', 'w') as f:
+        new_content = (
+            readme_content[:start_index] + "## Latest Results\n" + md_table + "\n"
+        )
+        with open("README.md", "w") as f:
             f.write(new_content)
         print("README.md updated.")
     else:
         print("Could not find '## Latest Results' in README.md")
+
 
 def make_batch(series):
     """Extractor input: one series per row, contiguous float32."""
@@ -180,7 +215,7 @@ def bench_feature(feature, data, window, step, min_time):
     n_cols = data.shape[0]
     windows = make_batch(data[:, :window])
     prime = make_batch(data[:, :window])
-    more = make_batch(data[:, window:window + step])
+    more = make_batch(data[:, window : window + step])
 
     static = tsfast.Extractor([feature])
     t_static = per_call(lambda: static.process_2d_floats(windows), min_time) / n_cols
@@ -251,7 +286,9 @@ def write_feature_table(rows, window, step, n_cols):
         ref = r.reference or "—"
         lines.append(
             f"| `{r.feature}` | {fmt(r.static_us, 2)} | {fmt(r.sliding_us, 2)} | {fmt(r.expanding_us, 2)} "
-            f"| {ref} | {fmt(r.reference_us)} | {fmt(r.speedup)}× |".replace("| × |", "| |")
+            f"| {ref} | {fmt(r.reference_us)} | {fmt(r.speedup)}× |".replace(
+                "| × |", "| |"
+            )
         )
     (out / "feature_benchmarks.md").write_text("\n".join(lines) + "\n")
     return df
@@ -260,7 +297,10 @@ def write_feature_table(rows, window, step, n_cols):
 def bench_all_in_one(data, window, step, min_time):
     """All features in one extractor: the realistic deployment cost."""
     n_cols = data.shape[0]
-    prime, more = make_batch(data[:, :window]), make_batch(data[:, window:window + step])
+    prime, more = (
+        make_batch(data[:, :window]),
+        make_batch(data[:, window : window + step]),
+    )
     static = tsfast.Extractor(FEATURES)
     t_static = per_call(lambda: static.process_2d_floats(prime), min_time) / n_cols
 
@@ -271,16 +311,26 @@ def bench_all_in_one(data, window, step, min_time):
         ext.update(more)
         return time.perf_counter() - start
 
-    t_sliding = timed(lambda: tsfast.SlidingExtractor(FEATURES, n_cols, window)) / (n_cols * step)
+    t_sliding = timed(lambda: tsfast.SlidingExtractor(FEATURES, n_cols, window)) / (
+        n_cols * step
+    )
     t_expanding = timed(lambda: tsfast.ExpandingExtractor(FEATURES, n_cols)) / n_cols
     return t_static, t_sliding, t_expanding
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--quick", action="store_true", help="shorter timings, for a smoke run")
-    parser.add_argument("--skip-readme", action="store_true", help="don't rewrite README.md")
-    parser.add_argument("--skip-history", action="store_true", help="don't append .jules/benchmarks.csv")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--quick", action="store_true", help="shorter timings, for a smoke run"
+    )
+    parser.add_argument(
+        "--skip-readme", action="store_true", help="don't rewrite README.md"
+    )
+    parser.add_argument(
+        "--skip-history", action="store_true", help="don't append .jules/benchmarks.csv"
+    )
     args = parser.parse_args()
 
     n_cols, window, step = 20, 256, 32
@@ -296,20 +346,31 @@ def main():
     print(f"Wrote .jules/feature_benchmarks.md ({len(df)} features)")
 
     t_static, t_sliding, t_expanding = bench_all_in_one(data, window, step, min_time)
-    ref_total = df["reference_us"].sum(skipna=True) / 1e3  # ms, sum over referenced features
-    print(f"All {len(FEATURES)} features, ms per window: static {t_static * 1e3:.3f}, "
-          f"sliding {t_sliding * 1e3:.3f}, expanding {t_expanding * 1e3:.3f}; "
-          f"references (sum of {df['reference'].astype(bool).sum()}) {ref_total:.3f}")
+    ref_total = (
+        df["reference_us"].sum(skipna=True) / 1e3
+    )  # ms, sum over referenced features
+    print(
+        f"All {len(FEATURES)} features, ms per window: static {t_static * 1e3:.3f}, "
+        f"sliding {t_sliding * 1e3:.3f}, expanding {t_expanding * 1e3:.3f}; "
+        f"references (sum of {df['reference'].astype(bool).sum()}) {ref_total:.3f}"
+    )
 
     if not args.skip_history:
-        append_to_csv(str(ROOT / ".jules" / "benchmarks.csv"), [
-            ("tsfast_static_all_features", t_static * 1e3, "ms"),
-            ("tsfast_sliding_all_features", t_sliding * 1e3, "ms"),
-            ("tsfast_expanding_all_features", t_expanding * 1e3, "ms"),
-            ("reference_all_features", ref_total, "ms"),
-            ("tsfast_features", len(FEATURES), "count"),
-            ("referenced_features", int(df["reference"].astype(bool).sum()), "count"),
-        ])
+        append_to_csv(
+            str(ROOT / ".jules" / "benchmarks.csv"),
+            [
+                ("tsfast_static_all_features", t_static * 1e3, "ms"),
+                ("tsfast_sliding_all_features", t_sliding * 1e3, "ms"),
+                ("tsfast_expanding_all_features", t_expanding * 1e3, "ms"),
+                ("reference_all_features", ref_total, "ms"),
+                ("tsfast_features", len(FEATURES), "count"),
+                (
+                    "referenced_features",
+                    int(df["reference"].astype(bool).sum()),
+                    "count",
+                ),
+            ],
+        )
         generate_chart()
     if not args.skip_readme:
         update_readme()

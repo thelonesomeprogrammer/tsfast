@@ -16,6 +16,8 @@ fn f(x: f32) -> u32 {
 fn parameterized_samples() -> Vec<Feature> {
     use Feature as F;
     vec![
+        F::Mse(3, 0),
+        F::Mse(2, 10),
         F::BinnedEntropy(5),
         F::EnergyRatioByChunks(3, 1),
         F::NumberCrossingM(f(0.5)),
@@ -33,6 +35,9 @@ fn parameterized_samples() -> Vec<Feature> {
         F::Quantile(f(0.25)),
         F::ChangeQuantiles(f(0.2), f(0.8), true, AggFunc::Mean),
         F::IndexMassQuantile(f(0.5)),
+        F::EcdfPercentile(f(0.5)),
+        F::EcdfPercentileCount(f(0.5)),
+        F::EcdfSlope(f(0.2), f(0.5)),
         F::MaxLangevinFixedPoint(3, f(30.0)),
         F::ArCoefficient(10, 1),
         F::FriedrichCoefficients(3, f(30.0), 0),
@@ -60,13 +65,19 @@ fn parameterized_samples() -> Vec<Feature> {
 }
 
 fn samples() -> Vec<Feature> {
-    UNIT_FEATURES.iter().copied().chain(parameterized_samples()).collect()
+    UNIT_FEATURES
+        .iter()
+        .copied()
+        .chain(parameterized_samples())
+        .collect()
 }
 
 #[test]
 fn every_variant_has_a_sample() {
-    let covered: HashSet<FeatureDiscriminants> =
-        samples().into_iter().map(FeatureDiscriminants::from).collect();
+    let covered: HashSet<FeatureDiscriminants> = samples()
+        .into_iter()
+        .map(FeatureDiscriminants::from)
+        .collect();
     let missing: Vec<_> = FeatureDiscriminants::iter()
         .filter(|d| !covered.contains(d))
         .collect();
@@ -88,18 +99,32 @@ fn name_round_trips_through_parse() {
             }
         })
         .collect();
-    assert!(failures.is_empty(), "name() doesn't parse back:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "name() doesn't parse back:\n{}",
+        failures.join("\n")
+    );
 }
 
 #[test]
 fn invalid_parameters_are_rejected() {
     for s in [
         "paa-2-2",
+        "mse-0",
+        "mse--1",
         "ar_coefficient-1-10",
         "ar_coefficient-0-0",
         "agg_linear_trend-slope-0-mean",
         "energy_ratio_by_chunks_num_segments_3__segment_focus_3",
         "human_range_energy-0",
+        "ecdf_percentile-0.0",
+        "ecdf_percentile-1.1",
+        "ecdf_percentile_count-0.0",
+        "ecdf_percentile_count-1.1",
+        "ecdf_slope-0.5-0.5",
+        "ecdf_slope-0.6-0.5",
+        "ecdf_slope-0.0-0.5",
+        "ecdf_slope-0.5-1.1",
         "not_a_feature",
     ] {
         assert!(s.parse::<Feature>().is_err(), "{s:?} should be rejected");
@@ -137,5 +162,8 @@ fn python_feature_samples_cover_every_variant() {
     let missing: Vec<_> = FeatureDiscriminants::iter()
         .filter(|d| !listed.contains(d))
         .collect();
-    assert!(missing.is_empty(), "add these to tests/feature_samples.txt: {missing:?}");
+    assert!(
+        missing.is_empty(),
+        "add these to tests/feature_samples.txt: {missing:?}"
+    );
 }

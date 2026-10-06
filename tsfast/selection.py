@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import stats
 
+
 def select_features(X, y=None, correlation_threshold=0.98, fdr_level=0.05):
     """
     Two-stage feature selection (FRESH filter).
@@ -12,7 +13,7 @@ def select_features(X, y=None, correlation_threshold=0.98, fdr_level=0.05):
     std = np.nanstd(X, axis=0)
     constant_mask = std > 0
     X = X[:, constant_mask]
-    
+
     if X.shape[1] == 0:
         return X, constant_mask
 
@@ -25,7 +26,7 @@ def select_features(X, y=None, correlation_threshold=0.98, fdr_level=0.05):
         for i in range(corr_matrix.shape[1]):
             if to_drop_mask[i]:
                 continue
-            to_drop_mask[i+1:] |= (upper[i, i+1:] > correlation_threshold)
+            to_drop_mask[i + 1 :] |= upper[i, i + 1 :] > correlation_threshold
 
         keep_indices = np.where(~to_drop_mask)[0].tolist()
         X = X[:, keep_indices]
@@ -37,34 +38,34 @@ def select_features(X, y=None, correlation_threshold=0.98, fdr_level=0.05):
     p_values = []
     for i in range(X.shape[1]):
         feature = X[:, i]
-        if len(np.unique(y)) == 2: # Classification
+        if len(np.unique(y)) == 2:  # Classification
             group0 = feature[y == 0]
             group1 = feature[y == 1]
             if len(group0) > 1 and len(group1) > 1:
                 _, p = stats.ttest_ind(group0, group1)
             else:
                 p = 1.0
-        else: # Regression
+        else:  # Regression
             _, p = stats.kendalltau(feature, y)
-        
+
         if np.isnan(p):
             p = 1.0
         p_values.append(p)
-    
+
     p_values = np.array(p_values)
     m = len(p_values)
 
     # Benjamini-Hochberg (FDR) control
     sorted_indices = np.argsort(p_values)
     sorted_p = p_values[sorted_indices]
-    
+
     significant = sorted_p <= (np.arange(1, m + 1) / m) * fdr_level
     if not any(significant):
-        # If nothing is significant under FDR, we might want to return some top features 
+        # If nothing is significant under FDR, we might want to return some top features
         # but strictly following FRESH/FDR we should return nothing.
         return X[:, []], constant_mask
-    
+
     max_idx = np.max(np.where(significant))
-    selected_indices = sorted_indices[:max_idx + 1]
-    
+    selected_indices = sorted_indices[: max_idx + 1]
+
     return X[:, selected_indices], constant_mask

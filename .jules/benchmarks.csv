@@ -119,15 +119,3 @@ Date,CommitHash,Benchmark_Name,Metric_Value,Unit,Delta_From_Last
 2026-10-05 19:42:00,c64693d,reference_all_features,69.59022902184239,ms,0.0
 2026-10-05 19:42:00,c64693d,tsfast_features,154,count,0.0
 2026-10-05 19:42:00,c64693d,referenced_features,145,count,0.0
-2026-10-06 17:05:33,83a16cf,tsfast_static_all_features,2.4569796100001895,ms,143.47
-2026-10-06 17:05:33,83a16cf,tsfast_sliding_all_features,2.0406877109374832,ms,110.61
-2026-10-06 17:05:33,83a16cf,tsfast_expanding_all_features,2.605325450002738,ms,116.14
-2026-10-06 17:05:33,83a16cf,reference_all_features,157.17340129219502,ms,125.86
-2026-10-06 17:05:33,83a16cf,tsfast_features,154,count,0.0
-2026-10-06 17:05:33,83a16cf,referenced_features,145,count,0.0
-2026-10-06 17:08:38,83a16cf,tsfast_static_all_features,2.527114200000824,ms,2.85
-2026-10-06 17:08:38,83a16cf,tsfast_sliding_all_features,2.053966887499925,ms,0.65
-2026-10-06 17:08:38,83a16cf,tsfast_expanding_all_features,2.612932699992143,ms,0.29
-2026-10-06 17:08:38,83a16cf,reference_all_features,155.76956737140733,ms,-0.89
-2026-10-06 17:08:38,83a16cf,tsfast_features,154,count,0.0
-2026-10-06 17:08:38,83a16cf,referenced_features,145,count,0.0

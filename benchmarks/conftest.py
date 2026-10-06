@@ -1,46 +1,114 @@
 import pytest
 import numpy as np
 
+
 @pytest.fixture(scope="session")
 def basic_features():
-    return ["mean", "variance", "std_dev", "min_value", "max_value", "total_sum", "energy", "rms"]
+    return [
+        "mean",
+        "variance",
+        "std_dev",
+        "min_value",
+        "max_value",
+        "total_sum",
+        "energy",
+        "rms",
+    ]
+
 
 @pytest.fixture(scope="session")
 def advanced_features():
     return [
-        "mean", "variance", "std_dev", "min_value", "max_value",
-        "skewness", "kurtosis", "autocorr-1", "abs_max", "last_loc_max", "first_loc_max",
-        "fft_coeff-1-real", "fft_coeff-1-imag", "c3-5", "cid_ce", "mean_abs_change"
+        "mean",
+        "variance",
+        "std_dev",
+        "min_value",
+        "max_value",
+        "skewness",
+        "kurtosis",
+        "autocorr-1",
+        "abs_max",
+        "last_loc_max",
+        "first_loc_max",
+        "fft_coeff-1-real",
+        "fft_coeff-1-imag",
+        "c3-5",
+        "cid_ce",
+        "mean_abs_change",
     ]
+
 
 @pytest.fixture(scope="session")
 def full_30_features():
     return [
-        "total_sum", "mean", "variance", "std_dev", "min_value", "max_value", "median",
-        "skewness", "kurtosis", "mad", "iqr", "entropy",
-        "energy", "rms", "zero_crossing_rate", "peak_count",
-        "mean_abs_change", "mean_change", "cid_ce", "auc",
-        "pk_pk_distance", "zero_cross", "max_power_spectrum",
-        "abs_sum_change", "count_above_mean", "count_below_mean",
-        "longest_strike_above_mean", "longest_strike_below_mean",
-        "abs_max", "first_loc_max", "last_loc_max", "first_loc_min", "last_loc_min",
-        "length", "variance_larger_than_standard_deviation", "percentage_of_reoccurring_datapoints_to_all_datapoints", "percentage_of_reoccurring_values_to_all_values", "ratio_value_number_to_time_series_length",
-        "spectral_centroid", "spectral_spread", "spectral_entropy",
-        "linear_trend__attr_\"slope\"", "agg_linear_trend__attr_\"slope\"__chunk_len_5__f_agg_\"mean\"", "time_reversal_asymmetry_statistic__lag_1",
-        "spectral_slope", "spectral_roll_on", "spectral_roll_off",
-        "approx_entropy-2-0.2", "sample_entropy", "binned_entropy__max_bins_10",
-        "ratio_beyond_r_sigma-2.0", "index_mass_quantile-0.5", "c3-2",
-        "permutation_entropy-1-3", "value_count-3.0"
+        "total_sum",
+        "mean",
+        "variance",
+        "std_dev",
+        "min_value",
+        "max_value",
+        "median",
+        "skewness",
+        "kurtosis",
+        "mad",
+        "iqr",
+        "entropy",
+        "energy",
+        "rms",
+        "zero_crossing_rate",
+        "peak_count",
+        "mean_abs_change",
+        "mean_change",
+        "cid_ce",
+        "auc",
+        "pk_pk_distance",
+        "zero_cross",
+        "max_power_spectrum",
+        "abs_sum_change",
+        "count_above_mean",
+        "count_below_mean",
+        "longest_strike_above_mean",
+        "longest_strike_below_mean",
+        "abs_max",
+        "first_loc_max",
+        "last_loc_max",
+        "first_loc_min",
+        "last_loc_min",
+        "length",
+        "variance_larger_than_standard_deviation",
+        "percentage_of_reoccurring_datapoints_to_all_datapoints",
+        "percentage_of_reoccurring_values_to_all_values",
+        "ratio_value_number_to_time_series_length",
+        "spectral_centroid",
+        "spectral_spread",
+        "spectral_entropy",
+        'linear_trend__attr_"slope"',
+        'agg_linear_trend__attr_"slope"__chunk_len_5__f_agg_"mean"',
+        "time_reversal_asymmetry_statistic__lag_1",
+        "spectral_slope",
+        "spectral_roll_on",
+        "spectral_roll_off",
+        "approx_entropy-2-0.2",
+        "sample_entropy",
+        "binned_entropy__max_bins_10",
+        "ratio_beyond_r_sigma-2.0",
+        "index_mass_quantile-0.5",
+        "c3-2",
+        "permutation_entropy-1-3",
+        "value_count-3.0",
     ]
+
 
 @pytest.fixture(scope="session")
 def single_series():
     np.random.seed(42)
     return np.random.randn(1000).astype(np.float32)
 
+
 @pytest.fixture(scope="session")
 def single_batch(single_series):
     return single_series[None, :]
+
 
 @pytest.fixture(scope="session")
 def batch_100_series():
@@ -48,11 +116,13 @@ def batch_100_series():
     data = np.random.randn(1000, 100).astype(np.float32)
     return np.ascontiguousarray(data.T)  # one series per row
 
+
 @pytest.fixture(scope="session")
 def batch_1000_series():
     np.random.seed(42)
     data = np.random.randn(1000, 1000).astype(np.float32)
     return np.ascontiguousarray(data.T)  # one series per row
+
 
 @pytest.fixture(scope="session")
 def streaming_chunks():
@@ -61,4 +131,4 @@ def streaming_chunks():
     total_len = 2000
     chunk_size = 100
     data = np.random.randn(n_cols, total_len).astype(np.float32)
-    return [data[:, j:j + chunk_size].copy() for j in range(0, total_len, chunk_size)]
+    return [data[:, j : j + chunk_size].copy() for j in range(0, total_len, chunk_size)]
