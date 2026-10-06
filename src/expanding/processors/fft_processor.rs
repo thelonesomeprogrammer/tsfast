@@ -23,7 +23,10 @@ impl FftProcessor {
     ) -> Result<FftResult, String> {
         let n_total = full_series.len();
         let mut fft_complex = Vec::new();
-        if let Some(r2c) = r2c.as_ref().filter(|_| compute.intersects(Compute::ANY_FFT)) {
+        if let Some(r2c) = r2c
+            .as_ref()
+            .filter(|_| compute.intersects(Compute::ANY_FFT))
+        {
             let should_update =
                 state.last_fft_n == 0 || n_total - state.last_fft_n >= fft_update_period;
             if should_update {
@@ -33,6 +36,15 @@ impl FftProcessor {
             fft_complex = state.last_fft_complex.clone();
         }
         let dft_len = state.last_fft_n;
-        crate::spectral::finalize(compute, full_series, n_total as f32, mean, m2, fft_complex, dft_len, state)
+        crate::spectral::finalize(
+            compute,
+            full_series,
+            n_total as f32,
+            mean,
+            m2,
+            fft_complex,
+            dft_len,
+            state,
+        )
     }
 }

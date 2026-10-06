@@ -82,11 +82,110 @@ pub fn eval_distribution(
                 h -= p * p.log2();
             }
             state.sort_buffer = sorted;
-            if values.len() <= 2 { 0.0 } else { (h / n_f.log2()) as f32 }
+            if values.len() <= 2 {
+                0.0
+            } else {
+                (h / n_f.log2()) as f32
+            }
         }
         Feature::Ecdf(d) => {
             let d_idx = *d as f32;
             if d_idx >= n { 1.0 } else { d_idx / n }
+        }
+
+        Feature::EcdfPercentile(p_bits) => {
+            let p = f32::from_bits(*p_bits);
+            let k = (p * n).floor() as usize;
+            if min_val == max_val && !values.is_empty() {
+                return Some(values[0]);
+            }
+            if k == 0 || values.is_empty() {
+                return Some(f32::NAN);
+            }
+            if let Some(sorted) = context.running_sorted.filter(|s| !s.is_empty()) {
+                sorted[k - 1]
+            } else {
+                let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
+                copy.clear();
+                copy.extend_from_slice(values);
+                let (_, val, _) = copy.select_nth_unstable_by(k - 1, f32::total_cmp);
+                let res = *val;
+                state.sort_buffer = copy;
+                res
+            }
+        }
+        Feature::EcdfPercentileCount(p_bits) => {
+            let p = f32::from_bits(*p_bits);
+            let k = (p * n).floor() as usize;
+            if min_val == max_val && !values.is_empty() {
+                return Some(n); // If constant, the count is the total length
+            }
+            if k == 0 || values.is_empty() {
+                return Some(f32::NAN);
+            }
+            let v = if let Some(sorted) = context.running_sorted.filter(|s| !s.is_empty()) {
+                sorted[k - 1]
+            } else {
+                let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
+                copy.clear();
+                copy.extend_from_slice(values);
+                let (_, val, _) = copy.select_nth_unstable_by(k - 1, f32::total_cmp);
+                let res = *val;
+                state.sort_buffer = copy;
+                res
+            };
+
+            use std::simd::{cmp::SimdPartialOrd, f32x4};
+            let mut count = 0;
+            let chunks = values.chunks_exact(4);
+            let rem = chunks.remainder();
+            let v_simd = f32x4::splat(v);
+
+            for chunk in chunks {
+                let chunk_simd = f32x4::from_slice(chunk);
+                let mask = chunk_simd.simd_le(v_simd);
+                count += mask.to_bitmask().count_ones();
+            }
+
+            for &val in rem {
+                if val <= v {
+                    count += 1;
+                }
+            }
+            count as f32
+        }
+        Feature::EcdfSlope(p_init_bits, p_end_bits) => {
+            if values.is_empty() {
+                return Some(f32::NAN);
+            }
+            if min_val == max_val {
+                return Some(f32::INFINITY);
+            }
+            let p_init = f32::from_bits(*p_init_bits);
+            let p_end = f32::from_bits(*p_end_bits);
+            let k_init = (p_init * n).floor() as usize;
+            let k_end = (p_end * n).floor() as usize;
+            if k_init == 0 || k_end == 0 {
+                return Some(f32::NAN);
+            }
+
+            let (x_init, x_end) = if let Some(sorted) = context.running_sorted.filter(|s| !s.is_empty()) {
+                (sorted[k_init - 1], sorted[k_end - 1])
+            } else {
+                let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
+                copy.clear();
+                copy.extend_from_slice(values);
+
+                let (_, val_end, _) = copy.select_nth_unstable_by(k_end - 1, f32::total_cmp);
+                let x_e = *val_end;
+                let (_, val_init, _) = copy[0..k_end].select_nth_unstable_by(k_init - 1, f32::total_cmp);
+                let x_i = *val_init;
+
+                state.sort_buffer = copy;
+                (x_i, x_e)
+            };
+
+            (p_end - p_init) / (x_end - x_init)
         }
         Feature::ValueCount(val_bits) => {
             let val = f32::from_bits(*val_bits);
@@ -190,7 +289,7 @@ pub fn eval_distribution(
                 return Some(0.0);
             }
 
-            let (ql_val, qh_val) = if let Some(sorted) = context.running_sorted {
+            let (ql_val, qh_val) = if let Some(sorted) = context.running_sorted.filter(|s| !s.is_empty()) {
                 (compute_quantile(sorted, ql), compute_quantile(sorted, qh))
             } else {
                 let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
@@ -246,7 +345,7 @@ pub fn eval_distribution(
         Feature::Quantile(q_bits) => {
             let q = f32::from_bits(*q_bits);
 
-            if let Some(sorted) = context.running_sorted {
+            if let Some(sorted) = context.running_sorted.filter(|s| !s.is_empty()) {
                 compute_quantile(sorted, q)
             } else {
                 let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);

@@ -23,6 +23,9 @@ pub enum Feature {
     SampleEntropy,
     Mse(u8, u16),
     HiguchiFd,
+    Dfa,
+    HurstExponent,
+    MaximumFractalLength,
     BinnedEntropy(u32),
     Energy,
     EnergyRatioByChunks(u16, u16),
@@ -111,6 +114,9 @@ pub enum Feature {
     HasDuplicateMin,
     HasDuplicate,
     Ecdf(u32),
+    EcdfPercentile(u32),
+    EcdfPercentileCount(u32),
+    EcdfSlope(u32, u32),
     PermutationEntropy(u32, u32),
     ValueCount(u32),
     CalcCentroid(u32),
@@ -122,6 +128,9 @@ pub enum Feature {
     CwtCoefficients([u16; 8], u8, u16, u16),
     NumberCwtPeaks(u16),
     AugmentedDickeyFuller(AdfAttr),
+    MaxFrequency,
+    MedianFrequency,
+    FundamentalFrequency,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -171,7 +180,9 @@ impl Feature {
             Self::Max => C::MAX,
             Self::Median => C::MEDIAN | C::NEEDS_SORT,
             Self::MedianAbsDeviation => C::MEDIAN | C::MEDIAN_ABS_DEV | C::NEEDS_SORT,
-            Self::Skew | Self::BiasedSkew => C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT,
+            Self::Skew | Self::BiasedSkew => {
+                C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT
+            }
             // The 4th central moment needs the sum of cubes, accumulated under SKEW.
             Self::UnbiasedFisherKurtosis | Self::BiasedFisherKurtosis => {
                 C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::KURTOSIS | C::ENERGY | C::NEEDS_SORT
@@ -303,6 +314,9 @@ impl Feature {
             Self::ZeroCross => C::ZERO_CROSS,
             Self::MaxPowerSpectrum => C::empty(),
             Self::Ecdf(_) => C::LENGTH,
+            Self::EcdfPercentile(_) => C::MIN | C::MAX,
+            Self::EcdfPercentileCount(_) => C::MIN | C::MAX,
+            Self::EcdfSlope(_, _) => C::MIN | C::MAX,
             Self::PermutationEntropy(_, _) => C::empty(),
             Self::ValueCount(_) => C::empty(),
             Self::CalcCentroid(_) => C::ENERGY | C::CALC_CENTROID,
@@ -314,7 +328,12 @@ impl Feature {
             Self::CwtCoefficients(_, _, _, _) => C::CWT,
             Self::NumberCwtPeaks(_) => C::CWT,
             Self::AugmentedDickeyFuller(_) => C::ADF | C::NEEDS_SORT,
-            Self::HiguchiFd => C::empty(),
+            Self::MaxFrequency => C::MAX_FREQ,
+            Self::MedianFrequency => C::MEDIAN_FREQ,
+            Self::FundamentalFrequency => C::FUNDAMENTAL_FREQ,
+            Self::Dfa | Self::HurstExponent => C::empty(),
+            Self::HiguchiFd => C::HIGUCHI,
+            Self::MaximumFractalLength => C::HIGUCHI,
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::common::{ColumnState, map_features_to_indices, next_good_fft_size};
-use crate::types::{Compute, Feature};
 use crate::numpy_io;
+use crate::types::{Compute, Feature};
 use numpy::PyArray2;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -197,7 +197,6 @@ impl ExpandingExtractor {
             .zip(self.sorted_histories[..n_cols].par_iter_mut())
             .zip(rows.par_iter())
             .map(|(((state, history), sorted_history), &values)| {
-
                 if history.is_empty() {
                     *state = ColumnState::new(
                         &self.unique_paa_totals,

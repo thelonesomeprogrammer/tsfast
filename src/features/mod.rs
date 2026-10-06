@@ -53,6 +53,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::BinnedEntropy(..)
         | F::ChangeQuantiles(..)
         | F::Ecdf(..)
+        | F::EcdfPercentile(..)
+        | F::EcdfPercentileCount(..)
+        | F::EcdfSlope(..)
         | F::Entropy
         | F::IndexMassQuantile(..)
         | F::Median
@@ -102,8 +105,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::CountBelowMean
         | F::LongestStrikeAboveMean
         | F::LongestStrikeBelowMean => runs::eval_runs(feat, ctx),
-        F::MatrixProfile(..)
-        | F::QuerySimilarityCount(..) => subsequence::eval_subsequence(feat, ctx),
+        F::MatrixProfile(..) | F::QuerySimilarityCount(..) => {
+            subsequence::eval_subsequence(feat, ctx)
+        }
         F::C3(..)
         | F::CalcCentroid(..)
         | F::CwtCoefficients(..)
@@ -127,6 +131,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::SpktWelchDensity(..)
         | F::WaveletEnergy(..)
         | F::WaveletEntropy
+        | F::MaxFrequency
+        | F::MedianFrequency
+        | F::FundamentalFrequency
         | F::WaveletFeatures(..) => transform::eval_transform(feat, ctx),
         F::ApproxEntropy(..)
         | F::HiguchiFd

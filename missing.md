@@ -21,9 +21,6 @@ Features summarizing signal amplitude distribution, central tendency, and disper
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
 | **`hist_mode`** | TSFEL | **Medium** | Fast SIMD min/max to establish bin edges, vectorized binning. |
-| **`ecdf_percentile`** | TSFEL | **Medium** | Value corresponding to target ECDF percentile. Quickselect / linear interpolation in Rust. |
-| **`ecdf_percentile_count`**| TSFEL | **Low** | Vectorized compare `_mm256_cmp_pd` + mask sum/popcount. |
-| **`ecdf_slope`** | TSFEL | **Medium** | Slope between two ECDF percentiles. Quickselect + division. |
 | **`count_above` / `count_below`** | TSFresh | **Low** | Count values above/below an arbitrary threshold $t$. SIMD compare + popcount. |
 | **`range_count`** | TSFresh | **Low** | Count points inside interval $[min, max)$. Double SIMD compare + AND mask + popcount. |
 
@@ -35,7 +32,6 @@ Features sensitive to the temporal order, differences, and zero crossings.
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
 | **`neighbourhood_peaks`**| TSFEL | **Medium** | Peaks that dominate window neighbourhood. Vectorized sliding window maximum. |
-| **`abs_percentage_sum_of_changes`**| TSFresh | **Low** | Total absolute change divided by mean/sum. |
 
 ---
 
@@ -65,8 +61,8 @@ Features measuring signal non-linearity, self-similarity, and fractal dimension.
 
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
-| **`petrosian_fractal_dimension`**| TSFEL | **Low** | Relies on derivative sign changes. SIMD adjacent diff + sign mask + popcount (extremely fast). |
 | **`maximum_fractal_length`** | TSFEL | **High** | Shared computation with HFD; vectorized max reduction. |
+| **`petrosian_fractal_dimension`**| TSFEL | **Low** | Relies on derivative sign changes. SIMD adjacent diff + sign mask + popcount (extremely fast). |
 | **`dfa`** (Detrended Fluct.) | TSFEL | **High** | Cumulative sum + chunked linear regressions and residual sum of squares. |
 | **`hurst_exponent`** | TSFEL | **High** | Parallelized multi-scale chunking, vectorized prefix sum and Rescaled Range (R/S). |
 | **`mse`** (Multiscale Entropy)| TSFEL | **Very High**| Coarse-graining via SIMD chunk mean, followed by 2D Chebyshev distance count. |

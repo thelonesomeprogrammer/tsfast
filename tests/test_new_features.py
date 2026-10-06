@@ -3,13 +3,14 @@ import numpy as np
 import pytest
 from tsfresh.feature_extraction import feature_calculators as fc
 
+
 def test_linear_trend():
     x = np.array([1.0, 3.0, 2.0, 5.0, 4.0, 6.0], dtype=np.float32)
     features = [
-        "linear_trend__attr_\"rvalue\"",
-        "linear_trend__attr_\"intercept\"",
-        "linear_trend__attr_\"slope\"",
-        "linear_trend__attr_\"stderr\"",
+        'linear_trend__attr_"rvalue"',
+        'linear_trend__attr_"intercept"',
+        'linear_trend__attr_"slope"',
+        'linear_trend__attr_"stderr"',
     ]
 
     extractor = tsfast.Extractor(features)
@@ -17,17 +18,25 @@ def test_linear_trend():
     out = extractor.process_2d_floats(batch)
     results = out[0]
 
-    tsfresh_param = [{"attr": "rvalue"}, {"attr": "intercept"}, {"attr": "slope"}, {"attr": "stderr"}]
+    tsfresh_param = [
+        {"attr": "rvalue"},
+        {"attr": "intercept"},
+        {"attr": "slope"},
+        {"attr": "stderr"},
+    ]
     tsfresh_results = fc.linear_trend(x, tsfresh_param)
 
     for i, (_, val) in enumerate(tsfresh_results):
-        assert np.allclose(results[i], val, atol=1e-5), f"Mismatch in {features[i]}: {results[i]} != {val}"
+        assert np.allclose(results[i], val, atol=1e-5), (
+            f"Mismatch in {features[i]}: {results[i]} != {val}"
+        )
+
 
 def test_agg_linear_trend():
     x = np.array([1.0, 3.0, 2.0, 5.0, 4.0, 6.0, 2.0, 1.0, 3.0], dtype=np.float32)
     features = [
-        "agg_linear_trend__attr_\"intercept\"__chunk_len_3__f_agg_\"mean\"",
-        "agg_linear_trend__attr_\"slope\"__chunk_len_3__f_agg_\"max\"",
+        'agg_linear_trend__attr_"intercept"__chunk_len_3__f_agg_"mean"',
+        'agg_linear_trend__attr_"slope"__chunk_len_3__f_agg_"max"',
     ]
 
     extractor = tsfast.Extractor(features)
@@ -42,7 +51,10 @@ def test_agg_linear_trend():
     tsfresh_results = list(fc.agg_linear_trend(x, tsfresh_param))
 
     for i, (_, val) in enumerate(tsfresh_results):
-        assert np.allclose(results[i], val, atol=1e-5), f"Mismatch in {features[i]}: {results[i]} != {val}"
+        assert np.allclose(results[i], val, atol=1e-5), (
+            f"Mismatch in {features[i]}: {results[i]} != {val}"
+        )
+
 
 def test_time_reversal_asymmetry_statistic():
     x = np.array([1.0, 3.0, 2.0, 5.0, 4.0, 6.0], dtype=np.float32)
@@ -62,11 +74,12 @@ def test_time_reversal_asymmetry_statistic():
     assert np.allclose(results[0], tsfresh_val_1, atol=1e-5)
     assert np.allclose(results[1], tsfresh_val_2, atol=1e-5)
 
+
 def test_incremental_linear_trend():
     x = np.array([1.0, 3.0, 2.0, 5.0, 4.0, 6.0], dtype=np.float32)
     features = [
-        "linear_trend__attr_\"rvalue\"",
-        "linear_trend__attr_\"slope\"",
+        'linear_trend__attr_"rvalue"',
+        'linear_trend__attr_"slope"',
     ]
 
     # Static extractor

@@ -126,7 +126,11 @@ pub fn number_cwt_peaks(values: &[f32], max_width: usize) -> usize {
     let gap_thresh = widths[0].ceil() as usize;
     let mut lines: Vec<Line> = max_cols[start_row]
         .iter()
-        .map(|&c| Line { rows: vec![start_row], cols: vec![c], gap: 0 })
+        .map(|&c| Line {
+            rows: vec![start_row],
+            cols: vec![c],
+            gap: 0,
+        })
         .collect();
     let mut finished: Vec<Line> = Vec::new();
     for row in (0..start_row).rev() {
@@ -149,7 +153,11 @@ pub fn number_cwt_peaks(values: &[f32], max_width: usize) -> usize {
                     lines[i].cols.push(col);
                     lines[i].gap = 0;
                 }
-                None => lines.push(Line { rows: vec![row], cols: vec![col], gap: 0 }),
+                None => lines.push(Line {
+                    rows: vec![row],
+                    cols: vec![col],
+                    gap: 0,
+                }),
             }
         }
         for i in (0..lines.len()).rev() {
@@ -182,7 +190,9 @@ pub fn number_cwt_peaks(values: &[f32], max_width: usize) -> usize {
                 return false;
             }
             // The ridge point on the lowest row (scipy sorts each line by row).
-            let k = (0..line.rows.len()).min_by_key(|&k| line.rows[k]).unwrap_or(0);
+            let k = (0..line.rows.len())
+                .min_by_key(|&k| line.rows[k])
+                .unwrap_or(0);
             let (r, c) = (line.rows[k], line.cols[k]);
             // scipy drops a line only when snr < min_snr, so a NaN snr keeps it.
             !((cwt[r][c] / noise_at(c)).abs() < 1.0)
