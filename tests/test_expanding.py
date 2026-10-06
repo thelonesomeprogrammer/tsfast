@@ -348,3 +348,50 @@ def test_expanding_output_shape_and_names():
     np.testing.assert_allclose(out, [[1.5, 2.0], [15.0, 20.0]])
     # float64 is accepted and converted; features cover everything seen so far.
     np.testing.assert_allclose(extractor.update(np.array([[3.0], [30.0]])), [[2.0, 3.0], [20.0, 30.0]])
+import numpy as np
+import tsfast
+
+def test_ecdf_features():
+    # Normal case with ties
+    x = np.array([1, 2, 2, 2, 5, 5, 7, 8, 9, 10], dtype=np.float32)
+    features = ["ecdf_percentile-0.5", "ecdf_percentile_count-0.5", "ecdf_slope-0.2-0.5"]
+
+    import tsfel
+    ext = tsfast.ExpandingExtractor(features, 1)
+    for i in range(len(x)):
+        arr = x[:i+1]
+        out = ext.update(np.stack([arr[-1:]]).T)
+
+
+        ref_perc = tsfel.feature_extraction.features.ecdf_percentile(arr, [0.5])
+        if np.isscalar(ref_perc):
+            ref_perc = float(ref_perc)
+        else:
+            ref_perc = float(ref_perc[0])
+
+        if np.max(arr) == np.min(arr):
+            ref_count = float(len(arr))
+        else:
+            ref_count = float(np.sum(arr <= ref_perc))
+
+        try:
+            ref_slope = tsfel.feature_extraction.features.ecdf_slope(arr, 0.2, 0.5)
+        except Exception:
+            ref_slope = np.nan
+
+        if np.isnan(ref_perc):
+            assert np.isnan(out[0][0])
+        else:
+            assert np.allclose(out[0][0], ref_perc)
+
+        if np.isnan(ref_count):
+            assert np.isnan(out[0][1])
+        else:
+            assert np.allclose(out[0][1], ref_count)
+
+        if np.isnan(ref_slope):
+            assert np.isnan(out[0][2])
+        elif np.isinf(ref_slope):
+            assert np.isinf(out[0][2])
+        else:
+            assert np.allclose(out[0][2], ref_slope)

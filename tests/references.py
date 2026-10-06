@@ -95,6 +95,9 @@ REFERENCES = {
     "value_count-0": ("tsfresh", lambda x: fc.value_count(x, 0)),
     "ecdf-10": ("tsfel", lambda x: F.ecdf(x, 10)[-1]),
     "ecdf-3": ("tsfel", lambda x: F.ecdf(x, 3)[-1]),
+    "ecdf_percentile-0.5": ("tsfel", lambda x: float(F.ecdf_percentile(x, [0.5])[0]) if not np.isscalar(F.ecdf_percentile(x, [0.5])) else float(F.ecdf_percentile(x, [0.5]))),
+    "ecdf_percentile_count-0.5": ("tsfel", lambda x: float(len(x)) if np.max(x) == np.min(x) else float(np.sum(x <= (F.ecdf_percentile(x, [0.5])[0] if not np.isscalar(F.ecdf_percentile(x, [0.5])) else F.ecdf_percentile(x, [0.5]))))),
+    "ecdf_slope-0.2-0.5": ("tsfel", lambda x: F.ecdf_slope(x, 0.2, 0.5)),
     "binned_entropy__max_bins_5": ("tsfresh", lambda x: fc.binned_entropy(x, 5)),
     # ── changes / temporal ──
     "mean_abs_change": ("tsfresh", fc.mean_abs_change),

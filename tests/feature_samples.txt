@@ -156,3 +156,6 @@ spkt_welch_density__coeff_5
 number_cwt_peaks__n_1
 augmented_dickey_fuller-teststat
 augmented_dickey_fuller-usedlag
+ecdf_percentile-0.5
+ecdf_percentile_count-0.5
+ecdf_slope-0.2-0.5
