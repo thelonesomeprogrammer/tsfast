@@ -370,3 +370,7 @@ def test_expanding_maximum_fractal_length():
 
     np.testing.assert_allclose(res1[0][0], mfl1, atol=1e-5)
     np.testing.assert_allclose(res2[0][0], mfl2, atol=1e-5)
+def test_expanding_invalid_feature():
+    # Verify unsupported features immediately error during initialization
+    with pytest.raises(ValueError, match="Unknown feature"):
+        ExpandingExtractor(["invalid_feature"], 1)
