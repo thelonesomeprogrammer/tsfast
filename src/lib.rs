@@ -19,7 +19,7 @@ fn _tsfast(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<sliding::SlidingExtractor>()?;
     Ok(())
 }
-pub mod metrics;
 pub mod context;
 pub mod features;
+pub mod metrics;
 pub mod spectral;

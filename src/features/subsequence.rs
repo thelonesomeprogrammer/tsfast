@@ -41,7 +41,8 @@ pub fn eval_subsequence(feat: &Feature, context: &mut FeatureContext) -> Option<
                 }
                 AggFunc::Var => {
                     let mean = profile.iter().sum::<f32>() / profile.len() as f32;
-                    let var = profile.iter().map(|&v| (v - mean).powi(2)).sum::<f32>() / (profile.len() - 1).max(1) as f32;
+                    let var = profile.iter().map(|&v| (v - mean).powi(2)).sum::<f32>()
+                        / (profile.len() - 1).max(1) as f32;
                     Some(var)
                 }
             }
@@ -79,7 +80,7 @@ fn mass_distance_profile(x: &[f32], q: &[f32]) -> Vec<f32> {
     let mut distances = Vec::with_capacity(n - m + 1);
 
     for i in 0..=n - m {
-        let window = &x[i..i+m];
+        let window = &x[i..i + m];
 
         let mut w_mean = 0.0;
         for &v in window {
@@ -120,7 +121,7 @@ fn stomp_matrix_profile(x: &[f32], m: usize) -> Vec<f32> {
     let mut stds = vec![0.0; l];
 
     for i in 0..l {
-        let window = &x[i..i+m];
+        let window = &x[i..i + m];
         let mut mean = 0.0;
         for &v in window {
             mean += v;

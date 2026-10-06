@@ -25,7 +25,13 @@ impl MeanProcessor {
         let mut max_strike_b = 0;
         let mut current_strike_b = 0;
 
-        if compute.intersects(Compute::MAD | Compute::CNT_ABOVE_MEAN | Compute::CNT_BELOW_MEAN | Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
+        if compute.intersects(
+            Compute::MAD
+                | Compute::CNT_ABOVE_MEAN
+                | Compute::CNT_BELOW_MEAN
+                | Compute::STRIKE_ABOVE
+                | Compute::STRIKE_BELOW,
+        ) {
             let mean_vec = f32x4::splat(mean);
             let mut mad_sum_vec = f32x4::splat(0.0);
 
@@ -43,7 +49,6 @@ impl MeanProcessor {
                 }
 
                 for &v in chunk {
-
                     if compute.intersects(Compute::STRIKE_ABOVE | Compute::STRIKE_BELOW) {
                         if v > mean {
                             current_strike_a += 1;

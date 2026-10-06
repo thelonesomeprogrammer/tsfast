@@ -52,7 +52,11 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
 
     let res = match feat {
         Feature::C3(lag) => {
-            let l_idx = unique_c3_lags.iter().position(|&l| l == *lag).unwrap();
+            let l_idx = if let Some(idx) = unique_c3_lags.iter().position(|&l| l == *lag) {
+                idx
+            } else {
+                return Some(0.0);
+            };
             let l = *lag as usize;
             if values.len() > 2 * l {
                 state.c3_sums[l_idx] / (values.len() - 2 * l) as f32
@@ -64,9 +68,12 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
         // covers [i * n / total, (i + 1) * n / total). Same in every engine.
         Feature::Paa(total, index) => {
             let n_vals = values.len();
+            if *total == 0 {
+                return None;
+            }
             let start = *index as usize * n_vals / *total as usize;
             let end = (*index as usize + 1) * n_vals / *total as usize;
-            if start < end {
+            if start < end && end <= values.len() {
                 values[start..end].iter().sum::<f32>() / (end - start) as f32
             } else {
                 0.0
@@ -89,12 +96,19 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             }
             super::cwt::mexh_cwt(values, *w as f64)[c] as f32
         }
-        Feature::NumberCwtPeaks(n_val) => super::cwt::number_cwt_peaks(values, *n_val as usize) as f32,
+        Feature::NumberCwtPeaks(n_val) => {
+            super::cwt::number_cwt_peaks(values, *n_val as usize) as f32
+        }
         // TSFEL: max(scipy.signal.welch(x / std(x), fs, nperseg=len(x))[1]).
         Feature::MaxPowerSpectrum => {
             let n_vals = values.len() as f64;
             let mean = values.iter().map(|&v| v as f64).sum::<f64>() / n_vals;
-            let std = (values.iter().map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / n_vals).sqrt();
+            let std = (values
+                .iter()
+                .map(|&v| (v as f64 - mean).powi(2))
+                .sum::<f64>()
+                / n_vals)
+                .sqrt();
             let scaled: Vec<f32> = if std > 0.0 {
                 values.iter().map(|&v| (v as f64 / std) as f32).collect()
             } else {
@@ -124,7 +138,13 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             let len = spectrum.len();
             if len > 1 {
                 let mut cum = 0.0f64;
-                let cums: Vec<f64> = spectrum.iter().map(|&s| { cum += s as f64; cum }).collect();
+                let cums: Vec<f64> = spectrum
+                    .iter()
+                    .map(|&s| {
+                        cum += s as f64;
+                        cum
+                    })
+                    .collect();
                 let total = cum;
                 cums.iter()
                     .enumerate()

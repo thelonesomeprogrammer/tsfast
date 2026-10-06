@@ -130,7 +130,8 @@ pub fn eval_autocorrelation(
 
                 // Remainder
                 for j in i..n_iters {
-                    sum += values[j + 2 * l].powi(2) * values[j + l] - values[j + l] * values[j].powi(2);
+                    sum += values[j + 2 * l].powi(2) * values[j + l]
+                        - values[j + l] * values[j].powi(2);
                 }
 
                 sum / n_iters as f32
