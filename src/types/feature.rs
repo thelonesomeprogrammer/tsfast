@@ -121,6 +121,9 @@ pub enum Feature {
     CwtCoefficients([u16; 8], u8, u16, u16),
     NumberCwtPeaks(u16),
     AugmentedDickeyFuller(AdfAttr),
+    MaxFrequency,
+    MedianFrequency,
+    FundamentalFrequency,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -311,6 +314,9 @@ impl Feature {
             Self::NumberCwtPeaks(_) => C::CWT,
             Self::AugmentedDickeyFuller(_) => C::ADF | C::NEEDS_SORT,
             Self::HiguchiFd => C::empty(),
+            Self::MaxFrequency => C::MAX_FREQ,
+            Self::MedianFrequency => C::MEDIAN_FREQ,
+            Self::FundamentalFrequency => C::FUNDAMENTAL_FREQ,
         }
     }
 }

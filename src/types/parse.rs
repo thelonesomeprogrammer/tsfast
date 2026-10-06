@@ -97,6 +97,9 @@ unit_features! {
     SpectralEntropy => "spectral_entropy", ["torque_Spectral entropy"];
     SpectralRollOn => "spectral_roll_on", ["torque_Spectral roll-on"];
     SpectralRollOff => "spectral_roll_off", ["torque_Spectral roll-off"];
+    MaxFrequency => "max_frequency", ["torque_Max frequency"];
+    MedianFrequency => "median_frequency", ["torque_Median frequency"];
+    FundamentalFrequency => "fundamental_frequency", ["torque_Fundamental frequency"];
     SpectralSkewness => "spectral_skewness", ["torque_Spectral skewness"];
     SpectralKurtosis => "spectral_kurtosis", ["torque_Spectral kurtosis"];
     SignalDistance => "signal_distance", ["torque_Signal distance"];

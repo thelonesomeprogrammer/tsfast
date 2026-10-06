@@ -127,6 +127,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::SpktWelchDensity(..)
         | F::WaveletEnergy(..)
         | F::WaveletEntropy
+        | F::MaxFrequency
+        | F::MedianFrequency
+        | F::FundamentalFrequency
         | F::WaveletFeatures(..) => transform::eval_transform(feat, ctx),
         F::ApproxEntropy(..)
         | F::HiguchiFd
