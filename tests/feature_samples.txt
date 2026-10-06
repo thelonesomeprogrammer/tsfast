@@ -156,3 +156,5 @@ spkt_welch_density__coeff_5
 number_cwt_peaks__n_1
 augmented_dickey_fuller-teststat
 augmented_dickey_fuller-usedlag
+mse-3
+mse-2-10

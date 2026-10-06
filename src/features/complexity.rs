@@ -48,14 +48,73 @@ pub fn eval_complexity(
                 - crate::common::approx_entropy_simd(m_val + 1, r, values))
             .abs()
         }
-        Feature::SampleEntropy => crate::common::sample_entropy_simd(values, population_std(values)),
+        Feature::SampleEntropy => crate::common::sample_entropy_simd(values, 2, 0.2 * population_std(values)),
         Feature::PermutationEntropy(tau, dimension) => {
             crate::common::permutation_entropy(values, *tau, *dimension)
         }
         Feature::HiguchiFd => calc_higuchi_fd(values),
+        Feature::Mse(m, maxscale) => calc_mse(values, *m, *maxscale, context.std_dev, context.state),
         _ => return None,
     };
     Some(res)
+}
+
+fn calc_mse(values: &[f32], m: u8, maxscale: u16, std_dev: f32, state: &mut crate::common::ColumnState) -> f32 {
+    let n = values.len();
+    if n < 160 || std_dev == 0.0 {
+        return f32::NAN;
+    }
+
+    let tolerance = 0.2 * std_dev;
+    let maxscale_val = if maxscale == 0 {
+        (n / 13).max(1)
+    } else {
+        maxscale as usize
+    };
+
+    let mut mse_area = 0.0;
+    let mut finite_count = 0;
+    let mut first_val = f32::NAN;
+    let mut last_val = f32::NAN;
+
+    for scale in 1..=maxscale_val {
+        let windows = n / scale;
+        if windows <= m as usize {
+            continue;
+        }
+
+        let se = if scale == 1 {
+            crate::common::sample_entropy_simd(values, m as usize, tolerance)
+        } else {
+            state.mse_buffer.clear();
+            for i in 0..windows {
+                let start = i * scale;
+                let end = start + scale;
+                let mut sum = 0.0;
+                for &v in &values[start..end] {
+                    sum += v;
+                }
+                state.mse_buffer.push(sum / scale as f32);
+            }
+            crate::common::sample_entropy_simd(&state.mse_buffer, m as usize, tolerance)
+        };
+
+        if se.is_finite() {
+            if finite_count == 0 {
+                first_val = se;
+            }
+            last_val = se;
+            mse_area += se;
+            finite_count += 1;
+        }
+    }
+
+    if finite_count == 0 {
+        return f32::NAN;
+    }
+
+    let trapezoid = mse_area - 0.5 * (first_val + last_val);
+    trapezoid / finite_count as f32
 }
 
 #[inline(always)]

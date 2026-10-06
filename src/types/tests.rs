@@ -16,6 +16,8 @@ fn f(x: f32) -> u32 {
 fn parameterized_samples() -> Vec<Feature> {
     use Feature as F;
     vec![
+        F::Mse(3, 0),
+        F::Mse(2, 10),
         F::BinnedEntropy(5),
         F::EnergyRatioByChunks(3, 1),
         F::NumberCrossingM(f(0.5)),
@@ -95,6 +97,8 @@ fn name_round_trips_through_parse() {
 fn invalid_parameters_are_rejected() {
     for s in [
         "paa-2-2",
+        "mse-0",
+        "mse--1",
         "ar_coefficient-1-10",
         "ar_coefficient-0-0",
         "agg_linear_trend-slope-0-mean",

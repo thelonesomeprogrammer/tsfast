@@ -702,3 +702,33 @@ def test_process_2d_floats_rejects_bad_input():
         ext.process_2d_floats(np.zeros((2, 3), dtype=np.int64))
     with pytest.raises(TypeError, match="list"):
         ext.process_2d_floats([[1.0, 2.0]])
+
+def test_mse():
+    import numpy as np
+    import tsfast
+    from tsfel.feature_extraction.features import mse
+
+    np.random.seed(42)
+    signal = np.random.rand(500).astype(np.float32)
+
+    e = tsfast.Extractor(["mse-3", "mse-2-10"])
+    res = e.process_2d_floats(np.array([signal]))
+
+    tol = 0.2 * np.std(signal)
+    ref_3_0 = mse(signal, m=3, maxscale=None, tolerance=tol)
+    ref_2_10 = mse(signal, m=2, maxscale=10, tolerance=tol)
+
+    assert np.isclose(res[0][0], ref_3_0, atol=1e-2)
+    assert np.isclose(res[0][1], ref_2_10, atol=1e-2)
+
+    # Test short signal (returns NaN)
+    short_signal = np.random.rand(100).astype(np.float32)
+    res_short = e.process_2d_floats(np.array([short_signal]))
+    assert np.isnan(res_short[0][0])
+    assert np.isnan(res_short[0][1])
+
+    # Test constant signal (returns NaN)
+    const_signal = np.ones(500, dtype=np.float32)
+    res_const = e.process_2d_floats(np.array([const_signal]))
+    assert np.isnan(res_const[0][0])
+    assert np.isnan(res_const[0][1])

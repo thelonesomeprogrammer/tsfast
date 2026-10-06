@@ -131,7 +131,8 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         F::ApproxEntropy(..)
         | F::HiguchiFd
         | F::PermutationEntropy(..)
-        | F::SampleEntropy => complexity::eval_complexity(feat, ctx),
+        | F::SampleEntropy
+        | F::Mse(..) => complexity::eval_complexity(feat, ctx),
         F::ArCoefficient(..)
         | F::FriedrichCoefficients(..)
         | F::MaxLangevinFixedPoint(..) => dynamic::eval_dynamic(feat, ctx),

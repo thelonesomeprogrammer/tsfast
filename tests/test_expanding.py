@@ -348,3 +348,26 @@ def test_expanding_output_shape_and_names():
     np.testing.assert_allclose(out, [[1.5, 2.0], [15.0, 20.0]])
     # float64 is accepted and converted; features cover everything seen so far.
     np.testing.assert_allclose(extractor.update(np.array([[3.0], [30.0]])), [[2.0, 3.0], [20.0, 30.0]])
+
+def test_expanding_mse():
+    import numpy as np
+    import tsfast
+    from tsfel.feature_extraction.features import mse
+
+    np.random.seed(42)
+    signal = np.random.rand(500).astype(np.float32)
+
+    e = tsfast.ExpandingExtractor(["mse-3"], 1)
+    res1 = e.update(np.array([signal[:200]]))
+    res2 = e.update(np.array([signal[200:]]))
+
+    # Check intermediate
+    window1 = signal[:200]
+    tol1 = 0.2 * np.std(window1)
+    ref1 = mse(window1, m=3, maxscale=None, tolerance=tol1)
+    assert np.isclose(res1[0][0], ref1, atol=1e-2)
+
+    # Check end
+    tol2 = 0.2 * np.std(signal)
+    ref2 = mse(signal, m=3, maxscale=None, tolerance=tol2)
+    assert np.isclose(res2[0][0], ref2, atol=1e-2)

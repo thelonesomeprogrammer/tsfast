@@ -153,7 +153,7 @@ REFERENCES = {
     "change_quantiles-0-1-False-var": (
         "tsfresh", lambda x: fc.change_quantiles(x, 0.0, 1.0, False, "var")),
     # ── complexity / dynamics ──
-    "sample_entropy": ("tsfresh", fc.sample_entropy),
+    "sample_entropy": ("tsfel", lambda x: F.sample_entropy(x, 2, 0.2 * np.std(x))),
     "approx_entropy-2-0.1": ("tsfresh", lambda x: fc.approximate_entropy(x, 2, 0.1)),
     "approx_entropy-2-0.5": ("tsfresh", lambda x: fc.approximate_entropy(x, 2, 0.5)),
     "permutation_entropy-1-3": ("tsfresh", lambda x: _permutation_entropy(x, 1, 3)),
@@ -206,6 +206,8 @@ REFERENCES = {
     "wavelet_energy-0": ("tsfel", lambda x: F.wavelet_energy(x, FS)["values"][0]),
     "wavelet_energy-3": ("tsfel", lambda x: F.wavelet_energy(x, FS)["values"][3]),
     "wavelet_entropy": ("tsfel", lambda x: F.wavelet_entropy(x, FS)),
+    "mse-3": ("tsfel", lambda x: F.mse(x, m=3, maxscale=None, tolerance=0.2 * np.std(x))),
+    "mse-2-10": ("tsfel", lambda x: F.mse(x, m=2, maxscale=10, tolerance=0.2 * np.std(x))),
 }
 
 # Lengths below which the reference returns NaN by policy rather than because

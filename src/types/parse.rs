@@ -187,6 +187,26 @@ impl std::str::FromStr for Feature {
 // ─── Parameterized parsers ──────────────────────────────────────────────────
 
 fn parse_parameterized(s: &str) -> Option<Feature> {
+    if let Some(arg) = s.strip_prefix("mse-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.is_empty() || parts.len() > 2 {
+            return None;
+        }
+        let m: u8 = parts[0].parse().ok()?;
+        if m < 1 {
+            return None;
+        }
+        let maxscale: u16 = if parts.len() == 2 {
+            let val: u16 = parts[1].parse().ok()?;
+            if val < 1 {
+                return None;
+            }
+            val
+        } else {
+            0
+        };
+        return Some(Feature::Mse(m, maxscale));
+    }
     if let Some(arg) = s.strip_prefix("human_range_energy-") {
         let fs: f32 = arg.trim().parse().ok()?;
         if !(fs.is_finite() && fs > 0.0) {
@@ -590,6 +610,13 @@ impl Feature {
             return name.to_string();
         }
         match self {
+            Feature::Mse(m, maxscale) => {
+                if *maxscale == 0 {
+                    format!("mse-{m}")
+                } else {
+                    format!("mse-{m}-{maxscale}")
+                }
+            }
             Feature::EnergyRatioByChunks(num, focus) => format!(
                 "energy_ratio_by_chunks_num_segments_{}__segment_focus_{}",
                 num, focus
