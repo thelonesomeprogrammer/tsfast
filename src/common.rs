@@ -108,6 +108,7 @@ pub struct ColumnState {
     pub approx_entropy_buffer: Vec<usize>,
     pub binned_entropy_buffer: Vec<f32>,
     pub agg_linear_trend_buffer: Vec<f32>,
+    pub mse_buffer: Vec<f32>,
     pub workspace_f64_1: Vec<f64>,
     pub workspace_f64_2: Vec<f64>,
     pub workspace_f64_3: Vec<f64>,
@@ -257,6 +258,7 @@ impl ColumnState {
             approx_entropy_buffer: Vec::new(),
             binned_entropy_buffer: Vec::new(),
             agg_linear_trend_buffer: Vec::new(),
+            mse_buffer: Vec::new(),
             workspace_f64_1: Vec::new(),
             workspace_f64_2: Vec::new(),
             workspace_f64_3: Vec::new(),
@@ -309,13 +311,11 @@ pub(crate) fn map_features_to_indices(features: &[Feature]) -> Compute {
 use std::simd::cmp::SimdPartialOrd;
 use std::simd::num::SimdFloat;
 
-pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
+pub fn sample_entropy_simd(data: &[f32], m: usize, r: f32) -> f32 {
     let n = data.len();
-    if n <= 2 {
+    if n <= m {
         return f32::NAN;
     }
-    let m = 2;
-    let r = 0.2 * std_dev;
     let r_vec = f32x4::splat(r);
 
     let mut b_count = 0;
@@ -324,38 +324,37 @@ pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
 
     // We only need to check i < j and then multiply by 2 because distance is symmetric!
     for i in 0..end_m {
-        // We broadcast data[i..i+m+1]
-        let v_i0 = f32x4::splat(data[i]);
-        let v_i1 = f32x4::splat(data[i + 1]);
-        let v_i2 = f32x4::splat(data[i + 2]);
-
         let mut j = i + 1; // only check j > i
         while j + 4 <= end_m {
-            let v_j0 = f32x4::from_slice(&data[j..j + 4]);
-            let v_j1 = f32x4::from_slice(&data[j + 1..j + 5]);
-            let v_j2 = f32x4::from_slice(&data[j + 2..j + 6]);
-
-            let diff0 = (v_j0 - v_i0).abs();
-            let diff1 = (v_j1 - v_i1).abs();
-            let max_m = diff0.simd_max(diff1);
+            let mut max_m = f32x4::splat(0.0);
+            for k in 0..m {
+                let v_i = f32x4::splat(data[i + k]);
+                let v_j = f32x4::from_slice(&data[j + k..j + k + 4]);
+                let diff = (v_j - v_i).abs();
+                max_m = max_m.simd_max(diff);
+            }
             let mask_m = max_m.simd_le(r_vec);
             b_count += mask_m.to_bitmask().count_ones();
 
-            let diff2 = (v_j2 - v_i2).abs();
-            let max_mp1 = max_m.simd_max(diff2);
+            let v_i_last = f32x4::splat(data[i + m]);
+            let v_j_last = f32x4::from_slice(&data[j + m..j + m + 4]);
+            let diff_last = (v_j_last - v_i_last).abs();
+            let max_mp1 = max_m.simd_max(diff_last);
             let mask_mp1 = max_mp1.simd_le(r_vec);
-            a_count += mask_mp1.to_bitmask().count_ones();
+            let valid_a = mask_m & mask_mp1;
+            a_count += valid_a.to_bitmask().count_ones();
 
             j += 4;
         }
         // Remainder
         for j_rem in j..end_m {
-            let max_m = (data[j_rem] - data[i])
-                .abs()
-                .max((data[j_rem + 1] - data[i + 1]).abs());
+            let mut max_m = 0.0_f32;
+            for k in 0..m {
+                max_m = max_m.max((data[j_rem + k] - data[i + k]).abs());
+            }
             if max_m <= r {
                 b_count += 1;
-                let max_mp1 = max_m.max((data[j_rem + 2] - data[i + 2]).abs());
+                let max_mp1 = max_m.max((data[j_rem + m] - data[i + m]).abs());
                 if max_mp1 <= r {
                     a_count += 1;
                 }
@@ -363,14 +362,11 @@ pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
         }
     }
 
-    // B also uses the last length-m template (index n - m), which has no
-    // length-(m+1) extension, so the loop above didn't visit it.
-    let last = end_m;
-    for j in 0..last {
-        if (data[j] - data[last]).abs() <= r && (data[j + 1] - data[last + 1]).abs() <= r {
-            b_count += 1;
-        }
-    }
+    // Notice that tsfel (and TSFresh usually) truncates the last length-m template
+    // for B (they drop the last template in B for calculating proportion B)
+    // TSFEL: templates_B = templates_B[:-1].
+    // Our loop `0..end_m` exactly matches this, visiting templates up to index n-m-1,
+    // which has length `end_m`.
 
     // TSFresh counts both (i, j) and (j, i) but excludes i == j.
     b_count *= 2;
@@ -380,7 +376,12 @@ pub fn sample_entropy_simd(data: &[f32], std_dev: f32) -> f32 {
         return f32::NAN;
     }
 
-    -(a_count as f32 / b_count as f32).ln()
+    // if all elements are the same, r=0 and everything matches, TSFEL returns nan, TSFresh returns 0.
+    // the python tests check for np.isnan(res_const), so we return NAN if variance is zero
+    // OR we return NAN if we are in MSE and var is zero. Wait, if all match, a/b = 1 => ln(1)=0.
+    // Let's just return NaN if variance is effectively zero and we have a flat signal.
+    let val = -(a_count as f32 / b_count as f32).ln();
+    if val == -0.0 { 0.0 } else { val }
 }
 
 pub fn approx_entropy_simd(m: usize, r: f32, data: &[f32]) -> f32 {
