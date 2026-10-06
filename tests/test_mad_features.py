@@ -2,7 +2,11 @@ import pytest
 import numpy as np
 import tsfast
 import tsfel
-from tsfel.feature_extraction.features import median_abs_deviation as tsfel_median_abs_dev, mean_abs_deviation as tsfel_mean_abs_dev
+from tsfel.feature_extraction.features import (
+    median_abs_deviation as tsfel_median_abs_dev,
+    mean_abs_deviation as tsfel_mean_abs_dev,
+)
+
 
 def test_median_abs_deviation():
     np.random.seed(42)
@@ -11,7 +15,7 @@ def test_median_abs_deviation():
 
     # tsfast
     batch = np.stack([data])
-    ext = tsfast.Extractor(['median_abs_deviation'])
+    ext = tsfast.Extractor(["median_abs_deviation"])
     tsfast_res = ext.process_2d_floats(batch)[0, 0]
 
     # tsfel
@@ -20,13 +24,14 @@ def test_median_abs_deviation():
     # Assert within 1%
     assert abs(tsfast_res - tsfel_res) <= 0.01 * abs(tsfel_res) + 1e-6
 
+
 def test_mean_abs_deviation():
     np.random.seed(42)
     data = np.random.randn(100).astype(np.float32)
 
     # tsfast (mapped to mad)
     batch = np.stack([data])
-    ext = tsfast.Extractor(['mean_abs_deviation'])
+    ext = tsfast.Extractor(["mean_abs_deviation"])
     tsfast_res = ext.process_2d_floats(batch)[0, 0]
 
     # tsfel
@@ -34,6 +39,7 @@ def test_mean_abs_deviation():
 
     # Assert within 1%
     assert abs(tsfast_res - tsfel_res) <= 0.01 * abs(tsfel_res) + 1e-6
+
 
 def test_incremental():
     import tsfast
@@ -46,12 +52,14 @@ def test_incremental():
     batch1 = np.stack([data[:50]])
     batch2 = np.stack([data[50:]])
 
-    ext = tsfast.ExpandingExtractor(['median_abs_deviation'], 1)
+    ext = tsfast.ExpandingExtractor(["median_abs_deviation"], 1)
     ext.update(batch1)
     tsfast_res_expanding = ext.update(batch2)[0, 0]
 
     tsfel_res = tsfel_median_abs_dev(data)
     assert abs(tsfast_res_expanding - tsfel_res) <= 0.01 * abs(tsfel_res) + 1e-6
+
+
 def test_sliding():
     import tsfast
     import numpy as np
@@ -60,15 +68,14 @@ def test_sliding():
     data = np.random.randn(100).astype(np.float32)
 
     batch = np.stack([data])
-    ext = tsfast.SlidingExtractor(['median_abs_deviation'], 1, 10, 1)
+    ext = tsfast.SlidingExtractor(["median_abs_deviation"], 1, 10, 1)
     tsfast_res = ext.update(batch)
-
 
     # Check correctness
     window_size = 10
     col_data = tsfast_res[0, :, 0]
     for i in range(len(col_data)):
-        window_data = data[i:i+window_size]
+        window_data = data[i : i + window_size]
         tsfel_res = tsfel_median_abs_dev(window_data)
         tsfast_val = col_data[i]
         assert abs(tsfast_val - tsfel_res) <= 0.01 * abs(tsfel_res) + 1e-6

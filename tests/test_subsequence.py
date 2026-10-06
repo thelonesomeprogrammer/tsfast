@@ -1,6 +1,7 @@
 import tsfast
 import numpy as np
 
+
 def test_subsequence_features():
     import stumpy
     from tsfresh.feature_extraction.feature_calculators import query_similarity_count
@@ -18,7 +19,7 @@ def test_subsequence_features():
     mp_mean = float(np.mean(profile))
 
     # tsfresh
-    param = [{'query': q, 'threshold': 1.0}]
+    param = [{"query": q, "threshold": 1.0}]
     qs = query_similarity_count(x, param)
     q_count = qs[0][1]
 
@@ -26,7 +27,7 @@ def test_subsequence_features():
         "matrix_profile-10-min",
         "matrix_profile-10-max",
         "matrix_profile-10-mean",
-        "query_similarity_count-10-1.0"
+        "query_similarity_count-10-1.0",
     ]
 
     extractor = tsfast.Extractor(features)

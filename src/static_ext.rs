@@ -98,7 +98,10 @@ impl Extractor {
             let n_series = if n_samples == 0 { 0 } else { rows.len() };
             // Python can still write to the array meanwhile; like any extension
             // releasing the GIL, that only garbles this call's features.
-            Ok((n_series, py.detach(|| self.extract(&rows[..n_series], n_samples))))
+            Ok((
+                n_series,
+                py.detach(|| self.extract(&rows[..n_series], n_samples)),
+            ))
         })?;
         numpy_io::to_numpy_2d(py, n_series, self.features.len(), data)
     }
@@ -212,11 +215,7 @@ mod tests {
         let names = extractor.feature_names();
         for (i, &val) in result.iter().enumerate() {
             println!("{}: {}", names[i], val);
-            assert!(
-                !val.is_nan(),
-                "Feature {} is NaN",
-                names[i]
-            );
+            assert!(!val.is_nan(), "Feature {} is NaN", names[i]);
         }
     }
 

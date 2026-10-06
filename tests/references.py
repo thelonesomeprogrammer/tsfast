@@ -11,6 +11,7 @@ feature_samples.txt must be in exactly one of the two.
 Also used by scripts/coach_benchmark.py to time tsfast against the reference
 libraries per feature.
 """
+
 import numpy as np
 import stumpy
 import tsfel.feature_extraction.features as F
@@ -63,14 +64,29 @@ REFERENCES = {
     "pk_pk_distance": ("tsfel", F.pk_pk_distance),
     "variation_coefficient": ("tsfresh", fc.variation_coefficient),
     "length": ("tsfresh", fc.length),
-    "variance_larger_than_standard_deviation": ("tsfresh", fc.variance_larger_than_standard_deviation),
-    "large_standard_deviation-0.05": ("tsfresh", lambda x: fc.large_standard_deviation(x, 0.05)),
-    "symmetry_looking-0.05": ("tsfresh", lambda x: _one(fc.symmetry_looking(x, [{"r": 0.05}]))),
+    "variance_larger_than_standard_deviation": (
+        "tsfresh",
+        fc.variance_larger_than_standard_deviation,
+    ),
+    "large_standard_deviation-0.05": (
+        "tsfresh",
+        lambda x: fc.large_standard_deviation(x, 0.05),
+    ),
+    "symmetry_looking-0.05": (
+        "tsfresh",
+        lambda x: _one(fc.symmetry_looking(x, [{"r": 0.05}])),
+    ),
     "ratio_beyond_r_sigma-1.5": ("tsfresh", lambda x: fc.ratio_beyond_r_sigma(x, 1.5)),
     "quantile-0.25": ("tsfresh", lambda x: fc.quantile(x, 0.25)),
     "quantile-0.9": ("tsfresh", lambda x: fc.quantile(x, 0.9)),
-    "index_mass_quantile-0.5": ("tsfresh", lambda x: _one(fc.index_mass_quantile(x, [{"q": 0.5}]))),
-    "index_mass_quantile-0.9": ("tsfresh", lambda x: _one(fc.index_mass_quantile(x, [{"q": 0.9}]))),
+    "index_mass_quantile-0.5": (
+        "tsfresh",
+        lambda x: _one(fc.index_mass_quantile(x, [{"q": 0.5}])),
+    ),
+    "index_mass_quantile-0.9": (
+        "tsfresh",
+        lambda x: _one(fc.index_mass_quantile(x, [{"q": 0.9}])),
+    ),
     "mean_n_absolute_max-7": ("tsfresh", lambda x: fc.mean_n_absolute_max(x, 7)),
     "count_above_mean": ("tsfresh", fc.count_above_mean),
     "count_below_mean": ("tsfresh", fc.count_below_mean),
@@ -87,10 +103,17 @@ REFERENCES = {
     "sum_of_reoccurring_values": ("tsfresh", fc.sum_of_reoccurring_values),
     "sum_of_reoccurring_data_points": ("tsfresh", fc.sum_of_reoccurring_data_points),
     "percentage_of_reoccurring_datapoints_to_all_datapoints": (
-        "tsfresh", fc.percentage_of_reoccurring_datapoints_to_all_datapoints),
+        "tsfresh",
+        fc.percentage_of_reoccurring_datapoints_to_all_datapoints,
+    ),
     "percentage_of_reoccurring_values_to_all_values": (
-        "tsfresh", fc.percentage_of_reoccurring_values_to_all_values),
-    "ratio_value_number_to_time_series_length": ("tsfresh", fc.ratio_value_number_to_time_series_length),
+        "tsfresh",
+        fc.percentage_of_reoccurring_values_to_all_values,
+    ),
+    "ratio_value_number_to_time_series_length": (
+        "tsfresh",
+        fc.ratio_value_number_to_time_series_length,
+    ),
     "value_count-1": ("tsfresh", lambda x: fc.value_count(x, 1)),
     "value_count-0": ("tsfresh", lambda x: fc.value_count(x, 0)),
     "ecdf-10": ("tsfel", lambda x: F.ecdf(x, 10)[-1]),
@@ -107,7 +130,10 @@ REFERENCES = {
     "auc": ("tsfel", lambda x: F.auc(x, FS)),
     "signal_distance": ("tsfel", F.distance),
     "slope": ("tsfel", F.slope),
-    "intercept": ("tsfresh", lambda x: _one(fc.linear_trend(x, [{"attr": "intercept"}]))),
+    "intercept": (
+        "tsfresh",
+        lambda x: _one(fc.linear_trend(x, [{"attr": "intercept"}])),
+    ),
     "zero_cross": ("tsfel", F.zero_cross),
     "negative_turning": ("tsfel", F.negative_turning),
     "positive_turning": ("tsfel", F.positive_turning),
@@ -118,40 +144,89 @@ REFERENCES = {
     "number_crossing_m__m_0.5": ("tsfresh", lambda x: fc.number_crossing_m(x, 0.5)),
     "c3-1": ("tsfresh", lambda x: fc.c3(x, 1)),
     "c3-2": ("tsfresh", lambda x: fc.c3(x, 2)),
-    "time_reversal_asymmetry-1": ("tsfresh", lambda x: fc.time_reversal_asymmetry_statistic(x, 1)),
-    "time_reversal_asymmetry-2": ("tsfresh", lambda x: fc.time_reversal_asymmetry_statistic(x, 2)),
+    "time_reversal_asymmetry-1": (
+        "tsfresh",
+        lambda x: fc.time_reversal_asymmetry_statistic(x, 1),
+    ),
+    "time_reversal_asymmetry-2": (
+        "tsfresh",
+        lambda x: fc.time_reversal_asymmetry_statistic(x, 2),
+    ),
     "energy_ratio_by_chunks_num_segments_3__segment_focus_1": (
-        "tsfresh", lambda x: _one(fc.energy_ratio_by_chunks(x, [{"num_segments": 3, "segment_focus": 1}]))),
+        "tsfresh",
+        lambda x: _one(
+            fc.energy_ratio_by_chunks(x, [{"num_segments": 3, "segment_focus": 1}])
+        ),
+    ),
     "energy_ratio_by_chunks_num_segments_4__segment_focus_3": (
-        "tsfresh", lambda x: _one(fc.energy_ratio_by_chunks(x, [{"num_segments": 4, "segment_focus": 3}]))),
+        "tsfresh",
+        lambda x: _one(
+            fc.energy_ratio_by_chunks(x, [{"num_segments": 4, "segment_focus": 3}])
+        ),
+    ),
     # ── autocorrelation ──
     "autocorr_lag1": ("tsfresh", lambda x: fc.autocorrelation(x, 1)),
     "autocorr-1": ("tsfresh", lambda x: fc.autocorrelation(x, 1)),
     "autocorr-3": ("tsfresh", lambda x: fc.autocorrelation(x, 3)),
     "autocorrelation": ("tsfel", F.autocorr),
     "agg_autocorrelation-mean-10": (
-        "tsfresh", lambda x: _one(fc.agg_autocorrelation(x, [{"f_agg": "mean", "maxlag": 10}]))),
+        "tsfresh",
+        lambda x: _one(fc.agg_autocorrelation(x, [{"f_agg": "mean", "maxlag": 10}])),
+    ),
     "agg_autocorrelation-max-5": (
-        "tsfresh", lambda x: _one(fc.agg_autocorrelation(x, [{"f_agg": "max", "maxlag": 5}]))),
+        "tsfresh",
+        lambda x: _one(fc.agg_autocorrelation(x, [{"f_agg": "max", "maxlag": 5}])),
+    ),
     "agg_autocorrelation-var-5": (
-        "tsfresh", lambda x: _one(fc.agg_autocorrelation(x, [{"f_agg": "var", "maxlag": 5}]))),
-    "partial_autocorr-1": ("tsfresh", lambda x: _one(fc.partial_autocorrelation(x, [{"lag": 1}]))),
-    "partial_autocorr-2": ("tsfresh", lambda x: _one(fc.partial_autocorrelation(x, [{"lag": 2}]))),
+        "tsfresh",
+        lambda x: _one(fc.agg_autocorrelation(x, [{"f_agg": "var", "maxlag": 5}])),
+    ),
+    "partial_autocorr-1": (
+        "tsfresh",
+        lambda x: _one(fc.partial_autocorrelation(x, [{"lag": 1}])),
+    ),
+    "partial_autocorr-2": (
+        "tsfresh",
+        lambda x: _one(fc.partial_autocorrelation(x, [{"lag": 2}])),
+    ),
     # ── linear trend ──
     **{
-        f"linear_trend-{a}": ("tsfresh", (lambda a: lambda x: _one(fc.linear_trend(x, [{"attr": a}])))(a))
+        f"linear_trend-{a}": (
+            "tsfresh",
+            (lambda a: lambda x: _one(fc.linear_trend(x, [{"attr": a}])))(a),
+        )
         for a in ["slope", "intercept", "rvalue", "pvalue", "stderr"]
     },
-    "agg_linear_trend-intercept-5-max": ("tsfresh", lambda x: _one(fc.agg_linear_trend(
-        x, [{"attr": "intercept", "chunk_len": 5, "f_agg": "max"}]))),
-    "agg_linear_trend-slope-10-mean": ("tsfresh", lambda x: _one(fc.agg_linear_trend(
-        x, [{"attr": "slope", "chunk_len": 10, "f_agg": "mean"}]))),
-    "agg_linear_trend-rvalue-5-var": ("tsfresh", lambda x: _one(fc.agg_linear_trend(
-        x, [{"attr": "rvalue", "chunk_len": 5, "f_agg": "var"}]))),
+    "agg_linear_trend-intercept-5-max": (
+        "tsfresh",
+        lambda x: _one(
+            fc.agg_linear_trend(
+                x, [{"attr": "intercept", "chunk_len": 5, "f_agg": "max"}]
+            )
+        ),
+    ),
+    "agg_linear_trend-slope-10-mean": (
+        "tsfresh",
+        lambda x: _one(
+            fc.agg_linear_trend(
+                x, [{"attr": "slope", "chunk_len": 10, "f_agg": "mean"}]
+            )
+        ),
+    ),
+    "agg_linear_trend-rvalue-5-var": (
+        "tsfresh",
+        lambda x: _one(
+            fc.agg_linear_trend(x, [{"attr": "rvalue", "chunk_len": 5, "f_agg": "var"}])
+        ),
+    ),
     "change_quantiles-0.2-0.8-True-mean": (
-        "tsfresh", lambda x: fc.change_quantiles(x, 0.2, 0.8, True, "mean")),
+        "tsfresh",
+        lambda x: fc.change_quantiles(x, 0.2, 0.8, True, "mean"),
+    ),
     "change_quantiles-0-1-False-var": (
-        "tsfresh", lambda x: fc.change_quantiles(x, 0.0, 1.0, False, "var")),
+        "tsfresh",
+        lambda x: fc.change_quantiles(x, 0.0, 1.0, False, "var"),
+    ),
     # ── complexity / dynamics ──
     "sample_entropy": ("tsfresh", fc.sample_entropy),
     "approx_entropy-2-0.1": ("tsfresh", lambda x: fc.approximate_entropy(x, 2, 0.1)),
@@ -159,16 +234,31 @@ REFERENCES = {
     "permutation_entropy-1-3": ("tsfresh", lambda x: _permutation_entropy(x, 1, 3)),
     "permutation_entropy-1-5": ("tsfresh", lambda x: _permutation_entropy(x, 1, 5)),
     "higuchi_fd": ("tsfel", F.higuchi_fractal_dimension),
-    "ar_coefficient-10-1": ("tsfresh", lambda x: _one(fc.ar_coefficient(x, [{"coeff": 1, "k": 10}]))),
-    "ar_coefficient-10-0": ("tsfresh", lambda x: _one(fc.ar_coefficient(x, [{"coeff": 0, "k": 10}]))),
+    "ar_coefficient-10-1": (
+        "tsfresh",
+        lambda x: _one(fc.ar_coefficient(x, [{"coeff": 1, "k": 10}])),
+    ),
+    "ar_coefficient-10-0": (
+        "tsfresh",
+        lambda x: _one(fc.ar_coefficient(x, [{"coeff": 0, "k": 10}])),
+    ),
     "friedrich_coefficients-3-30-0": (
-        "tsfresh", lambda x: _one(fc.friedrich_coefficients(x, [{"m": 3, "r": 30, "coeff": 0}]))),
+        "tsfresh",
+        lambda x: _one(fc.friedrich_coefficients(x, [{"m": 3, "r": 30, "coeff": 0}])),
+    ),
     "friedrich_coefficients-3-30-3": (
-        "tsfresh", lambda x: _one(fc.friedrich_coefficients(x, [{"m": 3, "r": 30, "coeff": 3}]))),
-    "max_langevin_fixed_point-3-30": ("tsfresh", lambda x: fc.max_langevin_fixed_point(x, m=3, r=30)),
+        "tsfresh",
+        lambda x: _one(fc.friedrich_coefficients(x, [{"m": 3, "r": 30, "coeff": 3}])),
+    ),
+    "max_langevin_fixed_point-3-30": (
+        "tsfresh",
+        lambda x: fc.max_langevin_fixed_point(x, m=3, r=30),
+    ),
     **{
         f"augmented_dickey_fuller-{a}": (
-            "tsfresh", (lambda a: lambda x: _one(fc.augmented_dickey_fuller(x, [{"attr": a}])))(a))
+            "tsfresh",
+            (lambda a: lambda x: _one(fc.augmented_dickey_fuller(x, [{"attr": a}])))(a),
+        )
         for a in ["teststat", "pvalue", "usedlag"]
     },
     # tsfresh's matrix_profile needs the unmaintained `matrixprofile` package and
@@ -178,22 +268,61 @@ REFERENCES = {
     "matrix_profile-10-max": ("stumpy", lambda x: _matrix_profile(x, 10).max()),
     "matrix_profile-10-mean": ("stumpy", lambda x: _matrix_profile(x, 10).mean()),
     "query_similarity_count-10-0.5": (
-        "tsfresh", lambda x: _one(fc.query_similarity_count(x, [{"query": x[:10], "threshold": 0.5}]))),
+        "tsfresh",
+        lambda x: _one(
+            fc.query_similarity_count(x, [{"query": x[:10], "threshold": 0.5}])
+        ),
+    ),
     # ── frequency domain ──
-    "fft_coeff-3-abs": ("tsfresh", lambda x: _one(fc.fft_coefficient(x, [{"coeff": 3, "attr": "abs"}]))),
-    "fft_coeff-0-real": ("tsfresh", lambda x: _one(fc.fft_coefficient(x, [{"coeff": 0, "attr": "real"}]))),
-    "fft_coeff-1-imag": ("tsfresh", lambda x: _one(fc.fft_coefficient(x, [{"coeff": 1, "attr": "imag"}]))),
-    "fft_coeff-2-angle": ("tsfresh", lambda x: _one(fc.fft_coefficient(x, [{"coeff": 2, "attr": "angle"}]))),
-    "spkt_welch_density__coeff_2": ("tsfresh", lambda x: _one(fc.spkt_welch_density(x, [{"coeff": 2}]))),
-    "spkt_welch_density__coeff_5": ("tsfresh", lambda x: _one(fc.spkt_welch_density(x, [{"coeff": 5}]))),
+    "fft_coeff-3-abs": (
+        "tsfresh",
+        lambda x: _one(fc.fft_coefficient(x, [{"coeff": 3, "attr": "abs"}])),
+    ),
+    "fft_coeff-0-real": (
+        "tsfresh",
+        lambda x: _one(fc.fft_coefficient(x, [{"coeff": 0, "attr": "real"}])),
+    ),
+    "fft_coeff-1-imag": (
+        "tsfresh",
+        lambda x: _one(fc.fft_coefficient(x, [{"coeff": 1, "attr": "imag"}])),
+    ),
+    "fft_coeff-2-angle": (
+        "tsfresh",
+        lambda x: _one(fc.fft_coefficient(x, [{"coeff": 2, "attr": "angle"}])),
+    ),
+    "spkt_welch_density__coeff_2": (
+        "tsfresh",
+        lambda x: _one(fc.spkt_welch_density(x, [{"coeff": 2}])),
+    ),
+    "spkt_welch_density__coeff_5": (
+        "tsfresh",
+        lambda x: _one(fc.spkt_welch_density(x, [{"coeff": 5}])),
+    ),
     "cwt_coefficients__coeff_3__w_5__widths_(2, 5, 10, 20)": (
-        "tsfresh", lambda x: _one(fc.cwt_coefficients(x, [{"widths": (2, 5, 10, 20), "coeff": 3, "w": 5}]))),
+        "tsfresh",
+        lambda x: _one(
+            fc.cwt_coefficients(x, [{"widths": (2, 5, 10, 20), "coeff": 3, "w": 5}])
+        ),
+    ),
     "number_cwt_peaks__n_1": ("tsfresh", lambda x: fc.number_cwt_peaks(x, 1)),
     "number_cwt_peaks__n_5": ("tsfresh", lambda x: fc.number_cwt_peaks(x, 5)),
     **{
-        f"spectral_{s}": ("tsfel", (lambda fn: lambda x: fn(x, FS))(getattr(F, f"spectral_{s}")))
-        for s in ["centroid", "distance", "decrease", "slope", "spread", "entropy",
-                  "roll_on", "roll_off", "skewness", "kurtosis"]
+        f"spectral_{s}": (
+            "tsfel",
+            (lambda fn: lambda x: fn(x, FS))(getattr(F, f"spectral_{s}")),
+        )
+        for s in [
+            "centroid",
+            "distance",
+            "decrease",
+            "slope",
+            "spread",
+            "entropy",
+            "roll_on",
+            "roll_off",
+            "skewness",
+            "kurtosis",
+        ]
     },
     "max_power_spectrum": ("tsfel", lambda x: F.max_power_spectrum(x, FS)),
     "human_range_energy-100": ("tsfel", lambda x: F.human_range_energy(x, 100.0)),
