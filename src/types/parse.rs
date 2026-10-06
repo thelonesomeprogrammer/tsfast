@@ -51,6 +51,7 @@ unit_features! {
     HiguchiFd => "higuchi_fd";
     Dfa => "dfa";
     HurstExponent => "hurst_exponent";
+    MaximumFractalLength => "maximum_fractal_length";
     Energy => "energy", ["torque_Absolute energy"];
     Rms => "rms";
     RootMeanSquare => "root_mean_square";

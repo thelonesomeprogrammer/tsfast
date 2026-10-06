@@ -113,6 +113,8 @@ pub struct ColumnState {
     pub workspace_f64_3: Vec<f64>,
     pub workspace_f64_4: Vec<f64>,
     pub workspace_f64_5: Vec<f64>,
+    pub higuchi_lk: Vec<f64>,
+    pub higuchi_k_values: Vec<f64>,
     pub sort_buffer: Vec<f32>,
     pub mad_buffer: Vec<f32>,
     pub diff_buffer: Vec<f32>,
@@ -185,6 +187,8 @@ impl ColumnState {
         self.adf_test_stat = f32::NAN;
         self.adf_p_value = f32::NAN;
         self.adf_used_lag = f32::NAN;
+        self.higuchi_lk.clear();
+        self.higuchi_k_values.clear();
     }
 
     pub fn new(
@@ -258,6 +262,8 @@ impl ColumnState {
             workspace_f64_3: Vec::new(),
             workspace_f64_4: Vec::new(),
             workspace_f64_5: Vec::new(),
+            higuchi_lk: Vec::new(),
+            higuchi_k_values: Vec::new(),
             sort_buffer: Vec::new(),
             mad_buffer: Vec::new(),
             diff_buffer: Vec::new(),

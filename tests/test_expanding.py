@@ -348,3 +348,29 @@ def test_expanding_output_shape_and_names():
     np.testing.assert_allclose(out, [[1.5, 2.0], [15.0, 20.0]])
     # float64 is accepted and converted; features cover everything seen so far.
     np.testing.assert_allclose(extractor.update(np.array([[3.0], [30.0]])), [[2.0, 3.0], [20.0, 30.0]])
+
+def test_expanding_maximum_fractal_length():
+    import numpy as np
+    import tsfast
+    from tsfel.feature_extraction.features import maximum_fractal_length
+
+    np.random.seed(42)
+    x1 = np.cumsum(np.random.randn(200)).astype(np.float32)
+    x2 = np.cumsum(np.random.randn(50)).astype(np.float32)
+    full_x = np.concatenate([x1, x2])
+
+    features = ["maximum_fractal_length"]
+    ext = tsfast.ExpandingExtractor(features, n_cols=1)
+
+    res1 = ext.update(x1.reshape(1, -1))
+    res2 = ext.update(x2.reshape(1, -1))
+
+    mfl1 = maximum_fractal_length(x1)
+    mfl2 = maximum_fractal_length(full_x)
+
+    np.testing.assert_allclose(res1[0][0], mfl1, atol=1e-5)
+    np.testing.assert_allclose(res2[0][0], mfl2, atol=1e-5)
+def test_expanding_invalid_feature():
+    # Verify unsupported features immediately error during initialization
+    with pytest.raises(ValueError, match="Unknown feature"):
+        ExpandingExtractor(["invalid_feature"], 1)

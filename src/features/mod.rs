@@ -132,6 +132,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::HiguchiFd
         | F::Dfa
         | F::HurstExponent
+        | F::MaximumFractalLength
         | F::PermutationEntropy(..)
         | F::SampleEntropy => complexity::eval_complexity(feat, ctx),
         F::ArCoefficient(..)
