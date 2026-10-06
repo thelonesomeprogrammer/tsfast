@@ -74,8 +74,11 @@ fn calc_higuchi_fd(values: &[f32]) -> f32 {
 
     let mut log_k_inv_sum = 0.0f64;
     let mut log_lk_sum = 0.0f64;
-    let mut log_k_inv_vals = Vec::with_capacity(k_max);
-    let mut log_lk_vals = Vec::with_capacity(k_max);
+
+    // Opt: Compute linear regression standard covariance/variance dynamically in one pass
+    // to avoid allocating two vectors for `log_k_inv` and `log_lk`
+    let mut sum_x_sq = 0.0f64;
+    let mut sum_xy = 0.0f64;
 
     for k in 1..=k_max {
         let mut lmk_sum = 0.0f64;
@@ -95,24 +98,18 @@ fn calc_higuchi_fd(values: &[f32]) -> f32 {
         let log_lk = lk.ln();
         let log_k_inv = (1.0 / k as f64).ln();
 
-        log_k_inv_vals.push(log_k_inv);
-        log_lk_vals.push(log_lk);
         log_k_inv_sum += log_k_inv;
         log_lk_sum += log_lk;
+        sum_x_sq += log_k_inv * log_k_inv;
+        sum_xy += log_k_inv * log_lk;
     }
 
     let count = k_max as f64;
     let x_mean = log_k_inv_sum / count;
     let y_mean = log_lk_sum / count;
 
-    let mut num = 0.0f64;
-    let mut den = 0.0f64;
-    for i in 0..k_max {
-        let dx = log_k_inv_vals[i] - x_mean;
-        let dy = log_lk_vals[i] - y_mean;
-        num += dx * dy;
-        den += dx * dx;
-    }
+    let num = sum_xy - count * x_mean * y_mean;
+    let den = sum_x_sq - count * x_mean * x_mean;
 
     if den == 0.0 {
         return f32::NAN;
