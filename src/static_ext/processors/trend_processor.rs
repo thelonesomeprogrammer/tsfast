@@ -70,9 +70,7 @@ impl TrendProcessor {
                 } else {
                     for (j, v) in i.iter().enumerate().take(LANES) {
                         let idx = global_idx + j;
-                        while *seg_idx < state.paa_sums[t_idx].len() - 1
-                            && idx >= b[*seg_idx + 1]
-                        {
+                        while *seg_idx < state.paa_sums[t_idx].len() - 1 && idx >= b[*seg_idx + 1] {
                             *seg_idx += 1;
                         }
                         state.paa_sums[t_idx][*seg_idx] += v;
@@ -85,8 +83,7 @@ impl TrendProcessor {
             for (l_idx, &lag) in unique_c3_lags.iter().enumerate() {
                 let l = lag as usize;
                 if global_idx >= 2 * l {
-                    let chunk_il =
-                        f32x4::from_slice(&values[global_idx - l..global_idx - l + 4]);
+                    let chunk_il = f32x4::from_slice(&values[global_idx - l..global_idx - l + 4]);
                     let chunk_i2l =
                         f32x4::from_slice(&values[global_idx - 2 * l..global_idx - 2 * l + 4]);
                     state.c3_sums_vec[l_idx] += chunk * chunk_il * chunk_i2l;
@@ -166,7 +163,8 @@ impl TrendProcessor {
             for (l_idx, &lag) in unique_c3_lags.iter().enumerate() {
                 let l = lag as usize;
                 if global_idx >= 2 * l {
-                    state.c3_sums[l_idx] += val * values[global_idx - l] * values[global_idx - 2 * l];
+                    state.c3_sums[l_idx] +=
+                        val * values[global_idx - l] * values[global_idx - 2 * l];
                 }
             }
         }

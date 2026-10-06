@@ -128,6 +128,7 @@ compute_flags! {
     CALC_CENTROID,
     ADF,
     LPCC,
+    HIGUCHI,
 }
 
 // ── Composite masks (zero bit-cost) ────────────────────────────────────────
@@ -153,9 +154,6 @@ impl Compute {
     );
 
     pub const ANY_DIFF: Self = Self::from_bits_retain(
-        Self::ZERO_CROSS.bits()
-            | Self::MAC.bits()
-            | Self::MC.bits()
-            | Self::CID_CE.bits(),
+        Self::ZERO_CROSS.bits() | Self::MAC.bits() | Self::MC.bits() | Self::CID_CE.bits(),
     );
 }

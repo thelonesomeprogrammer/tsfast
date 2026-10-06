@@ -43,9 +43,7 @@ impl ComplexityProcessor {
                 } else {
                     for (j, v) in chunk.as_array().iter().enumerate().take(LANES) {
                         let idx = global_idx + j;
-                        while *seg_idx < state.paa_sums[t_idx].len() - 1
-                            && idx >= b[*seg_idx + 1]
-                        {
+                        while *seg_idx < state.paa_sums[t_idx].len() - 1 && idx >= b[*seg_idx + 1] {
                             *seg_idx += 1;
                         }
                         state.paa_sums[t_idx][*seg_idx] += v;
@@ -59,8 +57,10 @@ impl ComplexityProcessor {
                 let l = lag as usize;
                 if global_idx >= 2 * l {
                     let chunk_il = f32x4::from_slice(&values[global_idx - l..global_idx - l + 4]);
-                    let chunk_i2l = f32x4::from_slice(&values[global_idx - 2 * l..global_idx - 2 * l + 4]);
-                    state.tra_sums_vec[l_idx] += chunk * chunk * chunk_il - chunk_il * chunk_i2l * chunk_i2l;
+                    let chunk_i2l =
+                        f32x4::from_slice(&values[global_idx - 2 * l..global_idx - 2 * l + 4]);
+                    state.tra_sums_vec[l_idx] +=
+                        chunk * chunk * chunk_il - chunk_il * chunk_i2l * chunk_i2l;
                 } else {
                     for j in 0..LANES {
                         let idx = global_idx + j;
@@ -77,8 +77,7 @@ impl ComplexityProcessor {
             for (l_idx, &lag) in unique_c3_lags.iter().enumerate() {
                 let l = lag as usize;
                 if global_idx >= 2 * l {
-                    let chunk_il =
-                        f32x4::from_slice(&values[global_idx - l..global_idx - l + 4]);
+                    let chunk_il = f32x4::from_slice(&values[global_idx - l..global_idx - l + 4]);
                     let chunk_i2l =
                         f32x4::from_slice(&values[global_idx - 2 * l..global_idx - 2 * l + 4]);
                     state.c3_sums_vec[l_idx] += chunk * chunk_il * chunk_i2l;
@@ -138,7 +137,8 @@ impl ComplexityProcessor {
             for (l_idx, &lag) in unique_c3_lags.iter().enumerate() {
                 let l = lag as usize;
                 if global_idx >= 2 * l {
-                    state.c3_sums[l_idx] += val * values[global_idx - l] * values[global_idx - 2 * l];
+                    state.c3_sums[l_idx] +=
+                        val * values[global_idx - l] * values[global_idx - 2 * l];
                 }
             }
         }
@@ -148,7 +148,9 @@ impl ComplexityProcessor {
                 let l = lag as usize;
                 if global_idx >= 2 * l {
                     state.tra_sums[l_idx] += val * val * values[global_idx - l]
-                        - values[global_idx - l] * values[global_idx - 2 * l] * values[global_idx - 2 * l];
+                        - values[global_idx - l]
+                            * values[global_idx - 2 * l]
+                            * values[global_idx - 2 * l];
                 }
             }
         }

@@ -9,6 +9,7 @@ one-value-at-a-time update paths run.
 The feature list lives in tests/feature_samples.txt; `cargo test` fails if a
 `Feature` variant is missing from it.
 """
+
 import functools
 from pathlib import Path
 
@@ -41,7 +42,9 @@ KNOWN_FAILURES = {
 def _params(engine):
     known = KNOWN_FAILURES[engine]
     return [
-        pytest.param(f, marks=pytest.mark.xfail(reason=known[f], strict=True)) if f in known else f
+        pytest.param(f, marks=pytest.mark.xfail(reason=known[f], strict=True))
+        if f in known
+        else f
         for f in FEATURES
     ]
 
@@ -76,7 +79,7 @@ def _static_each(feature, segments):
 def _chunks(x, sizes):
     start = 0
     for size in sizes:
-        yield x[start:start + size]
+        yield x[start : start + size]
         start += size
     assert start == len(x)
 
@@ -90,8 +93,10 @@ def test_sliding_matches_static(feature, window):
     got = np.concatenate(
         [_column(extractor.update(_batch(c))) for c in _chunks(x, SLIDING_CHUNKS)]
     )
-    windows = [x[i:i + window] for i in range(len(x) - window + 1)]
-    np.testing.assert_allclose(got, _static(feature, windows), rtol=RTOL, atol=ATOL, equal_nan=True)
+    windows = [x[i : i + window] for i in range(len(x) - window + 1)]
+    np.testing.assert_allclose(
+        got, _static(feature, windows), rtol=RTOL, atol=ATOL, equal_nan=True
+    )
 
 
 @pytest.mark.parametrize("feature", _params("expanding"))
@@ -102,7 +107,9 @@ def test_expanding_matches_static(feature):
         [_column(extractor.update(_batch(c))) for c in _chunks(x, EXPANDING_CHUNKS)]
     )
     prefixes = [x[:end] for end in np.cumsum(EXPANDING_CHUNKS)]
-    np.testing.assert_allclose(got, _static_each(feature, prefixes), rtol=RTOL, atol=ATOL, equal_nan=True)
+    np.testing.assert_allclose(
+        got, _static_each(feature, prefixes), rtol=RTOL, atol=ATOL, equal_nan=True
+    )
 
 
 @pytest.mark.parametrize("feature", _params("constant"))
@@ -111,8 +118,12 @@ def test_constant_series_matches_static(feature):
     sliding = _column(tsfast.SlidingExtractor([feature], 1, WINDOW).update(_batch(x)))
     expanding = _column(tsfast.ExpandingExtractor([feature], 1).update(_batch(x)))
     want_window = _static(feature, [x[:WINDOW]])[0]
-    np.testing.assert_allclose(sliding, want_window, rtol=RTOL, atol=ATOL, equal_nan=True)
-    np.testing.assert_allclose(expanding, _static(feature, [x]), rtol=RTOL, atol=ATOL, equal_nan=True)
+    np.testing.assert_allclose(
+        sliding, want_window, rtol=RTOL, atol=ATOL, equal_nan=True
+    )
+    np.testing.assert_allclose(
+        expanding, _static(feature, [x]), rtol=RTOL, atol=ATOL, equal_nan=True
+    )
 
 
 @functools.cache
@@ -133,4 +144,6 @@ def test_feature_independent_of_other_features(feature, engine):
     else:
         alone = tsfast.SlidingExtractor([feature], 1, WINDOW).update(_batch(x))
     together = _column(_all_at_once(engine), FEATURES.index(feature))
-    np.testing.assert_allclose(together, _column(alone), rtol=RTOL, atol=ATOL, equal_nan=True)
+    np.testing.assert_allclose(
+        together, _column(alone), rtol=RTOL, atol=ATOL, equal_nan=True
+    )
