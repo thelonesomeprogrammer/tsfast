@@ -468,6 +468,22 @@ def test_sliding_output_shape_and_names():
     # float64 is accepted and converted.
     np.testing.assert_array_equal(extractor.update(np.array([[5.0], [10.0]]))[:, 0, 1], [5.0, 10.0])
 
+def test_sliding_mse():
+    import numpy as np
+    import tsfast
+    from tsfel.feature_extraction.features import mse
+
+    np.random.seed(42)
+    signal = np.random.rand(500).astype(np.float32)
+
+    e = tsfast.SlidingExtractor(["mse-3"], 1, 200, 100)
+    res = e.update(np.array([signal]))
+
+    # Check one window
+    window = signal[100:300]
+    tol = 0.2 * np.std(window)
+    ref = mse(window, m=3, maxscale=None, tolerance=tol)
+    assert np.isclose(res[0][1][0], ref, atol=1e-2)
 
 def test_ecdf_features():
     # Normal case with ties

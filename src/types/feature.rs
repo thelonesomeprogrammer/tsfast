@@ -21,6 +21,7 @@ pub enum Feature {
     Iqr,
     Entropy,
     SampleEntropy,
+    Mse(u8, u16),
     HiguchiFd,
     Dfa,
     HurstExponent,
@@ -191,6 +192,9 @@ impl Feature {
             Self::Entropy => C::empty(),
             Self::SampleEntropy => {
                 C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::SAMP_ENT | C::NEEDS_SORT
+            }
+            Self::Mse(..) => {
+                C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::NEEDS_SORT
             }
             Self::BinnedEntropy(_) => C::MIN | C::MAX | C::BINNED_ENT,
             Self::Energy => C::ENERGY,
