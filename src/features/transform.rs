@@ -36,6 +36,9 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
     let spectral_spread = context.spectral_spread;
     let spectral_skewness = context.spectral_skewness;
     let spectral_kurtosis = context.spectral_kurtosis;
+    let max_frequency = context.max_frequency;
+    let median_frequency = context.median_frequency;
+    let fundamental_frequency = context.fundamental_frequency;
     let _fft_autocorr = context.fft_autocorr;
     let mfcc = context.mfcc;
     let lpcc = context.lpcc;
@@ -155,6 +158,9 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
         Feature::SpectralSlope => spectral_slope,
         Feature::SpectralRollOn => spectral_roll_on,
         Feature::SpectralRollOff => spectral_roll_off,
+        Feature::MaxFrequency => max_frequency,
+        Feature::MedianFrequency => median_frequency,
+        Feature::FundamentalFrequency => fundamental_frequency,
         Feature::SpectralSpread => spectral_spread,
         Feature::SpectralSkewness => spectral_skewness,
         Feature::SpectralKurtosis => spectral_kurtosis,
