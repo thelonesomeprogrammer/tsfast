@@ -52,11 +52,323 @@ pub fn eval_complexity(
         Feature::PermutationEntropy(tau, dimension) => {
             crate::common::permutation_entropy(values, *tau, *dimension)
         }
+        Feature::HiguchiFd => calc_higuchi_fd(values),
+        Feature::Dfa => calc_dfa(values, context.state),
+        Feature::HurstExponent => calc_hurst(values, context.state),
         Feature::HiguchiFd => calc_higuchi_fd(values, context.state),
         Feature::MaximumFractalLength => calc_maximum_fractal_length(values, context.state),
         _ => return None,
     };
     Some(res)
+}
+
+/// Calculates the Detrended Fluctuation Analysis (DFA) of the signal.
+///
+/// This implementation matches the TSFEL logic exactly:
+/// - Windows scales: `linspace(4, n // 10, n // 2, dtype=int)` deduplicated.
+/// - The windows do not overlap; each chunk is evaluated independently.
+/// - The profile is built as the cumulative sum of the demeaned signal (`cumsum(signal - mean)`).
+/// - Linear detrending (order 1) is applied to each chunk to compute the residual sum of squares.
+/// - A log-log fit is performed to determine the scaling exponent after identifying any potential plateau.
+/// - Minimum size behavior requires 160 elements; otherwise, NaN is returned.
+#[inline(always)]
+fn calc_dfa(values: &[f32], state: &mut crate::common::ColumnState) -> f32 {
+    let n = values.len();
+    if n < 160 {
+        return f32::NAN;
+    }
+
+    let first = values[0];
+    if values.iter().all(|&v| v == first) {
+        return f32::NAN;
+    }
+
+    let mean = values.iter().map(|&v| v as f64).sum::<f64>() / (n as f64);
+
+    let mut acc_sig = std::mem::take(&mut state.workspace_f64_1);
+    acc_sig.resize(n, 0.0);
+
+    let mut y_pref = std::mem::take(&mut state.workspace_f64_2);
+    y_pref.resize(n + 1, 0.0);
+
+    let mut y2_pref = std::mem::take(&mut state.workspace_f64_3);
+    y2_pref.resize(n + 1, 0.0);
+
+    let mut iy_pref = std::mem::take(&mut state.workspace_f64_4);
+    iy_pref.resize(n + 1, 0.0);
+
+    let mut current_acc = 0.0;
+    for i in 0..n {
+        current_acc += (values[i] as f64) - mean;
+        acc_sig[i] = current_acc;
+
+        y_pref[i + 1] = y_pref[i] + current_acc;
+        y2_pref[i + 1] = y2_pref[i] + current_acc * current_acc;
+        iy_pref[i + 1] = iy_pref[i] + (i as f64) * current_acc;
+    }
+
+    let min_scale = 4;
+    let max_scale = n / 10;
+    let num_scales = n / 2;
+
+    let mut scales = std::mem::take(&mut state.approx_entropy_buffer);
+    scales.clear();
+
+    if num_scales > 1 {
+        for i in 0..num_scales {
+            let scale = (min_scale as f64) + ((max_scale - min_scale) as f64) * (i as f64) / ((num_scales - 1) as f64);
+            scales.push(scale.floor() as usize);
+        }
+    } else {
+        scales.push(min_scale);
+    }
+
+    scales.sort_unstable();
+    scales.dedup();
+
+    let mut log_scales = std::mem::take(&mut state.workspace_f64_5);
+    log_scales.clear();
+    let mut log_flucts = std::mem::take(&mut state.sort_buffer);
+    let mut log_flucts_f64 = Vec::with_capacity(scales.len());
+
+    for &s in &scales {
+        let num_windows = n / s;
+        if num_windows == 0 {
+            continue;
+        }
+
+        let mut rms_sum = 0.0;
+        let x_bar = (s - 1) as f64 / 2.0;
+        let ss_xx = (s as f64) * (((s * s) as f64) - 1.0) / 12.0;
+
+        for idx in 0..num_windows {
+            let start = idx * s;
+            let end = start + s;
+
+            let sum_y = y_pref[end] - y_pref[start];
+            let sum_y2 = y2_pref[end] - y2_pref[start];
+            let sum_iy_global = iy_pref[end] - iy_pref[start];
+
+            let sum_jy = sum_iy_global - (start as f64) * sum_y;
+
+            let y_bar = sum_y / (s as f64);
+            let ss_xy = sum_jy - (s as f64) * x_bar * y_bar;
+            let mut beta1 = 0.0;
+            if ss_xx != 0.0 {
+                beta1 = ss_xy / ss_xx;
+            }
+            let beta0 = y_bar - beta1 * x_bar;
+
+            let mut rss = sum_y2 - beta0 * sum_y - beta1 * sum_jy;
+            if rss < 0.0 {
+                rss = 0.0;
+            }
+
+            rms_sum += rss / (s as f64);
+        }
+
+        let fluct = (rms_sum / (num_windows as f64)).sqrt();
+        log_scales.push((s as f64).ln());
+        log_flucts_f64.push(fluct.ln());
+    }
+
+    let mut i_plateau = log_flucts_f64.len();
+    if log_flucts_f64.len() > 5 {
+        let mut dy = Vec::with_capacity(log_flucts_f64.len() - 1);
+        for i in 0..log_flucts_f64.len() - 1 {
+            dy.push(log_flucts_f64[i + 1] - log_flucts_f64[i]);
+        }
+
+        let mean_y = log_flucts_f64.iter().sum::<f64>() / (log_flucts_f64.len() as f64);
+        let consecutive_points = 5;
+
+        for i in 0..=(dy.len() - consecutive_points) {
+            let mut all_below = true;
+            for j in 0..consecutive_points {
+                if dy[i + j].abs() >= 0.1 {
+                    all_below = false;
+                    break;
+                }
+            }
+            if all_below {
+                let plateau_val = log_flucts_f64[i..i + consecutive_points].iter().sum::<f64>() / (consecutive_points as f64);
+                if plateau_val > mean_y {
+                    i_plateau = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    state.workspace_f64_1 = acc_sig;
+    state.workspace_f64_2 = y_pref;
+    state.workspace_f64_3 = y2_pref;
+    state.workspace_f64_4 = iy_pref;
+    state.approx_entropy_buffer = scales;
+
+    let res = if i_plateau > 1 {
+        let x = &log_scales[0..i_plateau];
+        let y = &log_flucts_f64[0..i_plateau];
+
+        let mean_x = x.iter().sum::<f64>() / (x.len() as f64);
+        let mean_y = y.iter().sum::<f64>() / (y.len() as f64);
+
+        let mut num = 0.0;
+        let mut den = 0.0;
+        for i in 0..x.len() {
+            let dx = x[i] - mean_x;
+            let dy = y[i] - mean_y;
+            num += dx * dy;
+            den += dx * dx;
+        }
+        if den == 0.0 {
+            f32::NAN
+        } else {
+            (num / den) as f32
+        }
+    } else {
+        f32::NAN
+    };
+
+    state.workspace_f64_5 = log_scales;
+    state.sort_buffer = log_flucts;
+
+    res
+}
+
+/// Calculates the Hurst exponent of the signal through Rescaled Range (R/S) analysis.
+///
+/// This implementation matches the TSFEL logic exactly:
+/// - Windows scales: `linspace(4, n // 10, n // 2, dtype=int)` deduplicated.
+/// - The windows do not overlap; each chunk is evaluated independently.
+/// - The profile is built as the cumulative sum of the demeaned chunk (`cumsum(chunk - mean)`).
+/// - The chunk standard deviation is calculated over the raw chunk values.
+/// - Minimum size behavior requires 160 elements; otherwise, NaN is returned.
+#[inline(always)]
+fn calc_hurst(values: &[f32], state: &mut crate::common::ColumnState) -> f32 {
+    let n = values.len();
+    if n < 160 {
+        return f32::NAN;
+    }
+
+    let first = values[0];
+    if values.iter().all(|&v| v == first) {
+        return f32::NAN;
+    }
+
+    let min_scale = 4;
+    let max_scale = n / 10;
+    let num_scales = n / 2;
+
+    let mut scales = std::mem::take(&mut state.approx_entropy_buffer);
+    scales.clear();
+
+    if num_scales > 1 {
+        for i in 0..num_scales {
+            let scale = (min_scale as f64) + ((max_scale - min_scale) as f64) * (i as f64) / ((num_scales - 1) as f64);
+            scales.push(scale.floor() as usize);
+        }
+    } else {
+        scales.push(min_scale);
+    }
+
+    scales.sort_unstable();
+    scales.dedup();
+
+    let mut log_scales = std::mem::take(&mut state.workspace_f64_5);
+    log_scales.clear();
+    let mut log_rs = std::mem::take(&mut state.workspace_f64_4);
+    log_rs.clear();
+
+    let mut y_pref = std::mem::take(&mut state.workspace_f64_1);
+    y_pref.resize(n + 1, 0.0);
+
+    let mut y2_pref = std::mem::take(&mut state.workspace_f64_2);
+    y2_pref.resize(n + 1, 0.0);
+
+    for i in 0..n {
+        let v = values[i] as f64;
+        y_pref[i + 1] = y_pref[i] + v;
+        y2_pref[i + 1] = y2_pref[i] + v * v;
+    }
+
+    for &s in &scales {
+        let num_windows = n / s;
+        if num_windows == 0 {
+            continue;
+        }
+
+        let mut rs_sum = 0.0;
+        let mut valid_windows = 0;
+
+        for idx in 0..num_windows {
+            let start = idx * s;
+            let end = start + s;
+
+            let sum_y = y_pref[end] - y_pref[start];
+            let sum_y2 = y2_pref[end] - y2_pref[start];
+            let mean = sum_y / (s as f64);
+
+            let mut var = (sum_y2 - 2.0 * mean * sum_y + (s as f64) * mean * mean) / (s as f64);
+            if var < 0.0 { var = 0.0; }
+            let std = var.sqrt();
+
+            let mut acc = 0.0;
+            let mut max_acc = f64::NEG_INFINITY;
+            let mut min_acc = f64::INFINITY;
+
+            for i in start..end {
+                acc += (values[i] as f64) - mean;
+                if acc > max_acc { max_acc = acc; }
+                if acc < min_acc { min_acc = acc; }
+            }
+
+            let r = max_acc - min_acc;
+            if std > 0.0 {
+                rs_sum += r / std;
+                valid_windows += 1;
+            }
+        }
+
+        if valid_windows > 0 {
+            let mean_rs = rs_sum / (valid_windows as f64);
+            log_scales.push((s as f64).log10());
+            log_rs.push(mean_rs.log10());
+        }
+    }
+
+    state.workspace_f64_1 = y_pref;
+    state.workspace_f64_2 = y2_pref;
+    state.approx_entropy_buffer = scales;
+
+    let res = if log_scales.len() > 1 {
+        let x = &log_scales;
+        let y = &log_rs;
+
+        let mean_x = x.iter().sum::<f64>() / (x.len() as f64);
+        let mean_y = y.iter().sum::<f64>() / (y.len() as f64);
+
+        let mut num = 0.0;
+        let mut den = 0.0;
+        for i in 0..x.len() {
+            let dx = x[i] - mean_x;
+            let dy = y[i] - mean_y;
+            num += dx * dy;
+            den += dx * dx;
+        }
+        if den == 0.0 {
+            f32::NAN
+        } else {
+            (num / den) as f32
+        }
+    } else {
+        f32::NAN
+    };
+
+    state.workspace_f64_5 = log_scales;
+    state.workspace_f64_4 = log_rs;
+
+    res
 }
 
 #[inline(always)]
