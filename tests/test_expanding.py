@@ -348,3 +348,8 @@ def test_expanding_output_shape_and_names():
     np.testing.assert_allclose(out, [[1.5, 2.0], [15.0, 20.0]])
     # float64 is accepted and converted; features cover everything seen so far.
     np.testing.assert_allclose(extractor.update(np.array([[3.0], [30.0]])), [[2.0, 3.0], [20.0, 30.0]])
+
+def test_expanding_invalid_feature():
+    # Verify unsupported features immediately error during initialization
+    with pytest.raises(ValueError, match="Unknown feature"):
+        ExpandingExtractor(["invalid_feature"], 1)
