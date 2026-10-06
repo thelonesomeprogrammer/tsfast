@@ -19,12 +19,7 @@ impl DiffProcessor {
         let simd_zero = f32x4::splat(0.0);
 
         let diff = chunk - shifted;
-        if compute.intersects(
-            Compute::ZERO_CROSS
-                | Compute::MAC
-                | Compute::MC
-                | Compute::CID_CE,
-        ) {
+        if compute.intersects(Compute::ZERO_CROSS | Compute::MAC | Compute::MC | Compute::CID_CE) {
             if compute.contains(Compute::MAC) {
                 state.mac_sum_vec += diff.abs();
             }

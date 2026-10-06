@@ -128,6 +128,10 @@ compute_flags! {
     CALC_CENTROID,
     ADF,
     LPCC,
+    MAX_FREQ,
+    MEDIAN_FREQ,
+    FUNDAMENTAL_FREQ,
+    HIGUCHI,
 }
 
 // ── Composite masks (zero bit-cost) ────────────────────────────────────────
@@ -149,13 +153,13 @@ impl Compute {
             | Self::SPEC_ROLLON.bits()
             | Self::SPEC_ROLLOFF.bits()
             | Self::SPEC_SKEWNESS.bits()
-            | Self::SPEC_KURTOSIS.bits(),
+            | Self::SPEC_KURTOSIS.bits()
+            | Self::MAX_FREQ.bits()
+            | Self::MEDIAN_FREQ.bits()
+            | Self::FUNDAMENTAL_FREQ.bits(),
     );
 
     pub const ANY_DIFF: Self = Self::from_bits_retain(
-        Self::ZERO_CROSS.bits()
-            | Self::MAC.bits()
-            | Self::MC.bits()
-            | Self::CID_CE.bits(),
+        Self::ZERO_CROSS.bits() | Self::MAC.bits() | Self::MC.bits() | Self::CID_CE.bits(),
     );
 }

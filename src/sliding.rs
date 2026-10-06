@@ -1,6 +1,6 @@
 use crate::common::{ColumnState, map_features_to_indices};
-use crate::types::{Compute, Feature};
 use crate::numpy_io;
+use crate::types::{Compute, Feature};
 use numpy::PyArray3;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -124,8 +124,9 @@ impl SlidingExtractor {
         values: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyArray3<f32>>> {
         let (n_series, n_windows, data) = numpy_io::with_rows(values, |rows, _| {
-            let (n_windows, data) =
-                py.detach(|| self.update_rows(rows)).map_err(PyTypeError::new_err)?;
+            let (n_windows, data) = py
+                .detach(|| self.update_rows(rows))
+                .map_err(PyTypeError::new_err)?;
             Ok((rows.len(), n_windows, data))
         })?;
         numpy_io::to_numpy_3d(py, (n_series, n_windows, self.features.len()), data)

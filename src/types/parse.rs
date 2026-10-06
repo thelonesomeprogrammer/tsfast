@@ -49,6 +49,9 @@ unit_features! {
     Entropy => "entropy";
     SampleEntropy => "sample_entropy";
     HiguchiFd => "higuchi_fd";
+    Dfa => "dfa";
+    HurstExponent => "hurst_exponent";
+    MaximumFractalLength => "maximum_fractal_length";
     Energy => "energy", ["torque_Absolute energy"];
     Rms => "rms";
     RootMeanSquare => "root_mean_square";
@@ -97,6 +100,9 @@ unit_features! {
     SpectralEntropy => "spectral_entropy", ["torque_Spectral entropy"];
     SpectralRollOn => "spectral_roll_on", ["torque_Spectral roll-on"];
     SpectralRollOff => "spectral_roll_off", ["torque_Spectral roll-off"];
+    MaxFrequency => "max_frequency", ["torque_Max frequency"];
+    MedianFrequency => "median_frequency", ["torque_Median frequency"];
+    FundamentalFrequency => "fundamental_frequency", ["torque_Fundamental frequency"];
     SpectralSkewness => "spectral_skewness", ["torque_Spectral skewness"];
     SpectralKurtosis => "spectral_kurtosis", ["torque_Spectral kurtosis"];
     SignalDistance => "signal_distance", ["torque_Signal distance"];
@@ -193,6 +199,32 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
             return None;
         }
         return Some(Feature::HumanRangeEnergy(fs.to_bits()));
+    }
+    if let Some(arg) = s.strip_prefix("ecdf_slope-") {
+        let (p1, p2) = arg.split_once('-')?;
+        let p_init: f32 = p1.parse().ok()?;
+        let p_end: f32 = p2.parse().ok()?;
+        if p_init > 0.0 && p_init < p_end && p_end <= 1.0 {
+            return Some(Feature::EcdfSlope(p_init.to_bits(), p_end.to_bits()));
+        } else {
+            return None;
+        }
+    }
+    if let Some(arg) = s.strip_prefix("ecdf_percentile_count-") {
+        let p: f32 = arg.parse().ok()?;
+        if p > 0.0 && p <= 1.0 {
+            return Some(Feature::EcdfPercentileCount(p.to_bits()));
+        } else {
+            return None;
+        }
+    }
+    if let Some(arg) = s.strip_prefix("ecdf_percentile-") {
+        let p: f32 = arg.parse().ok()?;
+        if p > 0.0 && p <= 1.0 {
+            return Some(Feature::EcdfPercentile(p.to_bits()));
+        } else {
+            return None;
+        }
     }
     if let Some(arg) = s.strip_prefix("lpcc-") {
         return Some(Feature::Lpcc(arg.trim().parse().ok()?));
@@ -590,6 +622,9 @@ impl Feature {
             return name.to_string();
         }
         match self {
+            Feature::EcdfPercentile(p) => format!("ecdf_percentile-{}", f32::from_bits(*p)),
+            Feature::EcdfPercentileCount(p) => format!("ecdf_percentile_count-{}", f32::from_bits(*p)),
+            Feature::EcdfSlope(p_init, p_end) => format!("ecdf_slope-{}-{}", f32::from_bits(*p_init), f32::from_bits(*p_end)),
             Feature::EnergyRatioByChunks(num, focus) => format!(
                 "energy_ratio_by_chunks_num_segments_{}__segment_focus_{}",
                 num, focus
