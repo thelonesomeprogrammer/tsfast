@@ -54,12 +54,7 @@ impl DiffProcessor {
             return;
         }
 
-        if compute.intersects(
-            Compute::MAC
-                | Compute::MC
-                | Compute::CID_CE
-                | Compute::ZERO_CROSS,
-        ) {
+        if compute.intersects(Compute::MAC | Compute::MC | Compute::CID_CE | Compute::ZERO_CROSS) {
             // Remove effect of diffs starting within or at boundary of old_slice
             // Boundary diff: (old_slice[0], value_before_old)
             if let Some(prev) = value_before_old {
@@ -162,9 +157,7 @@ impl DiffProcessor {
         old_last: f32,
         state: &mut ColumnState,
     ) {
-        if compute.intersects(
-            Compute::MAC | Compute::MC | Compute::CID_CE,
-        ) {
+        if compute.intersects(Compute::MAC | Compute::MC | Compute::CID_CE) {
             // Remove effect of (old_val, old_val_next)
             let old_diff = old_val_next - old_val;
             if compute.contains(Compute::MAC) {
@@ -213,12 +206,7 @@ impl DiffProcessor {
         use std::simd::cmp::SimdPartialOrd;
         use std::simd::num::SimdFloat;
 
-        if compute.intersects(
-            Compute::ZERO_CROSS
-                | Compute::MAC
-                | Compute::MC
-                | Compute::CID_CE,
-        ) {
+        if compute.intersects(Compute::ZERO_CROSS | Compute::MAC | Compute::MC | Compute::CID_CE) {
             let shifted = if global_idx == 0 {
                 std::simd::f32x4::from_array([state.prev_last, chunk[0], chunk[1], chunk[2]])
             } else {

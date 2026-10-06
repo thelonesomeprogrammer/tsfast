@@ -26,7 +26,9 @@ pub fn rfft(
     indata.clear();
     indata.extend_from_slice(values);
     let mut out = r2c.make_output_vec();
-    let res = r2c.process(&mut indata, &mut out).map_err(|e| e.to_string());
+    let res = r2c
+        .process(&mut indata, &mut out)
+        .map_err(|e| e.to_string());
     state.fft_in_buffer = indata;
     res.map(|_| out)
 }
@@ -42,7 +44,11 @@ pub fn finalize(
     state: &mut ColumnState,
 ) -> Result<FftResult, String> {
     // TSFEL frequencies: np.fft.rfftfreq(dft_len, 1 / fs), fs = 100.
-    let freq_step = if dft_len > 0 { FS / dft_len as f32 } else { 0.0 };
+    let freq_step = if dft_len > 0 {
+        FS / dft_len as f32
+    } else {
+        0.0
+    };
 
     let mut spectrum = std::mem::take(&mut state.spectrum_buffer);
     spectrum.clear();
@@ -64,7 +70,10 @@ pub fn finalize(
         let n2 = values.len() * 2;
         let fft_size_ac = crate::common::next_good_fft_size(n2);
         let (r2c_ac, c2r_ac) = PLANNER.with_borrow_mut(|p| {
-            (p.plan_fft_forward(fft_size_ac), p.plan_fft_inverse(fft_size_ac))
+            (
+                p.plan_fft_forward(fft_size_ac),
+                p.plan_fft_inverse(fft_size_ac),
+            )
         });
 
         let mut indata = std::mem::take(&mut state.fft_in_buffer);
@@ -401,11 +410,7 @@ fn plan_forward(len: usize) -> std::sync::Arc<dyn realfft::RealToComplex<f32>> {
 
 /// scipy.signal.welch(values, fs, nperseg) with its defaults: periodic Hann
 /// window, 50% overlap, constant detrend per segment, one-sided density.
-pub fn welch_psd(
-    values: &[f32],
-    nperseg: usize,
-    fs: f32,
-) -> Result<Vec<f32>, String> {
+pub fn welch_psd(values: &[f32], nperseg: usize, fs: f32) -> Result<Vec<f32>, String> {
     let n = values.len();
     if nperseg == 0 || n < nperseg {
         return Ok(Vec::new());
@@ -427,13 +432,18 @@ pub fn welch_psd(
         for ((d, &v), &w) in indata.iter_mut().zip(chunk).zip(&window) {
             *d = (v - mean) * w;
         }
-        r2c.process(&mut indata, &mut outdata).map_err(|e| e.to_string())?;
+        r2c.process(&mut indata, &mut outdata)
+            .map_err(|e| e.to_string())?;
         for (p, c) in psd.iter_mut().zip(&outdata) {
             *p += c.norm_sqr() * scale;
         }
     }
     // One-sided: double all bins except DC and (for even nperseg) Nyquist.
-    let last = if nperseg % 2 == 0 { psd.len() - 1 } else { psd.len() };
+    let last = if nperseg % 2 == 0 {
+        psd.len() - 1
+    } else {
+        psd.len()
+    };
     for p in &mut psd[1..last] {
         *p *= 2.0;
     }
@@ -456,12 +466,20 @@ fn tsfel_mfcc(values: &[f32]) -> Result<Vec<f32>, String> {
     // np.fft.rfft(emphasized, 512): truncates or zero-pads to 512.
     let mut indata = vec![0.0f32; NFFT];
     for (i, d) in indata.iter_mut().enumerate().take(values.len()) {
-        *d = if i == 0 { values[0] } else { values[i] - 0.97 * values[i - 1] };
+        *d = if i == 0 {
+            values[0]
+        } else {
+            values[i] - 0.97 * values[i - 1]
+        };
     }
     let r2c = plan_forward(NFFT);
     let mut out = r2c.make_output_vec();
-    r2c.process(&mut indata, &mut out).map_err(|e| e.to_string())?;
-    let pow: Vec<f64> = out.iter().map(|c| c.norm_sqr() as f64 / NFFT as f64).collect();
+    r2c.process(&mut indata, &mut out)
+        .map_err(|e| e.to_string())?;
+    let pow: Vec<f64> = out
+        .iter()
+        .map(|c| c.norm_sqr() as f64 / NFFT as f64)
+        .collect();
 
     let fs = FS as f64;
     let high_mel = 2595.0 * (1.0 + (fs / 2.0) / 700.0).log10();
@@ -471,7 +489,10 @@ fn tsfel_mfcc(values: &[f32]) -> Result<Vec<f32>, String> {
             700.0 * (10f64.powf(mel / 2595.0) - 1.0)
         })
         .collect();
-    let bin: Vec<f64> = hz.iter().map(|h| ((NFFT + 1) as f64 * h / fs).floor()).collect();
+    let bin: Vec<f64> = hz
+        .iter()
+        .map(|h| ((NFFT + 1) as f64 * h / fs).floor())
+        .collect();
 
     let mut banks = [0.0f64; NFILT];
     for m in 1..=NFILT {

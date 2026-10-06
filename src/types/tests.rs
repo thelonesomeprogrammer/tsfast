@@ -60,13 +60,19 @@ fn parameterized_samples() -> Vec<Feature> {
 }
 
 fn samples() -> Vec<Feature> {
-    UNIT_FEATURES.iter().copied().chain(parameterized_samples()).collect()
+    UNIT_FEATURES
+        .iter()
+        .copied()
+        .chain(parameterized_samples())
+        .collect()
 }
 
 #[test]
 fn every_variant_has_a_sample() {
-    let covered: HashSet<FeatureDiscriminants> =
-        samples().into_iter().map(FeatureDiscriminants::from).collect();
+    let covered: HashSet<FeatureDiscriminants> = samples()
+        .into_iter()
+        .map(FeatureDiscriminants::from)
+        .collect();
     let missing: Vec<_> = FeatureDiscriminants::iter()
         .filter(|d| !covered.contains(d))
         .collect();
@@ -88,7 +94,11 @@ fn name_round_trips_through_parse() {
             }
         })
         .collect();
-    assert!(failures.is_empty(), "name() doesn't parse back:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "name() doesn't parse back:\n{}",
+        failures.join("\n")
+    );
 }
 
 #[test]
@@ -137,5 +147,8 @@ fn python_feature_samples_cover_every_variant() {
     let missing: Vec<_> = FeatureDiscriminants::iter()
         .filter(|d| !listed.contains(d))
         .collect();
-    assert!(missing.is_empty(), "add these to tests/feature_samples.txt: {missing:?}");
+    assert!(
+        missing.is_empty(),
+        "add these to tests/feature_samples.txt: {missing:?}"
+    );
 }

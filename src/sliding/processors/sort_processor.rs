@@ -132,9 +132,9 @@ impl SortProcessor {
 
                     let mut i = 0;
                     while i + 4 <= values.len() {
-                        let chunk = f32x4::from_slice(&values[i..i+4]);
+                        let chunk = f32x4::from_slice(&values[i..i + 4]);
                         let diff = (chunk - med_vec).abs();
-                        diff.copy_to_slice(&mut abs_devs[i..i+4]);
+                        diff.copy_to_slice(&mut abs_devs[i..i + 4]);
                         i += 4;
                     }
                     for j in i..values.len() {

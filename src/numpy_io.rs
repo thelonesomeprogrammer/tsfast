@@ -2,9 +2,7 @@
 //! rows of a 2-D numpy array, features go out as a float32 numpy array.
 
 use numpy::ndarray::{Array2, Array3};
-use numpy::{
-    IntoPyArray, PyArray2, PyArray3, PyReadonlyArrayDyn, PyUntypedArrayMethods,
-};
+use numpy::{IntoPyArray, PyArray2, PyArray3, PyReadonlyArrayDyn, PyUntypedArrayMethods};
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 

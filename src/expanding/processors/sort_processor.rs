@@ -1,6 +1,6 @@
+use crate::types::Compute;
 use std::simd::f32x4;
 use std::simd::num::SimdFloat;
-use crate::types::Compute;
 
 pub struct SortProcessor;
 
@@ -16,7 +16,11 @@ impl SortProcessor {
         let mut median_abs_dev = 0.0;
 
         if compute.intersects(
-            Compute::MEDIAN | Compute::IQR | Compute::QUANTILE | Compute::MEAN_N_ABS_MAX | Compute::MEDIAN_ABS_DEV,
+            Compute::MEDIAN
+                | Compute::IQR
+                | Compute::QUANTILE
+                | Compute::MEAN_N_ABS_MAX
+                | Compute::MEDIAN_ABS_DEV,
         ) {
             if running_sorted.len() < full_series.len() {
                 running_sorted.extend_from_slice(&full_series[running_sorted.len()..]);
@@ -53,49 +57,49 @@ impl SortProcessor {
             }
         }
 
-                if compute.contains(Compute::MEDIAN_ABS_DEV) {
-                    let med_vec = f32x4::splat(median);
-                    let mut abs_devs: Vec<f32> = std::mem::take(&mut state.mad_buffer);
-                    abs_devs.clear();
-                    abs_devs.resize(full_series.len(), 0.0);
+        if compute.contains(Compute::MEDIAN_ABS_DEV) {
+            let med_vec = f32x4::splat(median);
+            let mut abs_devs: Vec<f32> = std::mem::take(&mut state.mad_buffer);
+            abs_devs.clear();
+            abs_devs.resize(full_series.len(), 0.0);
 
-                    let mut i = 0;
-                    while i + 4 <= full_series.len() {
-                        let chunk = f32x4::from_slice(&full_series[i..i+4]);
-                        let diff = (chunk - med_vec).abs();
-                        diff.copy_to_slice(&mut abs_devs[i..i+4]);
-                        i += 4;
-                    }
-                    for j in i..full_series.len() {
-                        abs_devs[j] = (full_series[j] - median).abs();
-                    }
+            let mut i = 0;
+            while i + 4 <= full_series.len() {
+                let chunk = f32x4::from_slice(&full_series[i..i + 4]);
+                let diff = (chunk - med_vec).abs();
+                diff.copy_to_slice(&mut abs_devs[i..i + 4]);
+                i += 4;
+            }
+            for j in i..full_series.len() {
+                abs_devs[j] = (full_series[j] - median).abs();
+            }
 
-                    let n_len = abs_devs.len();
-                    if n_len > 0 {
-                        if n_len % 2 == 1 {
-                            median_abs_dev = *abs_devs
-                                .select_nth_unstable_by(n_len / 2, |a: &f32, b: &f32| {
-                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                                })
-                                .1;
-                        } else {
-                            let mid = n_len / 2;
-                            let m1 = *abs_devs
-                                .select_nth_unstable_by(mid, |a: &f32, b: &f32| {
-                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                                })
-                                .1;
-                            let m2 = *abs_devs[..mid]
-                                .iter()
-                                .max_by(|a: &&f32, b: &&f32| {
-                                    a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                                })
-                                .unwrap();
-                            median_abs_dev = (m1 + m2) / 2.0;
-                        }
-                    }
-                    state.mad_buffer = abs_devs;
+            let n_len = abs_devs.len();
+            if n_len > 0 {
+                if n_len % 2 == 1 {
+                    median_abs_dev = *abs_devs
+                        .select_nth_unstable_by(n_len / 2, |a: &f32, b: &f32| {
+                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .1;
+                } else {
+                    let mid = n_len / 2;
+                    let m1 = *abs_devs
+                        .select_nth_unstable_by(mid, |a: &f32, b: &f32| {
+                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .1;
+                    let m2 = *abs_devs[..mid]
+                        .iter()
+                        .max_by(|a: &&f32, b: &&f32| {
+                            a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .unwrap();
+                    median_abs_dev = (m1 + m2) / 2.0;
                 }
+            }
+            state.mad_buffer = abs_devs;
+        }
 
         (median, iqr, median_abs_dev)
     }

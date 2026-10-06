@@ -23,7 +23,10 @@ impl FftProcessor {
         state: &mut ColumnState,
     ) -> Result<FftResult, String> {
         let mut fft_complex = Vec::new();
-        if let Some(r2c) = r2c.as_ref().filter(|_| compute.intersects(Compute::ANY_FFT)) {
+        if let Some(r2c) = r2c
+            .as_ref()
+            .filter(|_| compute.intersects(Compute::ANY_FFT))
+        {
             let stale = state
                 .sliding_dft
                 .as_ref()
@@ -36,6 +39,15 @@ impl FftProcessor {
                 fft_complex = sdft.bins.clone();
             }
         }
-        crate::spectral::finalize(compute, values, n, mean, m2, fft_complex, values.len(), state)
+        crate::spectral::finalize(
+            compute,
+            values,
+            n,
+            mean,
+            m2,
+            fft_complex,
+            values.len(),
+            state,
+        )
     }
 }
