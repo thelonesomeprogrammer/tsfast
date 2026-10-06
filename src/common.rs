@@ -459,7 +459,9 @@ pub fn permutation_entropy(data: &[f32], tau: u32, dimension: u32) -> f32 {
                 (true, true) => std::cmp::Ordering::Equal,
                 (true, false) => std::cmp::Ordering::Greater,
                 (false, true) => std::cmp::Ordering::Less,
-                (false, false) => val_a.partial_cmp(&val_b).unwrap_or(std::cmp::Ordering::Equal),
+                (false, false) => val_a
+                    .partial_cmp(&val_b)
+                    .unwrap_or(std::cmp::Ordering::Equal),
             }
         });
 

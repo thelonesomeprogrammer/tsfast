@@ -7,12 +7,7 @@ pub struct TrendProcessor;
 
 impl TrendProcessor {
     #[inline(always)]
-    pub fn process_simd(
-        compute: Compute,
-        chunk: f32x4,
-        offset: f32,
-        state: &mut ColumnState,
-    ) {
+    pub fn process_simd(compute: Compute, chunk: f32x4, offset: f32, state: &mut ColumnState) {
         if compute.contains(Compute::SLOPE) {
             let indices = f32x4::from_array([offset, offset + 1.0, offset + 2.0, offset + 3.0]);
             state.sum_ix_vec += indices * chunk;
@@ -114,7 +109,6 @@ impl TrendProcessor {
                 }
             }
         }
-
     }
 
     #[inline(always)]

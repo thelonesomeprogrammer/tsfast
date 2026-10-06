@@ -4,21 +4,45 @@ import numpy as np
 import tsfast
 
 DEFAULT_FEATURES = [
-    "total_sum", "mean", "variance", "std_dev", "min_value", "max_value", "median",
-    "skewness", "kurtosis", "mad", "iqr", "entropy",
-    "energy", "rms", "zero_crossing_rate", "peak_count",
-    "mean_abs_change", "mean_change", "cid_ce", "auc",
-    "abs_sum_change", "count_above_mean", "count_below_mean",
-    "longest_strike_above_mean", "longest_strike_below_mean",
-    "abs_max", "first_loc_max", "last_loc_max", "first_loc_min", "last_loc_min"
+    "total_sum",
+    "mean",
+    "variance",
+    "std_dev",
+    "min_value",
+    "max_value",
+    "median",
+    "skewness",
+    "kurtosis",
+    "mad",
+    "iqr",
+    "entropy",
+    "energy",
+    "rms",
+    "zero_crossing_rate",
+    "peak_count",
+    "mean_abs_change",
+    "mean_change",
+    "cid_ce",
+    "auc",
+    "abs_sum_change",
+    "count_above_mean",
+    "count_below_mean",
+    "longest_strike_above_mean",
+    "longest_strike_below_mean",
+    "abs_max",
+    "first_loc_max",
+    "last_loc_max",
+    "first_loc_min",
+    "last_loc_min",
 ]
+
 
 def run_synthetic_benchmark(
     n_cols: int = 10,
     total_len: int = 10000,
     initial_size: int = 500,
     increment_size: int = 100,
-    warmup: bool = True
+    warmup: bool = True,
 ):
     print("=" * 70)
     print(f"TSFast ExpandingExtractor Streaming Benchmark")
@@ -51,7 +75,9 @@ def run_synthetic_benchmark(
     timings = []
     current_size = initial_size
     while current_size + increment_size <= total_len:
-        batch_inc = np.ascontiguousarray(data[:, current_size:current_size + increment_size])
+        batch_inc = np.ascontiguousarray(
+            data[:, current_size : current_size + increment_size]
+        )
         t0 = time.perf_counter()
         _ = exp_ext.update(batch_inc)
         timings.append((time.perf_counter() - t0) * 1000)
@@ -64,26 +90,43 @@ def run_synthetic_benchmark(
 
     print("\n--- Incremental Update Summary ---")
     print(f"Number of Incremental Updates: {n_updates}")
-    print(f"Mean Time / Update ({increment_size} pts): {np.mean(timings):.4f} ms (±{np.std(timings):.4f} ms)")
+    print(
+        f"Mean Time / Update ({increment_size} pts): {np.mean(timings):.4f} ms (±{np.std(timings):.4f} ms)"
+    )
     print(f"Median Time / Update:           {np.median(timings):.4f} ms")
-    print(f"Min / Max Update Time:          {np.min(timings):.4f} ms / {np.max(timings):.4f} ms")
-    print(f"Total Time for Updates:         {total_inc_ms:.2f} ms ({total_inc_ms / 1000:.4f} s)")
-    throughput_pts_sec = (total_data_points / (total_inc_ms / 1000))
+    print(
+        f"Min / Max Update Time:          {np.min(timings):.4f} ms / {np.max(timings):.4f} ms"
+    )
+    print(
+        f"Total Time for Updates:         {total_inc_ms:.2f} ms ({total_inc_ms / 1000:.4f} s)"
+    )
+    throughput_pts_sec = total_data_points / (total_inc_ms / 1000)
     print(f"Throughput (Points Processed):  {throughput_pts_sec:,.0f} pts/sec")
-    print(f"Feature Evals / Second:         {throughput_pts_sec * len(DEFAULT_FEATURES):,.0f} evals/sec")
+    print(
+        f"Feature Evals / Second:         {throughput_pts_sec * len(DEFAULT_FEATURES):,.0f} evals/sec"
+    )
     print("=" * 70)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TSFast ExpandingExtractor Benchmark")
-    parser.add_argument("--n_cols", type=int, default=10, help="Number of concurrent series")
-    parser.add_argument("--total_len", type=int, default=10000, help="Total length of series")
-    parser.add_argument("--initial_size", type=int, default=500, help="Initial points for window")
-    parser.add_argument("--increment_size", type=int, default=100, help="Points per incremental update")
+    parser.add_argument(
+        "--n_cols", type=int, default=10, help="Number of concurrent series"
+    )
+    parser.add_argument(
+        "--total_len", type=int, default=10000, help="Total length of series"
+    )
+    parser.add_argument(
+        "--initial_size", type=int, default=500, help="Initial points for window"
+    )
+    parser.add_argument(
+        "--increment_size", type=int, default=100, help="Points per incremental update"
+    )
     args = parser.parse_args()
 
     run_synthetic_benchmark(
         n_cols=args.n_cols,
         total_len=args.total_len,
         initial_size=args.initial_size,
-        increment_size=args.increment_size
+        increment_size=args.increment_size,
     )

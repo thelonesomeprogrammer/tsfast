@@ -48,7 +48,9 @@ pub fn eval_complexity(
                 - crate::common::approx_entropy_simd(m_val + 1, r, values))
             .abs()
         }
-        Feature::SampleEntropy => crate::common::sample_entropy_simd(values, population_std(values)),
+        Feature::SampleEntropy => {
+            crate::common::sample_entropy_simd(values, population_std(values))
+        }
         Feature::PermutationEntropy(tau, dimension) => {
             crate::common::permutation_entropy(values, *tau, *dimension)
         }
@@ -545,6 +547,10 @@ fn population_std(values: &[f32]) -> f32 {
         return 0.0;
     }
     let mean = values.iter().map(|&v| v as f64).sum::<f64>() / n;
-    let var = values.iter().map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / n;
+    let var = values
+        .iter()
+        .map(|&v| (v as f64 - mean).powi(2))
+        .sum::<f64>()
+        / n;
     var.sqrt() as f32
 }

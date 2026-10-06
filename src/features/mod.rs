@@ -102,8 +102,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::CountBelowMean
         | F::LongestStrikeAboveMean
         | F::LongestStrikeBelowMean => runs::eval_runs(feat, ctx),
-        F::MatrixProfile(..)
-        | F::QuerySimilarityCount(..) => subsequence::eval_subsequence(feat, ctx),
+        F::MatrixProfile(..) | F::QuerySimilarityCount(..) => {
+            subsequence::eval_subsequence(feat, ctx)
+        }
         F::C3(..)
         | F::CalcCentroid(..)
         | F::CwtCoefficients(..)
@@ -128,16 +129,12 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::WaveletEnergy(..)
         | F::WaveletEntropy
         | F::WaveletFeatures(..) => transform::eval_transform(feat, ctx),
-        F::ApproxEntropy(..)
-        | F::HiguchiFd
-        | F::Dfa
-        | F::HurstExponent
-        | F::MaximumFractalLength
-        | F::PermutationEntropy(..)
-        | F::SampleEntropy => complexity::eval_complexity(feat, ctx),
-        F::ArCoefficient(..)
-        | F::FriedrichCoefficients(..)
-        | F::MaxLangevinFixedPoint(..) => dynamic::eval_dynamic(feat, ctx),
+        F::ApproxEntropy(..) | F::HiguchiFd | F::PermutationEntropy(..) | F::SampleEntropy => {
+            complexity::eval_complexity(feat, ctx)
+        }
+        F::ArCoefficient(..) | F::FriedrichCoefficients(..) | F::MaxLangevinFixedPoint(..) => {
+            dynamic::eval_dynamic(feat, ctx)
+        }
         F::AugmentedDickeyFuller(..) => stationarity::eval_stationarity(feat, ctx),
         F::Length
         | F::PercentageOfReoccurringDatapointsToAllDatapoints

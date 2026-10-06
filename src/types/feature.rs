@@ -173,7 +173,9 @@ impl Feature {
             Self::Max => C::MAX,
             Self::Median => C::MEDIAN | C::NEEDS_SORT,
             Self::MedianAbsDeviation => C::MEDIAN | C::MEDIAN_ABS_DEV | C::NEEDS_SORT,
-            Self::Skew | Self::BiasedSkew => C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT,
+            Self::Skew | Self::BiasedSkew => {
+                C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT
+            }
             // The 4th central moment needs the sum of cubes, accumulated under SKEW.
             Self::UnbiasedFisherKurtosis | Self::BiasedFisherKurtosis => {
                 C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::KURTOSIS | C::ENERGY | C::NEEDS_SORT

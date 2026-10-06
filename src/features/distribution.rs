@@ -82,7 +82,11 @@ pub fn eval_distribution(
                 h -= p * p.log2();
             }
             state.sort_buffer = sorted;
-            if values.len() <= 2 { 0.0 } else { (h / n_f.log2()) as f32 }
+            if values.len() <= 2 {
+                0.0
+            } else {
+                (h / n_f.log2()) as f32
+            }
         }
         Feature::Ecdf(d) => {
             let d_idx = *d as f32;

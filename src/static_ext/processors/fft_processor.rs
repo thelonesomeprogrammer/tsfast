@@ -25,6 +25,15 @@ impl FftProcessor {
             }
             _ => Vec::new(),
         };
-        crate::spectral::finalize(compute, values, n, mean, m2, fft_complex, values.len(), state)
+        crate::spectral::finalize(
+            compute,
+            values,
+            n,
+            mean,
+            m2,
+            fft_complex,
+            values.len(),
+            state,
+        )
     }
 }
