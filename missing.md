@@ -66,7 +66,6 @@ Features measuring signal non-linearity, self-similarity, and fractal dimension.
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
 | **`petrosian_fractal_dimension`**| TSFEL | **Low** | Relies on derivative sign changes. SIMD adjacent diff + sign mask + popcount (extremely fast). |
-| **`maximum_fractal_length`** | TSFEL | **High** | Shared computation with HFD; vectorized max reduction. |
 | **`dfa`** (Detrended Fluct.) | TSFEL | **High** | Cumulative sum + chunked linear regressions and residual sum of squares. |
 | **`hurst_exponent`** | TSFEL | **High** | Parallelized multi-scale chunking, vectorized prefix sum and Rescaled Range (R/S). |
 | **`mse`** (Multiscale Entropy)| TSFEL | **Very High**| Coarse-graining via SIMD chunk mean, followed by 2D Chebyshev distance count. |

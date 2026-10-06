@@ -49,6 +49,7 @@ unit_features! {
     Entropy => "entropy";
     SampleEntropy => "sample_entropy";
     HiguchiFd => "higuchi_fd";
+    MaximumFractalLength => "maximum_fractal_length";
     Energy => "energy", ["torque_Absolute energy"];
     Rms => "rms";
     RootMeanSquare => "root_mean_square";
