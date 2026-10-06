@@ -32,7 +32,6 @@ Features sensitive to the temporal order, differences, and zero crossings.
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
 | **`neighbourhood_peaks`**| TSFEL | **Medium** | Peaks that dominate window neighbourhood. Vectorized sliding window maximum. |
-| **`abs_percentage_sum_of_changes`**| TSFresh | **Low** | Total absolute change divided by mean/sum. |
 
 ---
 
@@ -62,6 +61,7 @@ Features measuring signal non-linearity, self-similarity, and fractal dimension.
 
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
+| **`maximum_fractal_length`** | TSFEL | **High** | Shared computation with HFD; vectorized max reduction. |
 | **`petrosian_fractal_dimension`**| TSFEL | **Low** | Relies on derivative sign changes. SIMD adjacent diff + sign mask + popcount (extremely fast). |
 | **`dfa`** (Detrended Fluct.) | TSFEL | **High** | Cumulative sum + chunked linear regressions and residual sum of squares. |
 | **`hurst_exponent`** | TSFEL | **High** | Parallelized multi-scale chunking, vectorized prefix sum and Rescaled Range (R/S). |

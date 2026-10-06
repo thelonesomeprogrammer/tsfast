@@ -105,8 +105,7 @@ pub fn eval_stationarity(
                                 x_mat[[t + 6, i]],
                                 x_mat[[t + 7, i]],
                             ]);
-                            let y_vec =
-                                f64x8::from_slice(&y_arr.as_slice().unwrap_or(&[])[t..t + 8]);
+                            let y_vec = f64x8::from_slice(&y_arr.as_slice().unwrap_or(&[])[t..t + 8]);
                             sum_vec_xty += x_vec * y_vec;
                             t += 8;
                         }
@@ -214,8 +213,7 @@ pub fn eval_stationarity(
                                 x_mat[[t + 6, i]],
                                 x_mat[[t + 7, i]],
                             ]);
-                            let y_vec =
-                                f64x8::from_slice(&y_arr.as_slice().unwrap_or(&[])[t..t + 8]);
+                            let y_vec = f64x8::from_slice(&y_arr.as_slice().unwrap_or(&[])[t..t + 8]);
                             sum_vec_xty += x_vec * y_vec;
                             t += 8;
                         }
