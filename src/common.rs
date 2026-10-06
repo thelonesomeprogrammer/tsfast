@@ -381,11 +381,7 @@ pub fn sample_entropy_simd(data: &[f32], m: usize, r: f32) -> f32 {
     // OR we return NAN if we are in MSE and var is zero. Wait, if all match, a/b = 1 => ln(1)=0.
     // Let's just return NaN if variance is effectively zero and we have a flat signal.
     let val = -(a_count as f32 / b_count as f32).ln();
-    if val == -0.0 {
-        0.0
-    } else {
-        val
-    }
+    if val == -0.0 { 0.0 } else { val }
 }
 
 pub fn approx_entropy_simd(m: usize, r: f32, data: &[f32]) -> f32 {

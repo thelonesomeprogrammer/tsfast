@@ -25,6 +25,8 @@ use crate::types::Feature;
 pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
     use Feature as F;
     let res = match feat {
+        F::HurstExponent => None,
+        F::MaximumFractalLength => None,
         F::BiasedFisherKurtosis
         | F::Iqr
         | F::Mad
@@ -140,15 +142,16 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::PermutationEntropy(..)
         | F::SampleEntropy
         | F::Mse(..) => complexity::eval_complexity(feat, ctx),
-        F::ArCoefficient(..)
-        | F::FriedrichCoefficients(..)
-        | F::MaxLangevinFixedPoint(..) => dynamic::eval_dynamic(feat, ctx),
+        F::ArCoefficient(..) | F::FriedrichCoefficients(..) | F::MaxLangevinFixedPoint(..) => {
+            dynamic::eval_dynamic(feat, ctx)
+        }
         F::AugmentedDickeyFuller(..) => stationarity::eval_stationarity(feat, ctx),
         F::Length
         | F::PercentageOfReoccurringDatapointsToAllDatapoints
         | F::PercentageOfReoccurringValuesToAllValues
         | F::RatioValueNumberToTimeSeriesLength
         | F::VarianceLargerThanStandardDeviation => misc::eval_misc(feat, ctx),
+        F::Dfa => None,
     };
     // `None` means "not computable for this window" (e.g. zero variance, window
     // shorter than a lag); engines have always reported that as 0.0.

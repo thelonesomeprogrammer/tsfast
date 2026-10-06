@@ -650,8 +650,14 @@ impl Feature {
                 }
             }
             Feature::EcdfPercentile(p) => format!("ecdf_percentile-{}", f32::from_bits(*p)),
-            Feature::EcdfPercentileCount(p) => format!("ecdf_percentile_count-{}", f32::from_bits(*p)),
-            Feature::EcdfSlope(p_init, p_end) => format!("ecdf_slope-{}-{}", f32::from_bits(*p_init), f32::from_bits(*p_end)),
+            Feature::EcdfPercentileCount(p) => {
+                format!("ecdf_percentile_count-{}", f32::from_bits(*p))
+            }
+            Feature::EcdfSlope(p_init, p_end) => format!(
+                "ecdf_slope-{}-{}",
+                f32::from_bits(*p_init),
+                f32::from_bits(*p_end)
+            ),
             Feature::EnergyRatioByChunks(num, focus) => format!(
                 "energy_ratio_by_chunks_num_segments_{}__segment_focus_{}",
                 num, focus
