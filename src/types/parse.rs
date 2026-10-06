@@ -49,6 +49,8 @@ unit_features! {
     Entropy => "entropy";
     SampleEntropy => "sample_entropy";
     HiguchiFd => "higuchi_fd";
+    Dfa => "dfa";
+    HurstExponent => "hurst_exponent";
     Energy => "energy", ["torque_Absolute energy"];
     Rms => "rms";
     RootMeanSquare => "root_mean_square";

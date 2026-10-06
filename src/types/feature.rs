@@ -22,6 +22,8 @@ pub enum Feature {
     Entropy,
     SampleEntropy,
     HiguchiFd,
+    Dfa,
+    HurstExponent,
     BinnedEntropy(u32),
     Energy,
     EnergyRatioByChunks(u16, u16),
@@ -311,6 +313,7 @@ impl Feature {
             Self::NumberCwtPeaks(_) => C::CWT,
             Self::AugmentedDickeyFuller(_) => C::ADF | C::NEEDS_SORT,
             Self::HiguchiFd => C::empty(),
+            Self::Dfa | Self::HurstExponent => C::empty(),
         }
     }
 }
