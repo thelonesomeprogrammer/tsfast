@@ -22,6 +22,7 @@ pub enum Feature {
     Entropy,
     SampleEntropy,
     HiguchiFd,
+    MaximumFractalLength,
     BinnedEntropy(u32),
     Energy,
     EnergyRatioByChunks(u16, u16),
@@ -310,7 +311,8 @@ impl Feature {
             Self::CwtCoefficients(_, _, _, _) => C::CWT,
             Self::NumberCwtPeaks(_) => C::CWT,
             Self::AugmentedDickeyFuller(_) => C::ADF | C::NEEDS_SORT,
-            Self::HiguchiFd => C::empty(),
+            Self::HiguchiFd => C::HIGUCHI,
+            Self::MaximumFractalLength => C::HIGUCHI,
         }
     }
 }
