@@ -53,6 +53,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::BinnedEntropy(..)
         | F::ChangeQuantiles(..)
         | F::Ecdf(..)
+        | F::EcdfPercentile(..)
+        | F::EcdfPercentileCount(..)
+        | F::EcdfSlope(..)
         | F::Entropy
         | F::IndexMassQuantile(..)
         | F::Median

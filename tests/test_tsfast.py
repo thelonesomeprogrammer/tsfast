@@ -869,6 +869,59 @@ def test_process_2d_floats_rejects_bad_input():
     with pytest.raises(TypeError, match="list"):
         ext.process_2d_floats([[1.0, 2.0]])
 
+
+def test_ecdf_features():
+    # Normal case with ties
+    x = np.array([1, 2, 2, 2, 5, 5, 7, 8, 9, 10], dtype=np.float32)
+    # Constant case
+    x_const = np.array([3, 3, 3, 3], dtype=np.float32)
+    # Short window
+    x_short = np.array([1, 2], dtype=np.float32)
+
+    features = ["ecdf_percentile-0.5", "ecdf_percentile_count-0.5", "ecdf_slope-0.2-0.5"]
+
+    import tsfel
+    for arr in [x, x_const, x_short]:
+        ext = tsfast.Extractor(features)
+        batch = np.stack([arr])
+        res = ext.process_2d_floats(batch)[0]
+
+        # ecdf_percentile-0.5
+        ref_perc = tsfel.feature_extraction.features.ecdf_percentile(arr, [0.5])
+        if np.isscalar(ref_perc):
+            ref_perc = float(ref_perc)
+        else:
+            ref_perc = float(ref_perc[0])
+
+        # ecdf_percentile_count-0.5
+        if np.max(arr) == np.min(arr):
+            ref_count = float(len(arr))
+        else:
+            ref_count = float(np.sum(arr <= ref_perc))
+
+        # ecdf_slope-0.2-0.5
+        try:
+            ref_slope = tsfel.feature_extraction.features.ecdf_slope(arr, 0.2, 0.5)
+        except Exception:
+            ref_slope = np.nan
+
+        if np.isnan(ref_perc):
+            assert np.isnan(res[0])
+        else:
+            assert np.allclose(res[0], ref_perc)
+
+        if np.isnan(ref_count):
+            assert np.isnan(res[1])
+        else:
+            assert np.allclose(res[1], ref_count)
+
+        if np.isnan(ref_slope):
+            assert np.isnan(res[2])
+        elif np.isinf(ref_slope):
+            assert np.isinf(res[2])
+        else:
+            assert np.allclose(res[2], ref_slope)
+
 def test_maximum_fractal_length():
     import numpy as np
     from tsfel.feature_extraction.features import maximum_fractal_length

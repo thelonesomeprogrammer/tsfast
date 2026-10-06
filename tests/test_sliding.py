@@ -2,6 +2,7 @@ import pytest
 import numpy as np
 from tsfast._tsfast import SlidingExtractor
 from helpers import frame
+import tsfast
 
 
 def test_sliding_multiple_columns():
@@ -466,6 +467,54 @@ def test_sliding_output_shape_and_names():
     assert extractor.update(np.zeros((2, 0), dtype=np.float32)).shape == (2, 0, 2)
     # float64 is accepted and converted.
     np.testing.assert_array_equal(extractor.update(np.array([[5.0], [10.0]]))[:, 0, 1], [5.0, 10.0])
+
+
+def test_ecdf_features():
+    # Normal case with ties
+    x = np.array([1, 2, 2, 2, 5, 5, 7, 8, 9, 10], dtype=np.float32)
+    features = ["ecdf_percentile-0.5", "ecdf_percentile_count-0.5", "ecdf_slope-0.2-0.5"]
+
+    import tsfel
+    ext = tsfast.SlidingExtractor(features, 1, 5, 1)
+    for i in range(len(x)):
+        arr = x[:i+1]
+        out = ext.update(np.stack([arr[-1:]]).T)
+        if i >= 4:
+            window = x[i-4:i+1]
+
+
+            ref_perc = tsfel.feature_extraction.features.ecdf_percentile(window, [0.5])
+            if np.isscalar(ref_perc):
+                ref_perc = float(ref_perc)
+            else:
+                ref_perc = float(ref_perc[0])
+
+            if np.max(window) == np.min(window):
+                ref_count = float(len(window))
+            else:
+                ref_count = float(np.sum(window <= ref_perc))
+
+            try:
+                ref_slope = tsfel.feature_extraction.features.ecdf_slope(window, 0.2, 0.5)
+            except Exception:
+                ref_slope = np.nan
+
+            if np.isnan(ref_perc):
+                assert np.isnan(out[0][0][0])
+            else:
+                assert np.allclose(out[0][0][0], ref_perc)
+
+            if np.isnan(ref_count):
+                assert np.isnan(out[0][0][1])
+            else:
+                assert np.allclose(out[0][0][1], ref_count)
+
+            if np.isnan(ref_slope):
+                assert np.isnan(out[0][0][2])
+            elif np.isinf(ref_slope):
+                assert np.isinf(out[0][0][2])
+            else:
+                assert np.allclose(out[0][0][2], ref_slope)
 
 def test_sliding_maximum_fractal_length():
     import numpy as np

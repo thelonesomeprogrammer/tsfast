@@ -21,9 +21,6 @@ Features summarizing signal amplitude distribution, central tendency, and disper
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
 | **`hist_mode`** | TSFEL | **Medium** | Fast SIMD min/max to establish bin edges, vectorized binning. |
-| **`ecdf_percentile`** | TSFEL | **Medium** | Value corresponding to target ECDF percentile. Quickselect / linear interpolation in Rust. |
-| **`ecdf_percentile_count`**| TSFEL | **Low** | Vectorized compare `_mm256_cmp_pd` + mask sum/popcount. |
-| **`ecdf_slope`** | TSFEL | **Medium** | Slope between two ECDF percentiles. Quickselect + division. |
 | **`count_above` / `count_below`** | TSFresh | **Low** | Count values above/below an arbitrary threshold $t$. SIMD compare + popcount. |
 | **`range_count`** | TSFresh | **Low** | Count points inside interval $[min, max)$. Double SIMD compare + AND mask + popcount. |
 
