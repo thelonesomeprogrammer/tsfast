@@ -465,6 +465,24 @@ def test_sliding_output_shape_and_names():
     np.testing.assert_array_equal(out[1, :, 1], [7.0, 8.0, 9.0])
     assert extractor.update(np.zeros((2, 0), dtype=np.float32)).shape == (2, 0, 2)
     # float64 is accepted and converted.
-    np.testing.assert_array_equal(
-        extractor.update(np.array([[5.0], [10.0]]))[:, 0, 1], [5.0, 10.0]
-    )
+    np.testing.assert_array_equal(extractor.update(np.array([[5.0], [10.0]]))[:, 0, 1], [5.0, 10.0])
+
+def test_sliding_maximum_fractal_length():
+    import numpy as np
+    import tsfast
+    from tsfel.feature_extraction.features import maximum_fractal_length
+
+    np.random.seed(42)
+    x = np.cumsum(np.random.randn(300)).astype(np.float32)
+
+    features = ["maximum_fractal_length"]
+    ext = tsfast.SlidingExtractor(features, n_cols=1, window_size=200, stride=100)
+
+    res1 = ext.update(x[0:200].reshape(1, -1))
+    res2 = ext.update(x[200:300].reshape(1, -1))
+
+    mfl1 = maximum_fractal_length(x[0:200])
+    mfl2 = maximum_fractal_length(x[100:300])
+
+    np.testing.assert_allclose(res1[0][0], mfl1, atol=1e-5)
+    np.testing.assert_allclose(res2[0][0], mfl2, atol=1e-5)

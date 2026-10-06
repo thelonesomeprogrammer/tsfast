@@ -261,6 +261,8 @@ REFERENCES = {
         )
         for a in ["teststat", "pvalue", "usedlag"]
     },
+    "dfa": ("tsfel", lambda x: getattr(__import__("tsfel.feature_extraction.features", fromlist=["dfa"]), "dfa")(x)),
+    "hurst_exponent": ("tsfel", lambda x: getattr(__import__("tsfel.feature_extraction.features", fromlist=["hurst_exponent"]), "hurst_exponent")(x)),
     # tsfresh's matrix_profile needs the unmaintained `matrixprofile` package and
     # picks its own window; stumpy (tsfresh's backend for query_similarity_count)
     # computes the same z-normalised profile for tsfast's fixed window.
@@ -341,6 +343,8 @@ REFERENCES = {
 # the feature is undefined; tsfast still returns a value there.
 MIN_LENGTH = {
     "higuchi_fd": 160,  # TSFEL FEATURES_MIN_SIZE
+    "dfa": 160,
+    "hurst_exponent": 160,
 }
 
 NO_REFERENCE = {

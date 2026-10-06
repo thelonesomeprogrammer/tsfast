@@ -128,6 +128,7 @@ compute_flags! {
     CALC_CENTROID,
     ADF,
     LPCC,
+    HIGUCHI,
 }
 
 // ── Composite masks (zero bit-cost) ────────────────────────────────────────

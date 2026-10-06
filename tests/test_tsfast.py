@@ -868,3 +868,30 @@ def test_process_2d_floats_rejects_bad_input():
         ext.process_2d_floats(np.zeros((2, 3), dtype=np.int64))
     with pytest.raises(TypeError, match="list"):
         ext.process_2d_floats([[1.0, 2.0]])
+
+def test_maximum_fractal_length():
+    import numpy as np
+    from tsfel.feature_extraction.features import maximum_fractal_length
+
+    np.random.seed(42)
+    # Sine, random walk, flat
+    x_sine = np.sin(np.linspace(0, 10 * np.pi, 200))
+    x_rw = np.cumsum(np.random.randn(200))
+    x_flat = np.ones(200) * 5.0
+    x_short = np.random.randn(9)
+
+    features = ["maximum_fractal_length"]
+    ext = tsfast.Extractor(features)
+
+    batch = np.vstack([x_sine, x_rw, x_flat])
+    res = ext.process_2d_floats(batch)
+
+    mfl_sine = maximum_fractal_length(x_sine)
+    mfl_rw = maximum_fractal_length(x_rw)
+    mfl_flat = maximum_fractal_length(x_flat)
+
+    np.testing.assert_allclose([res[i][0] for i in range(len(res))], [mfl_sine, mfl_rw, mfl_flat], atol=1e-5)
+
+    # Below minimum size
+    res_short = ext.process_2d_floats(np.atleast_2d(x_short))
+    assert np.isnan(res_short[0][0])
