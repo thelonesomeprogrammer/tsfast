@@ -94,7 +94,7 @@ pub fn eval_changes(feat: &Feature, context: &mut crate::context::FeatureContext
                         .max_by(|a: &&f32, b: &&f32| {
                             a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                         })
-                        .unwrap();
+                        .unwrap_or(&0.0);
                     (m1 + m2) / 2.0
                 };
                 state.diff_buffer = diffs;

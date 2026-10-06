@@ -1,4 +1,5 @@
 """Shared test helpers."""
+
 import pandas as pd
 
 

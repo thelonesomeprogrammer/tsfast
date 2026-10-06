@@ -53,6 +53,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::BinnedEntropy(..)
         | F::ChangeQuantiles(..)
         | F::Ecdf(..)
+        | F::EcdfPercentile(..)
+        | F::EcdfPercentileCount(..)
+        | F::EcdfSlope(..)
         | F::Entropy
         | F::IndexMassQuantile(..)
         | F::Median
@@ -128,6 +131,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::SpktWelchDensity(..)
         | F::WaveletEnergy(..)
         | F::WaveletEntropy
+        | F::MaxFrequency
+        | F::MedianFrequency
+        | F::FundamentalFrequency
         | F::WaveletFeatures(..) => transform::eval_transform(feat, ctx),
         F::ApproxEntropy(..) | F::HiguchiFd | F::PermutationEntropy(..) | F::SampleEntropy => {
             complexity::eval_complexity(feat, ctx)

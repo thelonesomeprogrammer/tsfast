@@ -75,7 +75,9 @@ impl SortProcessor {
             }
 
             let n_len = abs_devs.len();
-            if n_len > 0 {
+            if n_len == 0 {
+                median_abs_dev = f32::NAN;
+            } else if n_len > 0 {
                 if n_len % 2 == 1 {
                     median_abs_dev = *abs_devs
                         .select_nth_unstable_by(n_len / 2, |a: &f32, b: &f32| {
@@ -94,7 +96,7 @@ impl SortProcessor {
                         .max_by(|a: &&f32, b: &&f32| {
                             a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
                         })
-                        .unwrap();
+                        .unwrap_or(&0.0);
                     median_abs_dev = (m1 + m2) / 2.0;
                 }
             }

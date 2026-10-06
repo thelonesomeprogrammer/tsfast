@@ -36,6 +36,9 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
     let spectral_spread = context.spectral_spread;
     let spectral_skewness = context.spectral_skewness;
     let spectral_kurtosis = context.spectral_kurtosis;
+    let max_frequency = context.max_frequency;
+    let median_frequency = context.median_frequency;
+    let fundamental_frequency = context.fundamental_frequency;
     let _fft_autocorr = context.fft_autocorr;
     let mfcc = context.mfcc;
     let lpcc = context.lpcc;
@@ -49,7 +52,11 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
 
     let res = match feat {
         Feature::C3(lag) => {
-            let l_idx = unique_c3_lags.iter().position(|&l| l == *lag).unwrap();
+            let l_idx = if let Some(idx) = unique_c3_lags.iter().position(|&l| l == *lag) {
+                idx
+            } else {
+                return Some(0.0);
+            };
             let l = *lag as usize;
             if values.len() > 2 * l {
                 state.c3_sums[l_idx] / (values.len() - 2 * l) as f32
@@ -61,9 +68,12 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
         // covers [i * n / total, (i + 1) * n / total). Same in every engine.
         Feature::Paa(total, index) => {
             let n_vals = values.len();
+            if *total == 0 {
+                return None;
+            }
             let start = *index as usize * n_vals / *total as usize;
             let end = (*index as usize + 1) * n_vals / *total as usize;
-            if start < end {
+            if start < end && end <= values.len() {
                 values[start..end].iter().sum::<f32>() / (end - start) as f32
             } else {
                 0.0
@@ -148,6 +158,9 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
         Feature::SpectralSlope => spectral_slope,
         Feature::SpectralRollOn => spectral_roll_on,
         Feature::SpectralRollOff => spectral_roll_off,
+        Feature::MaxFrequency => max_frequency,
+        Feature::MedianFrequency => median_frequency,
+        Feature::FundamentalFrequency => fundamental_frequency,
         Feature::SpectralSpread => spectral_spread,
         Feature::SpectralSkewness => spectral_skewness,
         Feature::SpectralKurtosis => spectral_kurtosis,

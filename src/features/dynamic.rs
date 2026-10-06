@@ -373,7 +373,11 @@ fn compute_friedrich_coeffs(values: &[f32], m: usize, r: f32) -> Vec<f32> {
         }
     }
 
-    let x = Array2::from_shape_vec((n_pts, m + 1), x_mat_vec).unwrap();
+    let x = if let Ok(mat) = Array2::from_shape_vec((n_pts, m + 1), x_mat_vec) {
+        mat
+    } else {
+        return vec![f32::NAN; m + 1];
+    };
     let y = Array1::from(y_means);
 
     if let Some(coeffs) = solve_ols_polyfit(&x, &y) {
