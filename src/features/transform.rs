@@ -120,7 +120,7 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             } else {
                 values.to_vec()
             };
-            let psd = crate::spectral::welch_psd(&scaled, scaled.len(), crate::spectral::FS)
+            let psd = crate::spectral::welch_psd(&scaled, scaled.len(), state.fs)
                 .unwrap_or_default();
             psd.into_iter().fold(0.0, f32::max)
         }
@@ -176,7 +176,7 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
         Feature::SpectrogramCoefficients(_, f_bits) => {
             if !spectrum.is_empty() {
                 let target_freq = f32::from_bits(*f_bits);
-                let freq_step = crate::spectral::FS / context.dft_len as f32;
+                let freq_step = state.fs / context.dft_len as f32;
                 let idx = (target_freq / freq_step).round() as usize;
                 let idx = idx.min(spectrum.len() - 1);
                 spectrum[idx]
@@ -185,7 +185,7 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             }
         }
         Feature::SpectrogramMeanCoeff(coeff, bins) => {
-            return state.spectrogram.coefficient(values, *coeff, *bins);
+            return state.spectrogram.coefficient(values, *coeff, *bins, state.fs);
         }
         Feature::SpectralEntropy => spectral_entropy,
         Feature::WaveletFeatures(_w_bits, f_type) => {
@@ -208,7 +208,7 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             }
         }
         Feature::CalcCentroid(fs_bits) => {
-            let fs = f32::from_bits(*fs_bits);
+            let fs = fs_bits.map_or(state.fs, f32::from_bits);
             if state.energy == 0.0 || fs == 0.0 {
                 0.0
             } else {

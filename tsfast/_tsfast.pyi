@@ -5,6 +5,12 @@ Feature names are tsfresh/TSFEL names, e.g. ``"mean"``,
 ``"human_range_energy-100"``. ``tests/feature_samples.txt`` lists one valid
 name per feature. An unknown or invalid name raises ``ValueError``.
 
+``fs`` (default 100 Hz, TSFEL's default) is the sampling frequency the TSFEL
+frequency-domain features (spectral centroid, roll-off, MFCC, spectrogram,
+power bandwidth, ...) are evaluated at. ``human_range_energy``,
+``average_power`` and ``calc_centroid`` follow it too, unless the name pins a
+frequency: ``human_range_energy-100`` always uses 100 Hz.
+
 Input arrays are 2-D float32/float64 with one series per row; float32
 C-contiguous input is read without a copy. Output is always float32, with the
 last axis in ``feature_names`` order. Every extractor grows to accept more
@@ -19,8 +25,11 @@ _Values = npt.NDArray[np.float32] | npt.NDArray[np.float64]
 class Extractor:
     """Features of whole series, one output row per input row."""
 
-    def __init__(self, feature_str: list[str], max_size: int | None = None) -> None:
-        """``max_size``: expected series length, used to pre-plan the FFT."""
+    def __init__(
+        self, feature_str: list[str], max_size: int | None = None, fs: float = 100.0
+    ) -> None:
+        """``max_size``: expected series length, used to pre-plan the FFT.
+        ``fs``: sampling frequency in Hz assumed by the frequency-domain features."""
     @property
     def feature_names(self) -> list[str]:
         """Canonical names of the output columns, in order."""
@@ -31,9 +40,15 @@ class SlidingExtractor:
     """Features of fixed-size windows over streaming series."""
 
     def __init__(
-        self, feature_str: list[str], n_cols: int, window_size: int, stride: int = 1
+        self,
+        feature_str: list[str],
+        n_cols: int,
+        window_size: int,
+        stride: int = 1,
+        fs: float = 100.0,
     ) -> None:
-        """``n_cols``: initial number of series; a window is emitted every ``stride`` samples once full."""
+        """``n_cols``: initial number of series; a window is emitted every ``stride`` samples once full.
+        ``fs``: sampling frequency in Hz assumed by the frequency-domain features."""
     @property
     def feature_names(self) -> list[str]:
         """Canonical names of the last output axis, in order."""
@@ -50,10 +65,12 @@ class ExpandingExtractor:
         n_cols: int,
         max_size: int | None = None,
         fft_update_period: int = 1,
+        fs: float = 100.0,
     ) -> None:
         """``max_size``: expected final length, used to pre-plan the FFT.
         ``fft_update_period``: recompute the FFT only after this many new samples
-        (1 = every update, exact)."""
+        (1 = every update, exact).
+        ``fs``: sampling frequency in Hz assumed by the frequency-domain features."""
     @property
     def feature_names(self) -> list[str]:
         """Canonical names of the output columns, in order."""

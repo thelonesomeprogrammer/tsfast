@@ -159,6 +159,8 @@ pub struct ColumnState {
     pub lz_symbol_buffer: Vec<u8>,
     pub lz_binary_trie: Vec<[usize; 2]>,
     pub lz_bit_buffer: Vec<u64>,
+    /// Sampling frequency (Hz) TSFEL's spectral features are evaluated at.
+    pub fs: f32,
 }
 
 pub fn next_good_fft_size(n: usize) -> usize {
@@ -217,6 +219,7 @@ impl ColumnState {
         unique_count_below_thresholds: &[u32],
         unique_range_counts: &[(u32, u32)],
         first_val: f32,
+        fs: f32,
     ) -> Self {
         Self {
             total_sum: 0.0,
@@ -324,6 +327,7 @@ impl ColumnState {
             lz_symbol_buffer: Vec::new(),
             lz_binary_trie: Vec::new(),
             lz_bit_buffer: Vec::new(),
+            fs,
         }
     }
 }

@@ -174,10 +174,10 @@ pub fn eval_changes(feat: &Feature, context: &mut crate::context::FeatureContext
             }
         }
         Feature::AbsSumChange => mac_sum as f32,
-        // TSFEL: trapezoid area of |x| with t = i / fs (fs = 100).
+        // TSFEL: trapezoid area of |x| with t = i / fs.
         Feature::Auc => {
             let area: f32 = values.windows(2).map(|w| (w[0] + w[1]).abs()).sum();
-            0.5 * area / 100.0
+            0.5 * area / state.fs
         }
         Feature::AggLinearTrend(attr, chunk_len, func) if values.len() >= *chunk_len as usize => {
             let cl = *chunk_len as usize;

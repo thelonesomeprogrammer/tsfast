@@ -23,6 +23,7 @@ pub(crate) struct StaticEngine<'a> {
     pub(crate) unique_range_counts: &'a [(u32, u32)],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
+    pub(crate) fs: f32,
 }
 
 impl<'a> StaticEngine<'a> {
@@ -42,6 +43,7 @@ impl<'a> StaticEngine<'a> {
             self.unique_count_below_thresholds,
             self.unique_range_counts,
             values[0],
+            self.fs,
         );
 
         let rem_start = self.process_simd_chunks(values, &mut state);

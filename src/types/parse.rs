@@ -158,7 +158,7 @@ impl std::str::FromStr for Feature {
                 return Ok(Feature::AugmentedDickeyFuller(AdfAttr::UsedLag));
             }
             "human_range_energy" => {
-                return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
+                return Ok(Feature::HumanRangeEnergy(None));
             }
             "hist_mode" => {
                 return Ok(Feature::HistMode(10)); // TSFEL default nbins=10
@@ -168,7 +168,10 @@ impl std::str::FromStr for Feature {
                 return Ok(Feature::NumberPeaks(10)); // TSFEL default n=10
             }
             "average_power" => {
-                return Ok(Feature::AveragePower(100.0f32.to_bits())); // Default fs=100
+                return Ok(Feature::AveragePower(None));
+            }
+            "calc_centroid" => {
+                return Ok(Feature::CalcCentroid(None));
             }
             _ => {}
         }
@@ -229,18 +232,10 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         return Some(Feature::Mse(m, maxscale));
     }
     if let Some(arg) = s.strip_prefix("human_range_energy-") {
-        let fs: f32 = arg.trim().parse().ok()?;
-        if !(fs.is_finite() && fs > 0.0) {
-            return None;
-        }
-        return Some(Feature::HumanRangeEnergy(fs.to_bits()));
+        return Some(Feature::HumanRangeEnergy(Some(parse_fs(arg)?)));
     }
     if let Some(arg) = s.strip_prefix("average_power-") {
-        let fs: f32 = arg.trim().parse().ok()?;
-        if !(fs.is_finite() && fs > 0.0) {
-            return None;
-        }
-        return Some(Feature::AveragePower(fs.to_bits()));
+        return Some(Feature::AveragePower(Some(parse_fs(arg)?)));
     }
     if let Some(arg) = s.strip_prefix("lempel_ziv_complexity-") {
         let bins: u16 = arg.trim().parse().ok()?;
@@ -453,8 +448,7 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         return Some(Feature::Ecdf(d));
     }
     if let Some(arg) = s.strip_prefix("calc_centroid-") {
-        let fs: f32 = arg.parse().ok()?;
-        return Some(Feature::CalcCentroid(fs.to_bits()));
+        return Some(Feature::CalcCentroid(Some(parse_fs(arg)?)));
     }
     if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
         && let Ok(bins) = arg.parse::<u32>()
@@ -895,12 +889,8 @@ impl Feature {
             }
             Feature::MeanNAbsoluteMax(n) => format!("mean_n_absolute_max-{}", n),
             Feature::HistMode(nbins) => format!("hist_mode-{}", nbins),
-            Feature::HumanRangeEnergy(fs_bits) => {
-                format!("human_range_energy-{}", f32::from_bits(*fs_bits))
-            }
-            Feature::AveragePower(fs_bits) => {
-                format!("average_power-{}", f32::from_bits(*fs_bits))
-            }
+            Feature::HumanRangeEnergy(fs) => with_fs("human_range_energy", *fs),
+            Feature::AveragePower(fs) => with_fs("average_power", *fs),
             Feature::WaveletFeatures(w_bits, f) => {
                 format!("wavelet-{}-{}", f32::from_bits(*w_bits), f)
             }
@@ -929,7 +919,7 @@ impl Feature {
             ),
             Feature::Lpcc(idx) => format!("lpcc-{}", idx),
             Feature::Ecdf(d) => format!("ecdf-{}", d),
-            Feature::CalcCentroid(fs) => format!("calc_centroid-{}", f32::from_bits(*fs)),
+            Feature::CalcCentroid(fs) => with_fs("calc_centroid", *fs),
             Feature::Mfcc(idx) => format!("mfcc-{}", idx),
             Feature::WaveletEnergy(idx) => format!("wavelet_energy-{}", idx),
             Feature::WaveletAbsMean(idx) => format!("wavelet_abs_mean-{}", idx),
@@ -968,5 +958,20 @@ impl Feature {
             }
             _ => unreachable!("unit variant {self:?} missing from unit_features! table"),
         }
+    }
+}
+
+/// A sampling frequency name parameter (`human_range_energy-<fs>`): positive
+/// and finite, as f32 bits.
+fn parse_fs(arg: &str) -> Option<u32> {
+    let fs: f32 = arg.trim().parse().ok()?;
+    (fs.is_finite() && fs > 0.0).then(|| fs.to_bits())
+}
+
+/// `name-<fs>` for a pinned sampling frequency, bare `name` for the extractor's.
+fn with_fs(name: &str, fs: Option<u32>) -> String {
+    match fs {
+        Some(bits) => format!("{}-{}", name, f32::from_bits(bits)),
+        None => name.to_string(),
     }
 }

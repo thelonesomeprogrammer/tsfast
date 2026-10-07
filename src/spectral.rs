@@ -12,8 +12,9 @@ use crate::common::ColumnState;
 use crate::metrics::FftResult;
 use crate::types::Compute;
 
-/// Sampling frequency TSFEL's spectral features are evaluated at.
-pub const FS: f32 = 100.0;
+/// Default sampling frequency (Hz) TSFEL's spectral features are evaluated at;
+/// each extractor's `fs` overrides it (stored on `ColumnState::fs`).
+pub const DEFAULT_FS: f32 = 100.0;
 
 /// Exact-length real DFT of `values`, as `np.fft.rfft` (no zero padding: padding
 /// changes the bins and every TSFEL spectral feature with them).
@@ -44,9 +45,10 @@ pub fn finalize(
     dft_len: usize,
     state: &mut ColumnState,
 ) -> Result<FftResult, String> {
-    // TSFEL frequencies: np.fft.rfftfreq(dft_len, 1 / fs), fs = 100.
+    // TSFEL frequencies: np.fft.rfftfreq(dft_len, 1 / fs).
+    let fs = state.fs;
     let freq_step = if dft_len > 0 {
-        FS / dft_len as f32
+        fs / dft_len as f32
     } else {
         0.0
     };
@@ -481,12 +483,12 @@ pub fn finalize(
             norm_buf.extend_from_slice(values);
         }
         let nperseg = norm_buf.len();
-        let power = welch_psd(&norm_buf, nperseg, FS)?;
+        let power = welch_psd(&norm_buf, nperseg, fs)?;
         state.fft_in_buffer = norm_buf;
 
         let total: f32 = power.iter().sum();
         if total > 0.0 && nperseg > 0 {
-            let freq_step_pb = FS / nperseg as f32;
+            let freq_step_pb = fs / nperseg as f32;
             let thresh = 0.95 * total;
 
             let mut running = 0.0;
@@ -529,7 +531,7 @@ pub fn finalize(
     }
 
     if compute.intersects(Compute::MFCC) {
-        mfcc = tsfel_mfcc(values)?;
+        mfcc = tsfel_mfcc(values, fs)?;
     }
 
     if compute.intersects(Compute::CWT_MEXH) {
@@ -749,11 +751,11 @@ impl SpectrogramCache {
         }
     }
 
-    /// TSFEL `spectrogram_mean_coeff(values, FS, bins)["values"][coeff]`:
-    /// `scipy.signal.spectrogram(values, FS, nperseg=2*bins-2)` averaged over
+    /// TSFEL `spectrogram_mean_coeff(values, fs, bins)["values"][coeff]`:
+    /// `scipy.signal.spectrogram(values, fs, nperseg=2*bins-2)` averaged over
     /// time, with `bins` clamped to `len // 2 + 1` like TSFEL does. `None` if
     /// the window is too short for a segment or for that many coefficients.
-    pub fn coefficient(&mut self, values: &[f32], coeff: u16, bins: u16) -> Option<f32> {
+    pub fn coefficient(&mut self, values: &[f32], coeff: u16, bins: u16, fs: f32) -> Option<f32> {
         let bins_eff = (bins as usize).min(values.len() / 2 + 1);
         if bins_eff < 2 || coeff as usize >= bins_eff {
             return None;
@@ -783,7 +785,7 @@ impl SpectrogramCache {
                 values,
                 &entry.window,
                 nperseg / 8,
-                FS,
+                fs,
                 &mut entry.psd,
                 &mut self.scratch,
             )
@@ -794,10 +796,10 @@ impl SpectrogramCache {
     }
 }
 
-/// TSFEL mfcc(signal, fs=100): pre-emphasis 0.97, 512-point power spectrum,
+/// TSFEL mfcc(signal, fs): pre-emphasis 0.97, 512-point power spectrum,
 /// 40 mel filters in dB, orthonormal DCT-II coefficients 1..=12, mean-centred,
 /// sinusoidal lifter 22.
-fn tsfel_mfcc(values: &[f32]) -> Result<Vec<f32>, String> {
+fn tsfel_mfcc(values: &[f32], fs: f32) -> Result<Vec<f32>, String> {
     const NFFT: usize = 512;
     const NFILT: usize = 40;
     const NUM_CEPS: usize = 12;
@@ -822,7 +824,7 @@ fn tsfel_mfcc(values: &[f32]) -> Result<Vec<f32>, String> {
         .map(|c| c.norm_sqr() as f64 / NFFT as f64)
         .collect();
 
-    let fs = FS as f64;
+    let fs = fs as f64;
     let high_mel = 2595.0 * (1.0 + (fs / 2.0) / 700.0).log10();
     let hz: Vec<f64> = (0..NFILT + 2)
         .map(|i| {
