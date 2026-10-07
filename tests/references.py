@@ -311,6 +311,23 @@ REFERENCES = {
         "tsfresh",
         lambda x: _one(fc.spkt_welch_density(x, [{"coeff": 5}])),
     ),
+    "fourier_entropy-5": ("tsfresh", lambda x: fc.fourier_entropy(x, 5)),
+    "fft_aggregated-centroid": (
+        "tsfresh",
+        lambda x: _one(fc.fft_aggregated(x, [{"aggtype": "centroid"}])),
+    ),
+    "fft_aggregated-variance": (
+        "tsfresh",
+        lambda x: _one(fc.fft_aggregated(x, [{"aggtype": "variance"}])),
+    ),
+    "fft_aggregated-skew": (
+        "tsfresh",
+        lambda x: _one(fc.fft_aggregated(x, [{"aggtype": "skew"}])),
+    ),
+    "fft_aggregated-kurtosis": (
+        "tsfresh",
+        lambda x: _one(fc.fft_aggregated(x, [{"aggtype": "kurtosis"}])),
+    ),
     "cwt_coefficients__coeff_3__w_5__widths_(2, 5, 10, 20)": (
         "tsfresh",
         lambda x: _one(

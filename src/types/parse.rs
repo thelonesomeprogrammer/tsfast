@@ -1,4 +1,4 @@
-use super::feature::{AdfAttr, AggAttr, AggFunc, Feature, FftAttr};
+use super::feature::{AdfAttr, AggAttr, AggFunc, Feature, FftAggType, FftAttr};
 
 // ─── Unit features: one line each ──────────────────────────────────────────
 //
@@ -414,6 +414,25 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
             return None;
         }
     }
+    if let Some(arg) = s.strip_prefix("fourier_entropy-")
+        && let Ok(bins) = arg.parse::<u32>()
+    {
+        if bins > 0 {
+            return Some(Feature::FourierEntropy(bins));
+        } else {
+            return None;
+        }
+    }
+    if let Some(arg) = s.strip_prefix("fft_aggregated-") {
+        let agg = match arg {
+            "centroid" => FftAggType::Centroid,
+            "variance" => FftAggType::Variance,
+            "skew" => FftAggType::Skew,
+            "kurtosis" => FftAggType::Kurtosis,
+            _ => return None,
+        };
+        return Some(Feature::FftAggregated(agg));
+    }
     if let Some(arg) = s.strip_prefix("ratio_beyond_r_sigma-") {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::RatioBeyondRSigma(r.to_bits()));
@@ -750,6 +769,16 @@ impl Feature {
                 format!("fft_coeff-{}-{}", coeff, attr_str)
             }
             Feature::BinnedEntropy(bins) => format!("binned_entropy__max_bins_{}", bins),
+            Feature::FourierEntropy(bins) => format!("fourier_entropy-{}", bins),
+            Feature::FftAggregated(agg) => {
+                let agg_str = match agg {
+                    FftAggType::Centroid => "centroid",
+                    FftAggType::Variance => "variance",
+                    FftAggType::Skew => "skew",
+                    FftAggType::Kurtosis => "kurtosis",
+                };
+                format!("fft_aggregated-{}", agg_str)
+            }
             Feature::ApproxEntropy(m, r_bits) => {
                 format!("approx_entropy-{}-{}", m, f32::from_bits(*r_bits))
             }

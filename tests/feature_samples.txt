@@ -178,3 +178,8 @@ range_count-0-5
 wavelet_abs_mean-3
 wavelet_std-3
 wavelet_var-3
+fourier_entropy-5
+fft_aggregated-centroid
+fft_aggregated-variance
+fft_aggregated-skew
+fft_aggregated-kurtosis

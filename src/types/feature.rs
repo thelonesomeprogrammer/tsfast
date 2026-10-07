@@ -142,6 +142,8 @@ pub enum Feature {
     PowerBandwidth,
     SpectralPositiveTurning,
     SpectralVariation,
+    FourierEntropy(u32),
+    FftAggregated(FftAggType),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -174,6 +176,14 @@ pub enum AggFunc {
     Min,
     Mean,
     Var,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+pub enum FftAggType {
+    Centroid,
+    Variance,
+    Skew,
+    Kurtosis,
 }
 
 // ─── Feature → Compute dependency mapping ───────────────────────────────────
@@ -352,6 +362,8 @@ impl Feature {
             Self::PowerBandwidth => C::POWER_BANDWIDTH,
             Self::SpectralPositiveTurning => C::SPEC_POS_TURN,
             Self::SpectralVariation => C::SPEC_VARIATION,
+            Self::FourierEntropy(_) => C::WELCH,
+            Self::FftAggregated(_) => C::FFT_AGGREGATED,
             Self::Dfa | Self::HurstExponent => C::empty(),
             Self::HiguchiFd => C::HIGUCHI,
             Self::MaximumFractalLength => C::HIGUCHI,

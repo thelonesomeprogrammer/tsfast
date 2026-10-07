@@ -256,6 +256,93 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
                 0.0
             }
         }
+        // tsfresh: binned_entropy(pxx / max(pxx), bins) where pxx is the Welch
+        // PSD (same nperseg=min(n,256), fs=1 config as spkt_welch_density).
+        // Dividing by max(pxx) only rescales the histogram's bin edges, not the
+        // relative bin membership, so binning pxx directly gives the same result
+        // -- except when pxx is all zero (a perfectly flat window), where tsfresh
+        // divides 0/0 into NaNs and binned_entropy short-circuits to NaN.
+        Feature::FourierEntropy(max_bins) => {
+            let max_bins = *max_bins as usize;
+            let pxx = context.welch_density;
+            if max_bins == 0 || pxx.is_empty() {
+                return Some(f32::NAN);
+            }
+            let mut min_val = f32::INFINITY;
+            let mut max_val = f32::NEG_INFINITY;
+            for &v in pxx {
+                min_val = min_val.min(v);
+                max_val = max_val.max(v);
+            }
+            if min_val == max_val {
+                return Some(if max_val == 0.0 { f32::NAN } else { 0.0 });
+            }
+
+            let mut hist = std::mem::take(&mut state.binned_entropy_buffer);
+            hist.clear();
+            hist.resize(max_bins, 0.0);
+
+            let bin_width = (max_val - min_val) / max_bins as f32;
+            for &v in pxx {
+                let mut bin = ((v - min_val) / bin_width).floor() as usize;
+                if bin >= max_bins {
+                    bin = max_bins - 1;
+                }
+                hist[bin] += 1.0;
+            }
+
+            let n_pxx = pxx.len() as f32;
+            let mut entropy = 0.0f32;
+            for &count in &hist {
+                if count > 0.0 {
+                    let p = count / n_pxx;
+                    entropy -= p * p.ln();
+                }
+            }
+            state.binned_entropy_buffer = hist;
+            entropy
+        }
+        // tsfresh fft_aggregated: (non-central) moments of np.abs(np.fft.rfft(x))
+        // treated as a distribution over its bin index.
+        Feature::FftAggregated(agg) => {
+            let y = spectrum;
+            let sum: f64 = y.iter().map(|&v| v as f64).sum();
+            if y.is_empty() || sum == 0.0 {
+                return Some(f32::NAN);
+            }
+            let moment = |p: i32| -> f64 {
+                y.iter()
+                    .enumerate()
+                    .map(|(i, &v)| (i as f64).powi(p) * v as f64)
+                    .sum::<f64>()
+                    / sum
+            };
+            let centroid = moment(1);
+            let variance = moment(2) - centroid * centroid;
+            let res = match agg {
+                crate::types::FftAggType::Centroid => centroid,
+                crate::types::FftAggType::Variance => variance,
+                crate::types::FftAggType::Skew => {
+                    if variance < 0.5 {
+                        f64::NAN
+                    } else {
+                        (moment(3) - 3.0 * centroid * variance - centroid.powi(3))
+                            / variance.powf(1.5)
+                    }
+                }
+                crate::types::FftAggType::Kurtosis => {
+                    if variance < 0.5 {
+                        f64::NAN
+                    } else {
+                        (moment(4) - 4.0 * centroid * moment(3)
+                            + 6.0 * moment(2) * centroid.powi(2)
+                            - 3.0 * centroid)
+                            / variance.powi(2)
+                    }
+                }
+            };
+            res as f32
+        }
         _ => return None,
     };
     Some(res)

@@ -145,6 +145,8 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::PowerBandwidth
         | F::SpectralPositiveTurning
         | F::SpectralVariation
+        | F::FourierEntropy(..)
+        | F::FftAggregated(..)
         | F::WaveletFeatures(..) => transform::eval_transform(feat, ctx),
         F::ApproxEntropy(..)
         | F::HiguchiFd

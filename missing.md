@@ -11,12 +11,10 @@ implemented and verified within 1% of its reference by
 
 ---
 
-## TSFresh (3 missing)
+## TSFresh (1 missing)
 
 | Feature | Notes |
 | :--- | :--- |
-| **`fourier_entropy`** | Binned entropy of the FFT power spectrum (histogram over `bins` parameter). |
-| **`fft_aggregated`** | Centroid/variance/skew/kurtosis of the power spectrum, tsfresh's own normalization (distinct from TSFEL's `spectral_centroid`/`spectral_spread`/etc., which use `FS` and are already implemented). |
 | **`linear_trend_timewise`** | OLS regression against an explicit `DatetimeIndex`. tsfast's engines take no timestamp input, so this needs a design decision before implementation, not just a port. |
 
 ## TSFEL (5 missing)
