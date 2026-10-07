@@ -11,7 +11,6 @@ These features are heavily used in Python but suffer from extreme performance bo
 
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
-| **`lempel_ziv_complexity`** | TSFresh/TSFEL | **High** | LZ78 complexity of discretized series. In Rust: binarize via SIMD `_mm256_movemask_pd`, then parse using a zero-allocation array-based trie or flat hash set. |
 
 ---
 

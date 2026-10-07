@@ -63,6 +63,8 @@ REFERENCES = {
     "pk_pk_distance": ("tsfel", F.pk_pk_distance),
     "variation_coefficient": ("tsfresh", fc.variation_coefficient),
     "length": ("tsfresh", fc.length),
+    "lempel_ziv": ("tsfel", F.lempel_ziv),
+    "lempel_ziv_complexity-3": ("tsfresh", lambda x: fc.lempel_ziv_complexity(x, 3)),
     "variance_larger_than_standard_deviation": ("tsfresh", fc.variance_larger_than_standard_deviation),
     "large_standard_deviation-0.05": ("tsfresh", lambda x: fc.large_standard_deviation(x, 0.05)),
     "symmetry_looking-0.05": ("tsfresh", lambda x: _one(fc.symmetry_looking(x, [{"r": 0.05}]))),

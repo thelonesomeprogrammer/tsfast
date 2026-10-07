@@ -16,6 +16,7 @@ fn f(x: f32) -> u32 {
 fn parameterized_samples() -> Vec<Feature> {
     use Feature as F;
     vec![
+        F::LempelZivComplexity(3),
         F::BinnedEntropy(5),
         F::EnergyRatioByChunks(3, 1),
         F::NumberCrossingM(f(0.5)),

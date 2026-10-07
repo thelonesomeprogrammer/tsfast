@@ -64,6 +64,8 @@ pub enum Feature {
     AggAutocorrelation(AggFunc, u16),
     PartialAutocorr(u16),
     TimeReversalAsymmetry(u16),
+    LempelZivComplexity(u16),
+    LempelZiv,
     FftCoefficient(u16, FftAttr),
     ApproxEntropy(u8, u32), // r is encoded as u32 (fixed point or bitcast)
     LinearTrend(AggAttr),
@@ -243,6 +245,7 @@ impl Feature {
                 C::SUM | C::MEAN | C::VARIANCE | C::ENERGY | C::PACF | C::NEEDS_SORT
             }
             Self::TimeReversalAsymmetry(_) => C::TRA | C::NEEDS_SORT,
+            Self::LempelZiv | Self::LempelZivComplexity(_) => C::SUM | C::MEAN | C::MIN | C::MAX | C::NEEDS_SORT,
             Self::FftCoefficient(_, _) => C::FFT_COEFF | C::NEEDS_SORT,
             Self::ApproxEntropy(_, _) => C::APPROX_ENT | C::NEEDS_SORT,
             Self::LinearTrend(_) => C::SUM | C::MEAN | C::SLOPE | C::VARIANCE | C::ENERGY,

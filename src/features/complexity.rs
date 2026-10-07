@@ -40,6 +40,12 @@ pub fn eval_complexity(
     let _paa_boundaries = context.paa_boundaries;
 
     let res = match feat {
+        Feature::LempelZiv => {
+            eval_lempel_ziv(context)
+        }
+        Feature::LempelZivComplexity(bins) => {
+            eval_lempel_ziv_complexity(context, *bins)
+        }
         Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
             let m_val = *m as usize;
             // tsfresh: r is relative to the population std.
@@ -131,4 +137,215 @@ fn population_std(values: &[f32]) -> f32 {
     let mean = values.iter().map(|&v| v as f64).sum::<f64>() / n;
     let var = values.iter().map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / n;
     var.sqrt() as f32
+}
+
+
+use std::simd::prelude::*;
+use std::simd::f32x8;
+
+#[inline(always)]
+fn lz_complexity_bits(state: &mut crate::common::ColumnState, n: usize) -> f32 {
+    if n == 0 {
+        return 0.0;
+    }
+
+    state.lz_binary_trie.clear();
+    state.lz_binary_trie.push([0, 0]); // root node
+    let mut num_substrings = 0;
+
+    let mut ind = 0;
+    let mut inc = 1;
+
+    while ind + inc <= n {
+        let mut curr_node = 0;
+        let mut found = true;
+
+        for i in 0..inc {
+            let symbol_idx = ind + i;
+            let bit = ((state.lz_bit_buffer[symbol_idx / 64] >> (symbol_idx % 64)) & 1) as usize;
+
+            let next_node = state.lz_binary_trie[curr_node][bit];
+            if next_node != 0 {
+                curr_node = next_node;
+            } else {
+                found = false;
+                break;
+            }
+        }
+
+        if found {
+            inc += 1;
+        } else {
+            let mut curr = 0;
+            for i in 0..inc {
+                let symbol_idx = ind + i;
+                let bit = ((state.lz_bit_buffer[symbol_idx / 64] >> (symbol_idx % 64)) & 1) as usize;
+
+                let next_node = state.lz_binary_trie[curr][bit];
+                if next_node != 0 {
+                    curr = next_node;
+                } else {
+                    let new_node = state.lz_binary_trie.len();
+                    state.lz_binary_trie.push([0, 0]);
+                    state.lz_binary_trie[curr][bit] = new_node;
+                    curr = new_node;
+                }
+            }
+            num_substrings += 1;
+            ind += inc;
+            inc = 1;
+        }
+    }
+
+    num_substrings as f32 / n as f32
+}
+
+#[inline(always)]
+fn lz_complexity(state: &mut crate::common::ColumnState) -> f32 {
+    let sequence = &state.lz_symbol_buffer;
+    let n = sequence.len();
+    if n == 0 {
+        return 0.0;
+    }
+
+    state.lz_trie_nodes.clear();
+    state.lz_trie_nodes.push(Vec::new()); // root node
+    let mut num_substrings = 0;
+
+    let mut ind = 0;
+    let mut inc = 1;
+
+    while ind + inc <= n {
+        let mut curr_node = 0;
+        let mut found = true;
+
+        for i in 0..inc {
+            let symbol = sequence[ind + i] as u16;
+
+            // Search children
+            let mut next_node = None;
+            for &(s, child_idx) in &state.lz_trie_nodes[curr_node] {
+                if s == symbol {
+                    next_node = Some(child_idx);
+                    break;
+                }
+            }
+
+            if let Some(child_idx) = next_node {
+                curr_node = child_idx;
+            } else {
+                found = false;
+                break;
+            }
+        }
+
+        if found {
+            inc += 1;
+        } else {
+            // Add new substring to trie
+            let mut curr = 0;
+            for i in 0..inc {
+                let symbol = sequence[ind + i] as u16;
+
+                let mut next_node = None;
+                for &(s, child_idx) in &state.lz_trie_nodes[curr] {
+                    if s == symbol {
+                        next_node = Some(child_idx);
+                        break;
+                    }
+                }
+
+                if let Some(child_idx) = next_node {
+                    curr = child_idx;
+                } else {
+                    let new_node = state.lz_trie_nodes.len();
+                    state.lz_trie_nodes.push(Vec::new());
+                    state.lz_trie_nodes[curr].push((symbol, new_node));
+                    curr = new_node;
+                }
+            }
+            num_substrings += 1;
+            ind += inc;
+            inc = 1;
+        }
+    }
+
+    num_substrings as f32 / n as f32
+}
+
+/// Computes the Lempel-Ziv's (LZ) complexity index, normalized by the signal's length.
+/// TSFEL definition: binarises around the mean threshold, and counts LZ76 dictionary entries.
+/// Optimizaton: binarise 8 symbols per instruction into a u64 buffer.
+fn eval_lempel_ziv(context: &mut crate::context::FeatureContext) -> f32 {
+    let values = context.values;
+    let n = values.len();
+    let state = &mut *context.state;
+    if n == 0 {
+        return 0.0;
+    }
+
+    let threshold = context.mean;
+    let threshold_vec = f32x8::splat(threshold);
+
+    state.lz_bit_buffer.clear();
+    state.lz_bit_buffer.resize((n + 63) / 64, 0);
+
+    let mut chunks = values.chunks_exact(8);
+    let mut idx = 0;
+    for chunk in &mut chunks {
+        let vals = f32x8::from_slice(chunk);
+        let mask = vals.simd_gt(threshold_vec);
+        let bitmask = mask.to_bitmask() as u64;
+        state.lz_bit_buffer[idx / 64] |= bitmask << (idx % 64);
+        idx += 8;
+    }
+    for &v in chunks.remainder() {
+        if v > threshold {
+            state.lz_bit_buffer[idx / 64] |= 1 << (idx % 64);
+        }
+        idx += 1;
+    }
+
+    lz_complexity_bits(state, n)
+}
+
+/// Calculate a complexity estimate based on the Lempel-Ziv compression algorithm.
+/// tsfresh definition: discretises into `bins` equal-width bins and then runs an LZ76-style dictionary parse.
+fn eval_lempel_ziv_complexity(context: &mut crate::context::FeatureContext, bins: u16) -> f32 {
+    let values = context.values;
+    let state = &mut *context.state;
+    if values.is_empty() || bins < 2 {
+        return 0.0;
+    }
+
+    let min_val = state.min_value;
+    let max_val = state.max_value;
+
+    state.lz_symbol_buffer.clear();
+
+    if max_val <= min_val {
+        for _ in values {
+            state.lz_symbol_buffer.push(0);
+        }
+        return lz_complexity(state);
+    }
+
+    let bin_width = (max_val - min_val) / bins as f32;
+
+    for &v in values {
+        // Compute searchsorted equivalent
+        if v <= min_val {
+            state.lz_symbol_buffer.push(0);
+        } else if v >= max_val {
+            state.lz_symbol_buffer.push((bins - 1) as u8);
+        } else {
+            let mut bin_idx = ((v - min_val) / bin_width) as u8;
+            if bin_idx >= bins as u8 {
+                bin_idx = bins as u8 - 1;
+            }
+            state.lz_symbol_buffer.push(bin_idx);
+        }
+    }
+
+    lz_complexity(state)
 }
