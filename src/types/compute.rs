@@ -138,6 +138,7 @@ compute_flags! {
     POWER_BANDWIDTH,
     SPEC_POS_TURN,
     SPEC_VARIATION,
+    FFT_AGGREGATED,
 }
 
 // ── Composite masks (zero bit-cost) ────────────────────────────────────────
@@ -164,7 +165,8 @@ impl Compute {
             | Self::MEDIAN_FREQ.bits()
             | Self::FUNDAMENTAL_FREQ.bits()
             | Self::SPEC_POS_TURN.bits()
-            | Self::SPEC_VARIATION.bits(),
+            | Self::SPEC_VARIATION.bits()
+            | Self::FFT_AGGREGATED.bits(),
     );
 
     pub const ANY_DIFF: Self = Self::from_bits_retain(

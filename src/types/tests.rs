@@ -4,7 +4,7 @@ use strum::IntoEnumIterator;
 
 use super::feature::FeatureDiscriminants;
 use super::parse::UNIT_FEATURES;
-use super::{AdfAttr, AggAttr, AggFunc, Feature, FftAttr};
+use super::{AdfAttr, AggAttr, AggFunc, Feature, FftAggType, FftAttr};
 
 fn f(x: f32) -> u32 {
     x.to_bits()
@@ -68,6 +68,11 @@ fn parameterized_samples() -> Vec<Feature> {
         F::CountAbove(f(0.5)),
         F::CountBelow(f(0.5)),
         F::RangeCount(f(-1.0), f(1.0)),
+        F::FourierEntropy(5),
+        F::FftAggregated(FftAggType::Centroid),
+        F::FftAggregated(FftAggType::Variance),
+        F::FftAggregated(FftAggType::Skew),
+        F::FftAggregated(FftAggType::Kurtosis),
     ]
 }
 
@@ -137,6 +142,8 @@ fn invalid_parameters_are_rejected() {
         "range_count-nan-5",
         "range_count-5-nan",
         "range_count-5-0",
+        "fourier_entropy-0",
+        "fft_aggregated-mode",
         "not_a_feature",
     ] {
         assert!(s.parse::<Feature>().is_err(), "{s:?} should be rejected");

@@ -1063,3 +1063,39 @@ def test_wavelet_abs_mean_std_var():
     assert np.allclose(results[0], F.wavelet_abs_mean(const, fs)["values"][3], atol=1e-3)
     assert np.allclose(results[1], F.wavelet_std(const, fs)["values"][3], atol=1e-3)
     assert np.allclose(results[2], F.wavelet_var(const, fs)["values"][3], atol=1e-3)
+
+
+def test_fourier_entropy_and_fft_aggregated():
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    def one(result):
+        return list(result)[0][1]
+
+    features = [
+        "fourier_entropy-5",
+        "fft_aggregated-centroid",
+        "fft_aggregated-variance",
+        "fft_aggregated-skew",
+        "fft_aggregated-kurtosis",
+    ]
+    ext = tsfast.Extractor(features)
+
+    def check(x):
+        x = np.asarray(x, dtype=np.float32)
+        res = ext.process_2d_floats(np.atleast_2d(x))[0]
+        x64 = x.astype(np.float64)
+        assert np.allclose(res[0], fc.fourier_entropy(x64, 5), rtol=1e-2, equal_nan=True)
+        for i, aggtype in enumerate(["centroid", "variance", "skew", "kurtosis"], start=1):
+            want = one(fc.fft_aggregated(x64, [{"aggtype": aggtype}]))
+            assert np.allclose(res[i], want, atol=1e-3, equal_nan=True)
+
+    rng = np.random.RandomState(3)
+    check(rng.randn(300))
+    check(np.sin(2 * np.pi * 5.37 * np.arange(200) / 100.0))
+
+    # Constant series: Welch PSD is all zero (mean-subtracted per segment), so
+    # tsfresh divides 0/0 into NaN; fft_aggregated's variance collapses below
+    # its 0.5 cutoff too, so skew/kurtosis are NaN regardless of the DC level.
+    check(np.full(300, 3.0))
+    # Short window.
+    check(np.full(8, -1.5))

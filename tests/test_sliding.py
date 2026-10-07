@@ -650,3 +650,40 @@ def test_sliding_wavelet_abs_mean_std_var():
     assert np.allclose(res["wavelet_abs_mean-3"].values, F.wavelet_abs_mean(const, fs)["values"][3], atol=1e-3)
     assert np.allclose(res["wavelet_std-3"].values, F.wavelet_std(const, fs)["values"][3], atol=1e-3)
     assert np.allclose(res["wavelet_var-3"].values, F.wavelet_var(const, fs)["values"][3], atol=1e-3)
+
+
+def test_sliding_fourier_entropy_and_fft_aggregated():
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    def one(result):
+        return list(result)[0][1]
+
+    features = [
+        "fourier_entropy-5",
+        "fft_aggregated-centroid",
+        "fft_aggregated-variance",
+        "fft_aggregated-skew",
+        "fft_aggregated-kurtosis",
+    ]
+
+    def check(x, window_size):
+        x = np.asarray(x, dtype=np.float32)
+        ext = SlidingExtractor(features, 1, window_size)
+        df = frame(ext, ext.update(x.reshape(1, -1)))
+        for w in range(len(df)):
+            window = x[w : w + window_size].astype(np.float64)
+            assert np.allclose(
+                df.iloc[w]["fourier_entropy-5"], fc.fourier_entropy(window, 5), rtol=1e-2, equal_nan=True
+            )
+            for aggtype in ["centroid", "variance", "skew", "kurtosis"]:
+                want = one(fc.fft_aggregated(window, [{"aggtype": aggtype}]))
+                assert np.allclose(df.iloc[w][f"fft_aggregated-{aggtype}"], want, atol=1e-3, equal_nan=True)
+
+    rng = np.random.RandomState(5)
+    check(rng.randn(150), window_size=50)
+    check(np.sin(2 * np.pi * 5.37 * np.arange(150) / 100.0), window_size=50)
+
+    # Constant window: Welch PSD is all zero, so fourier_entropy's 0/0 divide
+    # produces NaN, and fft_aggregated's variance collapses below its 0.5
+    # cutoff, so skew/kurtosis are also NaN.
+    check(np.full(80, -2.0), window_size=40)

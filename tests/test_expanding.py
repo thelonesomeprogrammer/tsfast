@@ -603,3 +603,42 @@ def test_expanding_wavelet_abs_mean_std_var():
         assert np.allclose(res[0][0], F.wavelet_abs_mean(seen, fs)["values"][3], atol=1e-3)
         assert np.allclose(res[0][1], F.wavelet_std(seen, fs)["values"][3], atol=1e-3)
         assert np.allclose(res[0][2], F.wavelet_var(seen, fs)["values"][3], atol=1e-3)
+
+
+def test_expanding_fourier_entropy_and_fft_aggregated():
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    def one(result):
+        return list(result)[0][1]
+
+    features = [
+        "fourier_entropy-5",
+        "fft_aggregated-centroid",
+        "fft_aggregated-variance",
+        "fft_aggregated-skew",
+        "fft_aggregated-kurtosis",
+    ]
+
+    def check(chunks):
+        ext = ExpandingExtractor(features, 1)
+        seen = np.array([], dtype=np.float32)
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            seen64 = seen.astype(np.float64)
+            assert np.allclose(res[0][0], fc.fourier_entropy(seen64, 5), rtol=1e-2, equal_nan=True)
+            for i, aggtype in enumerate(["centroid", "variance", "skew", "kurtosis"], start=1):
+                want = one(fc.fft_aggregated(seen64, [{"aggtype": aggtype}]))
+                assert np.allclose(res[0][i], want, atol=1e-3, equal_nan=True)
+
+    rng = np.random.RandomState(19)
+    noise = rng.randn(100)
+    check([noise[:40], noise[40:]])
+    # Short first window.
+    check([rng.randn(5), noise[:30]])
+
+    # Constant series: Welch PSD is all zero, so fourier_entropy's 0/0 divide
+    # produces NaN, and fft_aggregated's variance collapses below its 0.5
+    # cutoff, so skew/kurtosis are also NaN.
+    check([np.full(40, -1.5), np.full(40, -1.5)])
