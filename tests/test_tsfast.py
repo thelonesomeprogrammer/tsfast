@@ -1099,3 +1099,35 @@ def test_fourier_entropy_and_fft_aggregated():
     check(np.full(300, 3.0))
     # Short window.
     check(np.full(8, -1.5))
+
+
+def test_petrosian_fractal_dimension_and_average_power():
+    from tsfel.feature_extraction.features import (
+        average_power,
+        petrosian_fractal_dimension,
+    )
+
+    features = ["petrosian_fractal_dimension", "average_power-100"]
+    ext = tsfast.Extractor(features)
+
+    def check(x):
+        x = np.asarray(x, dtype=np.float32)
+        res = ext.process_2d_floats(np.atleast_2d(x))[0]
+        x64 = x.astype(np.float64)
+        assert np.allclose(
+            res[0], petrosian_fractal_dimension(x64), rtol=1e-2, equal_nan=True
+        )
+        assert np.allclose(
+            res[1], average_power(x64, 100.0), rtol=1e-2, equal_nan=True
+        )
+
+    rng = np.random.RandomState(7)
+    check(rng.randn(150))
+    check(np.sin(2 * np.pi * 5.37 * np.arange(150) / 100.0))
+
+    # Constant series: no sign changes, so petrosian is 1.0; average_power is
+    # just energy scaled by fs/(n-1).
+    check(np.full(64, 3.0))
+    # Short window with a flat run then a step, to exercise the
+    # flat-to-nonflat sign transition.
+    check(np.array([1.0, 1.0, 2.0, 2.0, -1.0]))

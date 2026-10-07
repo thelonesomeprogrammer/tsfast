@@ -642,3 +642,35 @@ def test_expanding_fourier_entropy_and_fft_aggregated():
     # produces NaN, and fft_aggregated's variance collapses below its 0.5
     # cutoff, so skew/kurtosis are also NaN.
     check([np.full(40, -1.5), np.full(40, -1.5)])
+
+
+def test_expanding_petrosian_fractal_dimension_and_average_power():
+    from tsfel.feature_extraction.features import (
+        average_power,
+        petrosian_fractal_dimension,
+    )
+
+    features = ["petrosian_fractal_dimension", "average_power-100"]
+
+    def check(chunks):
+        ext = ExpandingExtractor(features, 1)
+        seen = np.array([], dtype=np.float32)
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            seen64 = seen.astype(np.float64)
+            assert np.allclose(
+                res[0][0], petrosian_fractal_dimension(seen64), rtol=1e-2, equal_nan=True
+            )
+            assert np.allclose(
+                res[0][1], average_power(seen64, 100.0), rtol=1e-2, equal_nan=True
+            )
+
+    rng = np.random.RandomState(23)
+    noise = rng.randn(100)
+    check([noise[:40], noise[40:]])
+    # Short first window.
+    check([rng.randn(5), noise[:30]])
+    # Constant series.
+    check([np.full(40, -1.5), np.full(40, -1.5)])

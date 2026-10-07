@@ -687,3 +687,37 @@ def test_sliding_fourier_entropy_and_fft_aggregated():
     # produces NaN, and fft_aggregated's variance collapses below its 0.5
     # cutoff, so skew/kurtosis are also NaN.
     check(np.full(80, -2.0), window_size=40)
+
+
+def test_sliding_petrosian_fractal_dimension_and_average_power():
+    from tsfel.feature_extraction.features import (
+        average_power,
+        petrosian_fractal_dimension,
+    )
+
+    features = ["petrosian_fractal_dimension", "average_power-100"]
+
+    def check(x, window_size):
+        x = np.asarray(x, dtype=np.float32)
+        ext = SlidingExtractor(features, 1, window_size)
+        df = frame(ext, ext.update(x.reshape(1, -1)))
+        for w in range(len(df)):
+            window = x[w : w + window_size].astype(np.float64)
+            assert np.allclose(
+                df.iloc[w]["petrosian_fractal_dimension"],
+                petrosian_fractal_dimension(window),
+                rtol=1e-2,
+                equal_nan=True,
+            )
+            assert np.allclose(
+                df.iloc[w]["average_power-100"],
+                average_power(window, 100.0),
+                rtol=1e-2,
+                equal_nan=True,
+            )
+
+    rng = np.random.RandomState(11)
+    check(rng.randn(150), window_size=50)
+    check(np.sin(2 * np.pi * 5.37 * np.arange(150) / 100.0), window_size=50)
+    # Constant window.
+    check(np.full(80, -2.0), window_size=40)

@@ -71,6 +71,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         F::Energy
         | F::EnergyRatioByChunks(..)
         | F::HumanRangeEnergy(..)
+        | F::AveragePower(..)
         | F::Rms
         | F::RootMeanSquare => energy::eval_energy(feat, ctx),
         F::NegativeTurning
@@ -157,6 +158,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::Dfa
         | F::HurstExponent
         | F::MaximumFractalLength
+        | F::PetrosianFractalDimension
         | F::Mse(..) => complexity::eval_complexity(feat, ctx),
         F::ArCoefficient(..) | F::FriedrichCoefficients(..) | F::MaxLangevinFixedPoint(..) => {
             dynamic::eval_dynamic(feat, ctx)

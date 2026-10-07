@@ -17,12 +17,10 @@ implemented and verified within 1% of its reference by
 | :--- | :--- |
 | **`linear_trend_timewise`** | OLS regression against an explicit `DatetimeIndex`. tsfast's engines take no timestamp input, so this needs a design decision before implementation, not just a port. |
 
-## TSFEL (5 missing)
+## TSFEL (3 missing)
 
 | Feature | Notes |
 | :--- | :--- |
-| **`petrosian_fractal_dimension`** | Derivative sign-change count; cheap to add (adjacent diff + sign mask + popcount). |
 | **`neighbourhood_peaks`** | Peaks that dominate a local window neighbourhood. |
 | **`hist_mode`** | Mode of the value histogram; needs SIMD min/max for bin edges + vectorized binning. |
-| **`average_power`** | `abs_energy / length`, i.e. mean square value (distinct from `rms`, which is its square root). |
 | **`spectrogram_mean_coeff`** | tsfast's existing `spectrogram-N-T` feature does **not** implement this — see the note in `tests/references.py` (it ignores the time parameter and returns a single spectrum bin). The real TSFEL spectrogram-mean-coefficient feature is unimplemented. |

@@ -377,6 +377,8 @@ REFERENCES = {
     "mse-3": ("tsfel", lambda x: F.mse(x, m=3, maxscale=None, tolerance=0.2 * np.std(x))),
     "mse-2-10": ("tsfel", lambda x: F.mse(x, m=2, maxscale=10, tolerance=0.2 * np.std(x))),
     "maximum_fractal_length": ("tsfel", F.maximum_fractal_length),
+    "petrosian_fractal_dimension": ("tsfel", F.petrosian_fractal_dimension),
+    "average_power-100": ("tsfel", lambda x: F.average_power(x, 100.0)),
 }
 
 # Lengths below which the reference returns NaN by policy rather than because

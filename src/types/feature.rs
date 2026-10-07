@@ -144,6 +144,8 @@ pub enum Feature {
     SpectralVariation,
     FourierEntropy(u32),
     FftAggregated(FftAggType),
+    PetrosianFractalDimension,
+    AveragePower(u32), // fs encoded as f32 bits
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -367,6 +369,8 @@ impl Feature {
             Self::Dfa | Self::HurstExponent => C::empty(),
             Self::HiguchiFd => C::HIGUCHI,
             Self::MaximumFractalLength => C::HIGUCHI,
+            Self::PetrosianFractalDimension => C::empty(),
+            Self::AveragePower(_) => C::ENERGY,
         }
     }
 }

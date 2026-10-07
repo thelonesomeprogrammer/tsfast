@@ -52,6 +52,7 @@ unit_features! {
     Dfa => "dfa";
     HurstExponent => "hurst_exponent";
     MaximumFractalLength => "maximum_fractal_length";
+    PetrosianFractalDimension => "petrosian_fractal_dimension";
     Energy => "energy", ["torque_Absolute energy"];
     Rms => "rms";
     RootMeanSquare => "root_mean_square";
@@ -159,6 +160,9 @@ impl std::str::FromStr for Feature {
             "human_range_energy" | "torque_Human range energy" => {
                 return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
             }
+            "average_power" => {
+                return Ok(Feature::AveragePower(100.0f32.to_bits())); // Default fs=100
+            }
             _ => {}
         }
 
@@ -223,6 +227,13 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
             return None;
         }
         return Some(Feature::HumanRangeEnergy(fs.to_bits()));
+    }
+    if let Some(arg) = s.strip_prefix("average_power-") {
+        let fs: f32 = arg.trim().parse().ok()?;
+        if !(fs.is_finite() && fs > 0.0) {
+            return None;
+        }
+        return Some(Feature::AveragePower(fs.to_bits()));
     }
     if let Some(arg) = s.strip_prefix("lempel_ziv_complexity-") {
         let bins: u16 = arg.trim().parse().ok()?;
@@ -851,6 +862,9 @@ impl Feature {
             Feature::MeanNAbsoluteMax(n) => format!("mean_n_absolute_max-{}", n),
             Feature::HumanRangeEnergy(fs_bits) => {
                 format!("human_range_energy-{}", f32::from_bits(*fs_bits))
+            }
+            Feature::AveragePower(fs_bits) => {
+                format!("average_power-{}", f32::from_bits(*fs_bits))
             }
             Feature::WaveletFeatures(w_bits, f) => {
                 format!("wavelet-{}-{}", f32::from_bits(*w_bits), f)

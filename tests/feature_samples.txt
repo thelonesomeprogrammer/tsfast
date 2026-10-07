@@ -183,3 +183,5 @@ fft_aggregated-centroid
 fft_aggregated-variance
 fft_aggregated-skew
 fft_aggregated-kurtosis
+petrosian_fractal_dimension
+average_power-100
