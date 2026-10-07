@@ -387,7 +387,11 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
         && let Ok(bins) = arg.parse::<u32>()
     {
-        return Some(Feature::BinnedEntropy(bins));
+        if bins > 0 {
+            return Some(Feature::BinnedEntropy(bins));
+        } else {
+            return None;
+        }
     }
     if let Some(arg) = s.strip_prefix("ratio_beyond_r_sigma-") {
         let r: f32 = arg.parse().ok()?;
@@ -601,7 +605,11 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
         && let Ok(bins) = arg.parse::<u32>()
     {
-        return Some(Feature::BinnedEntropy(bins));
+        if bins > 0 {
+            return Some(Feature::BinnedEntropy(bins));
+        } else {
+            return None;
+        }
     }
     if s.contains("value__ratio_beyond_r_sigma__r_") {
         let pos = s.find("r_")?;
