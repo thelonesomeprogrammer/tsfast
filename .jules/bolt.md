@@ -19,3 +19,7 @@ Action: Reused fft_in_buffer and fft_out_buffer for realfft processing and remov
 ## 2024-10-25 - [Single-Pass Covariance]
 **Learning:** Calculating standard variance/covariance linear regression elements directly via `Σ(x_i * y_i) - n * x̄ * ȳ` dynamically inside a loop avoids allocating massive inner-loop temporary data `Vec`s required by two-pass map-reduce algorithms.
 **Action:** Replace sequential linear-regression math with dynamic one-pass sums to save allocations.
+
+## 2026-10-07 - [Performance Insight: Vector capacity preallocation]
+**Learning:** For loops that unconditionally append a known amount of items to an empty vector (`Vec::push()`), failing to reserve capacity beforehand forces the allocator to resize the buffer up to $O(\log N)$ times.
+**Action:** Always call `.reserve(len)` on empty buffers that are populated in known-length loops to execute a single $O(1)$ allocation, e.g. for features like `MedianDiff`.
