@@ -59,6 +59,9 @@ impl ExpandingExtractor {
         let mut unique_count_below_thresholds = std::collections::BTreeSet::new();
         let mut unique_range_counts = std::collections::BTreeSet::new();
 
+        // Meta features (`fresh-N`) only configure the sliding engine.
+        let (feature_str, _meta) = crate::types::split_meta(feature_str)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
         for i in feature_str {
             let feat = std::str::FromStr::from_str(&i)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;

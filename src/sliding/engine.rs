@@ -24,6 +24,7 @@ pub(crate) struct SlidingEngine<'a> {
     pub(crate) unique_range_counts: &'a [(u32, u32)],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn realfft::RealToComplex<f32>>>,
+    pub(crate) fft_rebuild_every: usize,
 }
 
 impl<'a> SlidingEngine<'a> {
@@ -389,6 +390,7 @@ impl<'a> SlidingEngine<'a> {
             base_metrics.mean,
             base_metrics.m2,
             &self.r2c,
+            self.fft_rebuild_every,
             state,
         )?;
 

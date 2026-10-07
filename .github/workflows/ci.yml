@@ -37,7 +37,7 @@ jobs:
           # Every tracked top-level entry must be listed here. A new one is
           # usually an agent's scratch file (plan.md, patch_*.py, result dumps):
           # delete it. If it really belongs at the root, add it to this list.
-          allowed=" .claude .github .gitignore .jules AGENTS.md CLAUDE.md Cargo.lock Cargo.toml README.md benches benchmarks missing.md pyproject.toml rust-toolchain.toml scripts src tests tsfast uv.lock "
+          allowed=" .claude .github .gitignore .jules AGENTS.md CLAUDE.md Cargo.lock Cargo.toml README.md benches benchmarks docs missing.md pyproject.toml rust-toolchain.toml scripts src tests tsfast uv.lock "
           bad=$(git ls-files | cut -d/ -f1 | sort -u | while read -r f; do
             case "$allowed" in *" $f "*) ;; *) echo "$f" ;; esac
           done)

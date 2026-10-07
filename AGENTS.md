@@ -13,6 +13,9 @@ uv run pytest tests/test_sliding.py -k energy   # narrow it down while iterating
 cargo build                  # fast Rust-only type check
 cargo test                   # Rust unit tests: feature name round-trips, coverage
 uv run pytest benchmarks     # benchmarks (slow, not part of the normal test run)
+# per-feature regression gate (every feature x engine, ~2 min; warns >5%, fails >10% vs baseline):
+RAYON_NUM_THREADS=1 uv run pytest benchmarks/test_bench_features.py --save-feature-baseline  # on master
+RAYON_NUM_THREADS=1 uv run pytest benchmarks/test_bench_features.py                          # on your branch
 uv run python scripts/coach_benchmark.py --skip-readme  # per-feature timings vs references -> .jules/feature_benchmarks.md
 ```
 
@@ -56,6 +59,7 @@ uv run python -c "import numpy as np, tsfast; e = tsfast.Extractor(['mean', 'hum
 | `tests/` | `test_tsfast.py` = static, `test_sliding.py`, `test_expanding.py`, plus topic files; `helpers.py` for shared helpers |
 | `tests/feature_samples.txt`, `tests/references.py` | one valid name per feature; its tsfresh/TSFEL reference function |
 | `missing.md` | backlog of unimplemented tsfresh/TSFEL features |
+| `docs/` | user-facing notes, e.g. `sliding-dft-drift.md` (sliding-DFT accuracy, the `fresh-N` meta feature) |
 | `.jules/*.md` | historical learning journals; may mention files that no longer exist |
 
 ## Adding a feature (checklist)

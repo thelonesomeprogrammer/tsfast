@@ -193,3 +193,4 @@ spectrogram_mean_coeff-0-5
 human_range_energy
 average_power
 calc_centroid
+tsfresh_sample_entropy

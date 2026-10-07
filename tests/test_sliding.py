@@ -772,3 +772,153 @@ def test_sliding_spectrogram_mean_coeff():
     check(rng.randn(80).cumsum(), window_size=40)
     # Constant window.
     check(np.full(90, -2.0), window_size=70)
+
+
+def test_sliding_tsfresh_sample_entropy():
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    def check(x, window_size):
+        x = np.asarray(x, dtype=np.float32)
+        ext = SlidingExtractor(["tsfresh_sample_entropy"], 1, window_size)
+        df = frame(ext, ext.update(x.reshape(1, -1)))
+        assert len(df) == len(x) - window_size + 1
+        for w in range(len(df)):
+            window = x[w : w + window_size].astype(np.float64)
+            assert np.isclose(
+                df.iloc[w]["tsfresh_sample_entropy"],
+                fc.sample_entropy(window),
+                rtol=1e-4,
+                equal_nan=True,
+            )
+
+    rng = np.random.RandomState(19)
+    check(rng.randn(120), window_size=50)
+    check(rng.randint(0, 4, size=60), window_size=20)
+    # Constant window.
+    check(np.full(40, -2.0), window_size=15)
+    # Short windows: often no length-3 match, so inf.
+    check(rng.randn(30), window_size=5)
+
+
+def test_sliding_spectral_entropy_short_windows():
+    # See test_spectral_entropy_short_series_dc_bin: the DC bin counts toward
+    # TSFEL's normaliser unless the window's f64 mean is exact.
+    from tsfel.feature_extraction.features import spectral_entropy
+
+    def check(x, window_size):
+        x = np.asarray(x, dtype=np.float32)
+        ext = SlidingExtractor(["spectral_entropy"], 1, window_size)
+        df = frame(ext, ext.update(x.reshape(1, -1)))
+        assert len(df) == len(x) - window_size + 1
+        for w in range(len(df)):
+            window = x[w : w + window_size].astype(np.float64)
+            assert df.iloc[w]["spectral_entropy"] == pytest.approx(
+                spectral_entropy(window, 100.0), rel=1e-3
+            )
+
+    rng = np.random.RandomState(37)
+    # Power-of-two windows: every window has an exactly-zero DC bin. Long
+    # enough for several sliding-DFT rebuilds.
+    check(rng.randn(120), window_size=32)
+    check(rng.randn(70), window_size=16)
+
+
+def _sliding_vs_static(feature, x, window_size):
+    x = np.asarray(x, dtype=np.float32)
+    got = SlidingExtractor([feature], 1, window_size).update(x.reshape(1, -1)).reshape(-1)
+    windows = np.stack([x[i : i + window_size] for i in range(len(got))])
+    return got, tsfast.Extractor([feature]).process_2d_floats(windows)[:, 0]
+
+
+def test_sliding_spectral_entropy_exact_zero_bins():
+    # Integer data gives exactly-zero DC, n/4 and Nyquist bins (twiddles 1, i,
+    # -1). With f32 twiddles (sin(pi) = -8.7e-8) the sliding DFT turned them
+    # into tiny non-zero bins, which spectral_entropy counts.
+    from tsfel.feature_extraction.features import spectral_entropy
+
+    rng = np.random.RandomState(37)
+    rng.randn(120)
+    x = rng.randint(-5, 5, size=400)
+    for window_size in [16, 24, 64]:
+        got, static = _sliding_vs_static("spectral_entropy", x, window_size)
+        np.testing.assert_allclose(got, static, rtol=1e-4)
+    # Window 3 has a zero alternating sum: an exactly-zero Nyquist bin.
+    got, _ = _sliding_vs_static("spectral_entropy", x[:19], 16)
+    window = x[3:19].astype(np.float64)
+    assert np.fft.rfft(window - window.mean())[-1] == 0
+    assert got[3] == pytest.approx(spectral_entropy(window, 100.0), rel=1e-3)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="sliding-DFT f32 drift: on binary data, bins whose twiddle is not a "
+    "quarter turn can be exactly 0 (or tied) in a fresh FFT but tiny non-zero "
+    "in the sliding DFT; spectral_entropy, spectral_positive_turning, "
+    "fundamental_frequency and fft_coeff angles compare bins exactly. "
+    "The fresh-1 meta feature fixes it (test_sliding_fresh_fft_meta_feature)",
+)
+@pytest.mark.parametrize(
+    "feature",
+    [
+        "spectral_entropy",
+        "spectral_positive_turning",
+        "fundamental_frequency",
+        "fft_coeff-2-angle",
+    ],
+)
+def test_sliding_exact_bin_comparisons_binary_data(feature):
+    rng = np.random.default_rng(3)
+    rng.integers(-5, 5, size=400)
+    x = rng.integers(0, 2, size=400)
+    got, static = _sliding_vs_static(feature, x, 24)
+    np.testing.assert_allclose(got, static, rtol=1e-3, atol=1e-4)
+
+
+def test_sliding_fresh_fft_meta_feature():
+    # `fresh-N` rebuilds the sliding DFT from a fresh FFT at least every N
+    # samples. fresh-1 makes every window's spectrum a fresh FFT, so the
+    # features that compare bins exactly match the static engine bit for bit
+    # (see test_sliding_exact_bin_comparisons_binary_data for the default).
+    features = [
+        "spectral_entropy",
+        "spectral_positive_turning",
+        "fundamental_frequency",
+        "fft_coeff-2-angle",
+        "spectral_centroid",
+    ]
+    rng = np.random.default_rng(3)
+    rng.integers(-5, 5, size=400)
+    x = rng.integers(0, 2, size=400).astype(np.float32)
+
+    def static(window_size, stride):
+        starts = range(0, len(x) - window_size + 1, stride)
+        windows = np.stack([x[i : i + window_size] for i in starts])
+        return tsfast.Extractor(features).process_2d_floats(windows)
+
+    def sliding(meta, window_size, stride=1):
+        ext = SlidingExtractor(features + meta, 1, window_size, stride)
+        # Meta features produce no column.
+        assert ext.feature_names == features
+        return ext.update(x.reshape(1, -1)).reshape(-1, len(features))
+
+    for window_size, stride in [(16, 1), (24, 1), (24, 5)]:
+        np.testing.assert_array_equal(
+            sliding(["fresh-1"], window_size, stride), static(window_size, stride)
+        )
+    # N at or above the window size is the default; repeated, the smallest wins.
+    default = sliding([], 24)
+    np.testing.assert_array_equal(sliding(["fresh-24"], 24), default)
+    np.testing.assert_array_equal(sliding(["fresh-100"], 24), default)
+    np.testing.assert_array_equal(
+        sliding(["fresh-1", "fresh-100"], 24), static(24, 1)
+    )
+    # Feeding samples in uneven chunks does not change which windows are fresh.
+    ext = SlidingExtractor(features + ["fresh-1"], 1, 24)
+    chunks = [ext.update(c.reshape(1, -1)) for c in np.split(x, [30, 31, 37, 200])]
+    np.testing.assert_array_equal(
+        np.concatenate([c.reshape(-1, len(features)) for c in chunks]), static(24, 1)
+    )
+
+    for bad in ["fresh-0", "fresh-", "fresh-x", "fresh--1"]:
+        with pytest.raises(ValueError, match="fresh-N"):
+            SlidingExtractor(features + [bad], 1, 24)

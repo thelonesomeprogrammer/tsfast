@@ -726,3 +726,68 @@ def test_expanding_spectrogram_mean_coeff():
     check([noise[:10], noise[10:40], noise[40:100], noise[100:]])
     # Constant series.
     check([np.full(50, 1.5), np.full(50, 1.5)])
+
+
+def test_expanding_tsfresh_sample_entropy():
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    def check(chunks):
+        ext = ExpandingExtractor(["tsfresh_sample_entropy"], 1)
+        seen = np.array([], dtype=np.float32)
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            assert np.isclose(
+                res[0][0],
+                fc.sample_entropy(seen.astype(np.float64)),
+                rtol=1e-4,
+                equal_nan=True,
+            )
+
+    rng = np.random.RandomState(23)
+    noise = rng.randn(200)
+    check([noise[:4], noise[4:30], noise[30:120], noise[120:]])
+    check([rng.randint(0, 4, size=40), rng.randint(0, 4, size=40)])
+    # Constant series.
+    check([np.full(30, 1.5), np.full(30, 1.5)])
+
+
+def test_expanding_spectral_entropy_short_series():
+    # See test_spectral_entropy_short_series_dc_bin. With fft_update_period > 1
+    # the spectrum is of an earlier prefix, and so is the DC-bin decision.
+    from tsfel.feature_extraction.features import spectral_entropy
+
+    def check(chunks, period):
+        ext = ExpandingExtractor(["spectral_entropy"], 1, fft_update_period=period)
+        seen = np.array([], dtype=np.float32)
+        fft_n = 0
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            if fft_n == 0 or len(seen) - fft_n >= period:
+                fft_n = len(seen)
+            ref = spectral_entropy(seen[:fft_n].astype(np.float64), 100.0)
+            assert res[0][0] == pytest.approx(ref, rel=1e-3)
+
+    rng = np.random.RandomState(41)
+    noise = rng.randn(128)
+    # Power-of-two lengths along the way: 16, 32, 64, 128.
+    check([noise[:16], noise[16:32], noise[32:64], noise[64:]], period=1)
+    # Spectrum refreshed at 16 and 32 only; the 24-sample update reuses n = 16.
+    check([noise[:16], noise[16:24], noise[24:32]], period=16)
+
+
+def test_expanding_fresh_fft_meta_feature_is_ignored():
+    # `fresh-N` only configures the sliding engine; the expanding engine's own
+    # knob is fft_update_period.
+    features = ["mean", "spectral_entropy"]
+    x = np.random.RandomState(47).randn(1, 60).astype(np.float32)
+    with_meta = ExpandingExtractor(["fresh-2"] + features, 1)
+    plain = ExpandingExtractor(features, 1)
+    assert with_meta.feature_names == features
+    for chunk in np.split(x, [10, 11, 40], axis=1):
+        np.testing.assert_array_equal(with_meta.update(chunk), plain.update(chunk))
+    with pytest.raises(ValueError, match="fresh-N"):
+        ExpandingExtractor(["fresh-x"], 1)
