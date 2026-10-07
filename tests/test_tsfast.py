@@ -998,3 +998,43 @@ def test_count_above_below_and_range_count():
     check([2.0, 2.0, 2.0, 2.0])
     # Series of length 1.
     check([3.0])
+
+
+def test_power_bandwidth_positive_turning_variation():
+    import tsfel.feature_extraction.features as F
+
+    fs = 100.0
+    rng = np.random.RandomState(7)
+    features = ["power_bandwidth", "spectral_positive_turning", "spectral_variation"]
+    ext = tsfast.Extractor(features)
+
+    def check(x):
+        x = np.asarray(x, dtype=np.float32)
+        res = ext.process_2d_floats(np.atleast_2d(x))[0]
+        assert np.allclose(res[0], F.power_bandwidth(x, fs), atol=1e-3)
+        assert np.allclose(res[1], F.spectral_positive_turning(x, fs))
+        assert np.allclose(res[2], F.spectral_variation(x, fs), atol=1e-5)
+
+    t = np.arange(300)
+    check(np.sin(2 * np.pi * 5.37 * t / fs))  # sine
+    check(np.sin(2 * np.pi * (1 + 0.05 * t) * t / fs))  # chirp
+    check(rng.randn(300))  # noise
+
+    # Short window.
+    t_short = np.arange(8)
+    check(np.sin(2 * np.pi * 5.37 * t_short / fs))
+    check(rng.randn(8))
+
+    # Constant series: AC spectral content is zero mathematically, but
+    # TSFEL's own reference value for it is float-noise-dependent (its
+    # non-DC FFT bins don't reliably cancel to exactly zero at double
+    # precision either, and how well they do varies with the exact value),
+    # so comparing against it here would assert on TSFEL's rounding error
+    # rather than on tsfast's correctness. Assert the mathematically correct
+    # values directly instead.
+    for x in (np.full(300, 3.0), np.full(8, -1.5)):
+        x = np.asarray(x, dtype=np.float32)
+        res = ext.process_2d_floats(np.atleast_2d(x))[0]
+        assert np.allclose(res[0], 0.0)
+        assert np.allclose(res[1], 0.0)
+        assert np.allclose(res[2], 1.0)

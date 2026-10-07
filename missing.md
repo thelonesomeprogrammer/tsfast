@@ -41,12 +41,9 @@ Features derived from Fourier transforms, PSD, or Cepstrum. Many can share a sin
 
 | Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
 | :--- | :--- | :--- | :--- |
-| **`spectral_variation`** | TSFEL | **Medium** | Normalized spectral flux. Vectorized cross-correlation across FFT frames. |
-| **`spectral_positive_turning`**| TSFEL | **Low** | Peak count in FFT magnitude. 3-way SIMD compare on FFT output. |
 | **`fundamental_frequency`** | TSFEL | **Medium** | Dominant pitch frequency. Peak search in FFT magnitude or Cepstrum using SIMD argmax. |
 | **`max_frequency`** | TSFEL | **Low** | Frequency of max spectral amplitude. Post-FFT SIMD argmax over magnitude. |
 | **`median_frequency`** | TSFEL | **Medium** | Frequency dividing power into two equal halves. Prefix sum scan over power spectrum. |
-| **`power_bandwidth`** | TSFEL | **Medium** | Bandwidth above threshold. SIMD threshold filter + index range diff on PSD. |
 
 ---
 

@@ -104,6 +104,9 @@ unit_features! {
     MaxFrequency => "max_frequency", ["torque_Max frequency"];
     MedianFrequency => "median_frequency", ["torque_Median frequency"];
     FundamentalFrequency => "fundamental_frequency", ["torque_Fundamental frequency"];
+    PowerBandwidth => "power_bandwidth";
+    SpectralPositiveTurning => "spectral_positive_turning";
+    SpectralVariation => "spectral_variation";
     SpectralSkewness => "spectral_skewness", ["torque_Spectral skewness"];
     SpectralKurtosis => "spectral_kurtosis", ["torque_Spectral kurtosis"];
     SignalDistance => "signal_distance", ["torque_Signal distance"];

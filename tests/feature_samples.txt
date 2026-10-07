@@ -70,6 +70,9 @@ spectral_roll_on
 spectral_roll_off
 spectral_skewness
 spectral_kurtosis
+spectral_positive_turning
+spectral_variation
+power_bandwidth
 signal_distance
 pk_pk_distance
 zero_cross

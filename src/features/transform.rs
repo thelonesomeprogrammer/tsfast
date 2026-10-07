@@ -39,6 +39,9 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
     let max_frequency = context.max_frequency;
     let median_frequency = context.median_frequency;
     let fundamental_frequency = context.fundamental_frequency;
+    let power_bandwidth = context.power_bandwidth;
+    let spectral_positive_turning = context.spectral_positive_turning;
+    let spectral_variation = context.spectral_variation;
     let _fft_autocorr = context.fft_autocorr;
     let mfcc = context.mfcc;
     let lpcc = context.lpcc;
@@ -161,6 +164,9 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
         Feature::MaxFrequency => max_frequency,
         Feature::MedianFrequency => median_frequency,
         Feature::FundamentalFrequency => fundamental_frequency,
+        Feature::PowerBandwidth => power_bandwidth,
+        Feature::SpectralPositiveTurning => spectral_positive_turning,
+        Feature::SpectralVariation => spectral_variation,
         Feature::SpectralSpread => spectral_spread,
         Feature::SpectralSkewness => spectral_skewness,
         Feature::SpectralKurtosis => spectral_kurtosis,
