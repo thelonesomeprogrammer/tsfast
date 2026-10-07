@@ -193,6 +193,7 @@ spectrogram_mean_coeff-0-5
 human_range_energy
 average_power
 calc_centroid
+tsfresh_sample_entropy
 linear_trend_timewise-slope-60
 linear_trend_timewise-intercept-3600
 linear_trend_timewise-rvalue-1

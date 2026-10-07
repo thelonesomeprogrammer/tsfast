@@ -12,7 +12,8 @@ impl FftProcessor {
     /// Sliding windows: the DFT is updated in O(window) per step by the sliding
     /// DFT (see `SlidingDFT::update` in sliding.rs) instead of an O(n log n)
     /// FFT. It is rebuilt from a fresh FFT on the first window and after every
-    /// `window` updates, which bounds the f32 drift of repeated twiddle products.
+    /// `rebuild_every` updates (`window` unless a `fresh-N` meta feature lowers
+    /// it), which bounds the f32 drift of repeated twiddle products.
     pub fn finalize(
         compute: Compute,
         values: &[f32],
@@ -20,6 +21,7 @@ impl FftProcessor {
         mean: f32,
         m2: f32,
         r2c: &Option<Arc<dyn RealToComplex<f32>>>,
+        rebuild_every: usize,
         state: &mut ColumnState,
     ) -> Result<FftResult, String> {
         let mut fft_complex = Vec::new();
@@ -30,7 +32,7 @@ impl FftProcessor {
             let stale = state
                 .sliding_dft
                 .as_ref()
-                .is_none_or(|s| s.updates >= values.len());
+                .is_none_or(|s| s.updates >= rebuild_every);
             if stale {
                 let bins = crate::spectral::rfft(values, r2c.as_ref(), state)?;
                 state.sliding_dft = Some(SlidingDFT::from_fft(bins, values.len()));

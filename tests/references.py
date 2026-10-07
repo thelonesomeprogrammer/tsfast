@@ -261,6 +261,7 @@ REFERENCES = {
     ),
     # ── complexity / dynamics ──
     "sample_entropy": ("tsfel", lambda x: F.sample_entropy(x, 2, 0.2 * np.std(x))),
+    "tsfresh_sample_entropy": ("tsfresh", fc.sample_entropy),
     "approx_entropy-2-0.1": ("tsfresh", lambda x: fc.approximate_entropy(x, 2, 0.1)),
     "approx_entropy-2-0.5": ("tsfresh", lambda x: fc.approximate_entropy(x, 2, 0.5)),
     "permutation_entropy-1-3": ("tsfresh", lambda x: _permutation_entropy(x, 1, 3)),

@@ -20,7 +20,8 @@ pub enum Feature {
     Mad,
     Iqr,
     Entropy,
-    SampleEntropy,
+    SampleEntropy,        // tsfel definition
+    TsfreshSampleEntropy, // tsfresh definition
     Mse(u8, u16),
     HiguchiFd,
     Dfa,
@@ -219,6 +220,7 @@ impl Feature {
             Self::SampleEntropy => {
                 C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::SAMP_ENT | C::NEEDS_SORT
             }
+            Self::TsfreshSampleEntropy => C::empty(),
             Self::Mse(..) => {
                 C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::NEEDS_SORT
             }

@@ -389,11 +389,14 @@ pub fn finalize(
 
                 // TSFEL: entropy of the power probabilities of the mean-removed
                 // signal, normalised by log2(count of non-zero probabilities).
-                // Its DC bin is float residue (~1e-30) rather than exactly 0 for
-                // almost all inputs, so it adds nothing to the sum but counts.
+                // Its DC bin adds nothing to the sum, but counts unless it is
+                // exactly 0: float residue (~1e-30) in general, exactly 0 when
+                // numpy's f64 mean is exact (always for power-of-two lengths).
                 if p_sum > 0.0 {
+                    let dft_values = &values[..dft_len.min(values.len())];
+                    let dc_counts = !f64_mean_is_exact(dft_values).unwrap_or(false);
                     let mut entropy_sum = 0.0;
-                    let mut nonzero = 1usize; // the DC residue
+                    let mut nonzero = dc_counts as usize;
                     for &power in &power_vals {
                         if power > 0.0 {
                             let p = power / p_sum;
@@ -618,6 +621,55 @@ thread_local! {
     /// lifetime instead of one per column.
     static PLANNER: std::cell::RefCell<realfft::RealFftPlanner<f32>> =
         std::cell::RefCell::new(realfft::RealFftPlanner::new());
+}
+
+/// Whether the mean of `values` (f32, widened to f64 as numpy does) is
+/// exactly representable as an f64. If it is, `x - mean` cancels exactly and
+/// numpy's DFT has an exactly-zero DC bin; this matches numpy's DC bin
+/// being zero for 93-100% of inputs (all power-of-two lengths). Integer-only,
+/// so it needs no f64 FPU. `None` (unknown) for non-finite input or an
+/// exponent spread too wide for the i128 accumulator.
+fn f64_mean_is_exact(values: &[f32]) -> Option<bool> {
+    // Each finite f32 is an integer significand (< 2^24) times 2^exp.
+    let parts = |v: f32| {
+        let bits = v.to_bits();
+        let biased = ((bits >> 23) & 0xff) as i32;
+        let frac = (bits & 0x7f_ffff) as i128;
+        let (sig, exp) = if biased == 0 { (frac, -149) } else { (frac | 1 << 23, biased - 150) };
+        (if bits >> 31 == 1 { -sig } else { sig }, exp)
+    };
+    if values.is_empty() || values.iter().any(|v| !v.is_finite()) {
+        return None;
+    }
+    let min_exp = values.iter().filter(|&&v| v != 0.0).map(|&v| parts(v).1).min();
+    let Some(min_exp) = min_exp else { return Some(true) }; // all zeros
+    // |sum| < len * 2^(24 + spread) must stay below 2^127.
+    let len_bits = usize::BITS - values.len().leading_zeros();
+    let max_spread = 126 - 24 - len_bits as i32;
+    let mut sum: i128 = 0;
+    for &v in values {
+        let (sig, exp) = parts(v);
+        if sig == 0 {
+            continue;
+        }
+        let shift = exp - min_exp;
+        if shift > max_spread {
+            return None;
+        }
+        sum += sig << shift;
+    }
+    if sum == 0 {
+        return Some(true);
+    }
+    // mean = sum * 2^min_exp / (2^k * q), q odd: exact iff q divides sum and
+    // the quotient's odd part fits in f64's 53-bit significand. (f32 exponents
+    // stay well inside f64's range, so only the significand can fail.)
+    let q = (values.len() >> values.len().trailing_zeros()) as i128;
+    if sum % q != 0 {
+        return Some(false);
+    }
+    let odd = (sum / q).unsigned_abs() >> (sum / q).trailing_zeros();
+    Some(128 - odd.leading_zeros() <= 53)
 }
 
 fn plan_forward(len: usize) -> std::sync::Arc<dyn realfft::RealToComplex<f32>> {

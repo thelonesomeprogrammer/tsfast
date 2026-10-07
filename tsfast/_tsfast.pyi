@@ -11,6 +11,15 @@ power bandwidth, ...) are evaluated at. ``human_range_energy``,
 ``average_power`` and ``calc_centroid`` follow it too, unless the name pins a
 frequency: ``human_range_energy-100`` always uses 100 Hz.
 
+A feature list may also hold meta features, which configure the engine and
+produce no output column (``feature_names`` leaves them out). Every engine
+accepts them and ignores the ones that do not apply:
+
+- ``"fresh-N"`` (N >= 1): ``SlidingExtractor`` rebuilds its sliding DFT from a
+  fresh FFT at least every N samples instead of every ``window_size``.
+  ``"fresh-1"`` gives every window a fresh FFT, matching ``Extractor`` bit for
+  bit, at up to ~1.7x the cost. See ``docs/sliding-dft-drift.md``.
+
 Input arrays are 2-D float32/float64 with one series per row; float32
 C-contiguous input is read without a copy. Output is always float32, with the
 last axis in ``feature_names`` order. Every extractor grows to accept more
@@ -48,7 +57,9 @@ class SlidingExtractor:
         fs: float = 100.0,
     ) -> None:
         """``n_cols``: initial number of series; a window is emitted every ``stride`` samples once full.
-        ``fs``: sampling frequency in Hz assumed by the frequency-domain features."""
+        ``fs``: sampling frequency in Hz assumed by the frequency-domain features.
+        Add ``"fresh-N"`` to ``feature_str`` to rebuild the spectrum from a fresh
+        FFT every N samples (see the module docstring)."""
     @property
     def feature_names(self) -> list[str]:
         """Canonical names of the last output axis, in order."""

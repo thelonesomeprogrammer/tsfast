@@ -18,10 +18,20 @@ impl SlidingDFT {
     pub fn new(n: usize) -> Self {
         let n_bins = n / 2 + 1;
         let mut twiddles = Vec::with_capacity(n_bins);
-        let pi2 = 2.0 * std::f32::consts::PI;
         for k in 0..n_bins {
-            let angle = pi2 * k as f32 / n as f32;
-            twiddles.push(Complex::new(angle.cos(), angle.sin()));
+            // Multiples of a quarter turn exactly (±1, ±i): an f32 sin(π) is
+            // -8.7e-8, not 0, which would leak into the DC/Nyquist/n/4 bins
+            // even for exact (e.g. integer) data. The rest computed in f64.
+            let twiddle = match (4 * k % n == 0).then(|| 4 * k / n) {
+                Some(0) => Complex::new(1.0, 0.0),
+                Some(1) => Complex::new(0.0, 1.0),
+                Some(2) => Complex::new(-1.0, 0.0),
+                _ => {
+                    let angle = 2.0 * std::f64::consts::PI * k as f64 / n as f64;
+                    Complex::new(angle.cos() as f32, angle.sin() as f32)
+                }
+            };
+            twiddles.push(twiddle);
         }
         Self {
             n,
@@ -344,10 +354,44 @@ use std::simd::cmp::SimdPartialOrd;
 use std::simd::num::SimdFloat;
 
 pub fn sample_entropy_simd(data: &[f32], m: usize, r: f32) -> f32 {
+    if data.len() <= m {
+        return f32::NAN;
+    }
+    let (a_count, b_count) = sample_entropy_counts(data, m, r);
+
+    if b_count == 0 || a_count == 0 {
+        return f32::NAN;
+    }
+
+    // if all elements are the same, r=0 and everything matches, TSFEL returns nan, TSFresh returns 0.
+    // the python tests check for np.isnan(res_const), so we return NAN if variance is zero
+    // OR we return NAN if we are in MSE and var is zero. Wait, if all match, a/b = 1 => ln(1)=0.
+    // Let's just return NaN if variance is effectively zero and we have a flat signal.
+    let val = -(a_count as f32 / b_count as f32).ln();
+    if val == -0.0 { 0.0 } else { val }
+}
+
+/// tsfresh's sample entropy: like `sample_entropy_simd`, but B also counts the
+/// last length-m template (all n - m + 1 of them), and no NaN guard: A == 0
+/// gives inf, B == 0 gives NaN, as `-np.log(A / B)` does.
+pub fn tsfresh_sample_entropy(data: &[f32], m: usize, r: f32) -> f32 {
     let n = data.len();
     if n <= m {
         return f32::NAN;
     }
+    let (a_count, mut b_count) = sample_entropy_counts(data, m, r);
+    let last = n - m;
+    let extra = (0..last)
+        .filter(|&j| (0..m).all(|k| (data[j + k] - data[last + k]).abs() <= r))
+        .count() as u32;
+    b_count += 2 * extra;
+    -(a_count as f32 / b_count as f32).ln()
+}
+
+/// Ordered pair counts (A, B) over the first n - m templates: B matches of
+/// length m, A matches of length m + 1 (Chebyshev distance <= r, i != j).
+fn sample_entropy_counts(data: &[f32], m: usize, r: f32) -> (u32, u32) {
+    let n = data.len();
     let r_vec = f32x4::splat(r);
 
     let mut b_count = 0;
@@ -394,26 +438,11 @@ pub fn sample_entropy_simd(data: &[f32], m: usize, r: f32) -> f32 {
         }
     }
 
-    // Notice that tsfel (and TSFresh usually) truncates the last length-m template
-    // for B (they drop the last template in B for calculating proportion B)
-    // TSFEL: templates_B = templates_B[:-1].
-    // Our loop `0..end_m` exactly matches this, visiting templates up to index n-m-1,
-    // which has length `end_m`.
+    // TSFEL drops the last length-m template from B (templates_B[:-1]); the
+    // loop `0..end_m` matches that. tsfresh keeps it: see tsfresh_sample_entropy.
 
-    // TSFresh counts both (i, j) and (j, i) but excludes i == j.
-    b_count *= 2;
-    a_count *= 2;
-
-    if b_count == 0 || a_count == 0 {
-        return f32::NAN;
-    }
-
-    // if all elements are the same, r=0 and everything matches, TSFEL returns nan, TSFresh returns 0.
-    // the python tests check for np.isnan(res_const), so we return NAN if variance is zero
-    // OR we return NAN if we are in MSE and var is zero. Wait, if all match, a/b = 1 => ln(1)=0.
-    // Let's just return NaN if variance is effectively zero and we have a flat signal.
-    let val = -(a_count as f32 / b_count as f32).ln();
-    if val == -0.0 { 0.0 } else { val }
+    // Both libraries count (i, j) and (j, i) but exclude i == j.
+    (a_count * 2, b_count * 2)
 }
 
 pub fn approx_entropy_simd(m: usize, r: f32, data: &[f32]) -> f32 {

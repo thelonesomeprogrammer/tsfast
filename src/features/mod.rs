@@ -158,6 +158,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::LempelZivComplexity(..)
         | F::PermutationEntropy(..)
         | F::SampleEntropy
+        | F::TsfreshSampleEntropy
         | F::Dfa
         | F::HurstExponent
         | F::MaximumFractalLength

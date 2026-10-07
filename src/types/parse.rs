@@ -48,6 +48,7 @@ unit_features! {
     Iqr => "iqr";
     Entropy => "entropy";
     SampleEntropy => "sample_entropy";
+    TsfreshSampleEntropy => "tsfresh_sample_entropy", ["value__sample_entropy"];
     HiguchiFd => "higuchi_fd";
     Dfa => "dfa";
     HurstExponent => "hurst_exponent";
@@ -119,6 +120,40 @@ unit_features! {
     HasDuplicateMin => "has_duplicate_min";
     HasDuplicate => "has_duplicate";
     WaveletEntropy => "wavelet_entropy";
+}
+
+// ─── Meta features ──────────────────────────────────────────────────────────
+
+/// Options given in the feature list that configure the engine instead of
+/// producing an output column. Every engine accepts them (so one list works
+/// everywhere) and ignores the ones that do not apply to it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct MetaFeatures {
+    /// `fresh-N`: the sliding engine rebuilds its sliding DFT from a fresh FFT
+    /// at least every N samples (default: every `window_size`). Repeated:
+    /// the smallest N wins. Ignored by the static and expanding engines,
+    /// which always run a fresh FFT.
+    pub fresh_fft_every: Option<usize>,
+}
+
+/// Split meta features (see `MetaFeatures`) off a feature list, returning the
+/// remaining feature names in order. Errors on a malformed meta feature.
+pub fn split_meta(names: Vec<String>) -> Result<(Vec<String>, MetaFeatures), String> {
+    let mut meta = MetaFeatures::default();
+    let mut rest = Vec::with_capacity(names.len());
+    for name in names {
+        if let Some(arg) = name.strip_prefix("fresh-") {
+            let n = arg
+                .parse::<usize>()
+                .ok()
+                .filter(|&n| n >= 1)
+                .ok_or_else(|| format!("{name}: expected fresh-N with N >= 1"))?;
+            meta.fresh_fft_every = Some(meta.fresh_fft_every.map_or(n, |m| m.min(n)));
+        } else {
+            rest.push(name);
+        }
+    }
+    Ok((rest, meta))
 }
 
 // ─── FromStr ────────────────────────────────────────────────────────────────

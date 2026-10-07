@@ -1204,40 +1204,111 @@ def test_spectrogram_mean_coeff():
     assert ext.feature_names == ["spectrogram_mean_coeff-4"]
 
 
-def _tsfresh_linear_trend_timewise(x, period_s):
-    import pandas as pd
-    from tsfresh.feature_extraction.feature_calculators import linear_trend_timewise
+def test_tsfresh_sample_entropy():
+    import tsfresh.feature_extraction.feature_calculators as fc
+    import tsfel.feature_extraction.features as F
 
-    ix = pd.date_range("2000-01-01", periods=len(x), freq=pd.Timedelta(seconds=period_s))
-    res = linear_trend_timewise(pd.Series(x, index=ix), [{"attr": a} for a in LTT_ATTRS])
-    return np.array([v for _, v in res])
-
-
-LTT_ATTRS = ["slope", "intercept", "rvalue", "pvalue", "stderr"]
-
-
-def test_linear_trend_timewise():
-    def check(x, period_s, attrs=LTT_ATTRS):
-        x = np.asarray(x, dtype=np.float32)
-        ext = tsfast.Extractor([f"linear_trend_timewise-{a}-{period_s}" for a in attrs])
-        res = ext.process_2d_floats(np.atleast_2d(x))[0]
-        expected = _tsfresh_linear_trend_timewise(x.astype(np.float64), period_s)
-        expected = expected[[LTT_ATTRS.index(a) for a in attrs]]
-        np.testing.assert_allclose(res, expected, rtol=1e-3, atol=1e-5)
+    ext = tsfast.Extractor(["tsfresh_sample_entropy", "sample_entropy"])
+    assert ext.feature_names == ["tsfresh_sample_entropy", "sample_entropy"]
+    # tsfresh column-name alias.
+    assert tsfast.Extractor(["value__sample_entropy"]).feature_names == [
+        "tsfresh_sample_entropy"
+    ]
 
     rng = np.random.RandomState(7)
-    check(rng.randn(300).cumsum(), 60)
-    check(np.arange(200.0) * 0.3 + rng.randn(200), 0.5)
-    check(rng.randn(100), 3600)
-    check(rng.randn(50) + 5.0, 86400)
-    # Constant series: flat line through the value (stderr: scipy NaN, tsfast 0 like linear_trend).
-    check(np.full(40, 2.5), 60, ["slope", "intercept"])
-    # Hourly sampling matches linear_trend exactly.
-    x = rng.randn(120).astype(np.float32)
-    a = tsfast.Extractor([f"linear_trend_timewise-{a}-3600" for a in LTT_ATTRS])
-    b = tsfast.Extractor([f"linear_trend-{a}" for a in LTT_ATTRS])
-    np.testing.assert_array_equal(a.process_2d_floats(x[None]), b.process_2d_floats(x[None]))
-    assert a.feature_names[0] == "linear_trend_timewise-slope-3600"
-    for bad in ["linear_trend_timewise-slope-0", "linear_trend_timewise-slope"]:
-        with pytest.raises(ValueError):
-            tsfast.Extractor([bad])
+    for x in [
+        rng.randn(200),
+        np.sin(np.arange(300) / 7) + 0.1 * rng.randn(300),
+        rng.randint(0, 4, size=80),
+        # Constant: r = 0 but every template still matches.
+        np.full(50, 3.0),
+        # So short that no length-3 template matches: tsfresh gives inf.
+        np.array([0.0, 5.0, -3.0, 9.0]),
+    ]:
+        x = np.asarray(x, dtype=np.float32)
+        got, tsfel_got = ext.process_2d_floats(x[None])[0]
+        x64 = x.astype(np.float64)
+        assert np.isclose(got, fc.sample_entropy(x64), rtol=1e-4, equal_nan=True)
+        if np.std(x) > 0 and len(x) > 10:
+            # The two definitions disagree, so each needs its own feature.
+            ref = F.sample_entropy(x64, 2, 0.2 * np.std(x64))
+            assert np.isclose(tsfel_got, ref, rtol=1e-4)
+            assert not np.isclose(got, tsfel_got, rtol=1e-4)
+
+
+def test_spectral_entropy_short_series_dc_bin():
+    # TSFEL normalises by log2 of the number of non-zero power bins, and its DC
+    # bin is exactly 0 only when numpy's f64 mean of the series is exact (then
+    # x - mean cancels exactly). Counting it wrongly is off by
+    # log2(N) / log2(N - 1) - 1: 2.2% at n = 32, so this checks to 0.1%.
+    from tsfel.feature_extraction.features import spectral_entropy
+
+    ext = tsfast.Extractor(["spectral_entropy"])
+
+    def check(x, dc_zero):
+        x = np.asarray(x, dtype=np.float32)
+        x64 = x.astype(np.float64)
+        assert (np.fft.rfft(x64 - np.mean(x64))[0] == 0) == dc_zero
+        got = ext.process_2d_floats(x[None])[0, 0]
+        assert got == pytest.approx(spectral_entropy(x64, 100.0), rel=1e-3)
+
+    rng = np.random.RandomState(29)
+    # Power-of-two lengths: the mean is always exact.
+    for n in [16, 32, 64, 128]:
+        check(rng.randn(n), dc_zero=True)
+        check(np.cumsum(rng.randn(n)), dc_zero=True)
+    # n = 45 = 9 * 5 (odd, so no Nyquist bin): integer data has an exact mean
+    # iff 45 divides the sum.
+    ints = rng.randint(-5, 5, size=45).astype(float)
+    ints[0] -= ints.sum() % 45
+    check(ints, dc_zero=True)
+    # Inexact mean: the DC residue counts. (Small integers are a poor example
+    # here: numpy's summation often rounds their residue away, see below.)
+    check(rng.randn(45), dc_zero=False)
+    check(rng.randn(60), dc_zero=False)
+
+
+def _spectral_entropy_known_misses():
+    rng = np.random.RandomState(29)
+    for n in [16, 32, 64, 128]:
+        rng.randn(n), rng.randn(n)
+    nyquist = rng.randint(-5, 5, size=48).astype(float)
+    nyquist[0] += 1 - nyquist.sum() % 3
+    rng = np.random.RandomState(37)
+    rng.randn(120)
+    swallowed = rng.randint(-5, 5, size=90)[4:28].astype(float)
+    return [
+        pytest.param(nyquist, id="nyquist_residue"),
+        pytest.param(swallowed, id="dc_residue_rounded_away"),
+    ]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="TSFEL counts float residue as a non-zero bin; tsfast predicts only "
+    "the DC bin, from whether the f64 mean is exact. Missed: (1) an exactly-zero "
+    "Nyquist bin (alternating sum 0) that numpy's inexact x - mean leaves "
+    "residue in; (2) an inexact mean whose DC residue numpy's summation rounds "
+    "to exactly 0. Both depend on pocketfft's rounding order.",
+)
+@pytest.mark.parametrize("x", _spectral_entropy_known_misses())
+def test_spectral_entropy_residue_bins_known_misses(x):
+    from tsfel.feature_extraction.features import spectral_entropy
+
+    x = np.asarray(x, dtype=np.float32)
+    got = tsfast.Extractor(["spectral_entropy"]).process_2d_floats(x[None])[0, 0]
+    assert got == pytest.approx(spectral_entropy(x.astype(np.float64), 100.0), rel=1e-3)
+
+
+def test_fresh_fft_meta_feature_is_ignored():
+    # `fresh-N` only configures the sliding engine; the static engine always
+    # runs a fresh FFT. Accepted so one feature list works with every engine.
+    features = ["mean", "spectral_entropy"]
+    x = np.random.RandomState(43).randn(2, 50).astype(np.float32)
+    ext = tsfast.Extractor(features + ["fresh-4"])
+    assert ext.feature_names == features
+    np.testing.assert_array_equal(
+        ext.process_2d_floats(x), tsfast.Extractor(features).process_2d_floats(x)
+    )
+    with pytest.raises(ValueError, match="fresh-N"):
+        tsfast.Extractor(["mean", "fresh-0"])

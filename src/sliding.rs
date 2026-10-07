@@ -26,6 +26,9 @@ pub struct SlidingExtractor {
     pub window_size: usize,
     pub stride: usize,
     pub fs: f32,
+    /// Rebuild the sliding DFT from a fresh FFT every this many samples:
+    /// `window_size` by default, lower with a `fresh-N` meta feature.
+    pub fft_rebuild_every: usize,
     // State per column
     pub states: Vec<ColumnState>,
     pub histories: Vec<Vec<f32>>,
@@ -57,6 +60,8 @@ impl SlidingExtractor {
         let mut unique_count_below_thresholds = std::collections::BTreeSet::new();
         let mut unique_range_counts = std::collections::BTreeSet::new();
 
+        let (feature_str, meta) = crate::types::split_meta(feature_str)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
         for i in feature_str {
             let feat = std::str::FromStr::from_str(&i)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
@@ -123,6 +128,10 @@ impl SlidingExtractor {
             window_size,
             stride,
             fs,
+            fft_rebuild_every: meta
+                .fresh_fft_every
+                .map_or(window_size, |n| n.min(window_size))
+                .max(1),
             states: (0..n_cols)
                 .map(|_| {
                     ColumnState::new(
@@ -237,6 +246,7 @@ impl SlidingExtractor {
                         unique_range_counts: &self.unique_range_counts,
                         paa_boundaries: &paa_boundaries,
                         r2c: r2c.as_ref().cloned(),
+                        fft_rebuild_every: self.fft_rebuild_every,
                     };
 
                     let mut batch_res = Vec::new();
@@ -267,8 +277,14 @@ impl SlidingExtractor {
                             );
 
                             if let Some(ref mut sdft) = state.sliding_dft {
-                                for (i, &v) in old_slice.iter().enumerate() {
-                                    sdft.update(v, new_slice[i]);
+                                if sdft.updates + stride >= self.fft_rebuild_every {
+                                    // Rebuilt from a fresh FFT for this window
+                                    // anyway: skip the O(window) updates.
+                                    sdft.updates += stride;
+                                } else {
+                                    for (i, &v) in old_slice.iter().enumerate() {
+                                        sdft.update(v, new_slice[i]);
+                                    }
                                 }
                             }
 

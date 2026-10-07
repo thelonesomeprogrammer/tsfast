@@ -40,6 +40,29 @@ TSFast takes no timestamps, so sample `i` is at time `i / fs`:
 - **Selective Execution**: Only computes the features you request, using a bitmask-based engine to skip unnecessary calculations.
 - **Python-Friendly**: Simple API based on `Extractor` and `ExpandingExtractor` classes.
 
+## Sliding Windows on Quantized Data
+
+`SlidingExtractor` updates each window's spectrum incrementally instead of
+running a new FFT, so its frequency bins drift slightly (~1e-6 to 1e-4) from a
+fresh FFT. This only matters when **all** of these hold:
+
+- you use `SlidingExtractor`,
+- with `spectral_entropy`, `spectral_positive_turning`,
+  `fundamental_frequency` or `fft_coeff-*-angle` (they compare bins exactly),
+- on quantized data: integer-valued (ADC counts) or especially binary/event
+  signals,
+- with short windows (about 32 samples or less).
+
+Then some windows can be badly off (e.g. 8–33% in `spectral_entropy`, or a
+flipped angle). Add the meta feature `"fresh-1"` to the feature list to give
+every window a fresh FFT. This makes the result identical to `Extractor`, at
+1.1× (W=16) to 1.7× (W=1024) the spectrum cost. `"fresh-N"` rebuilds every N
+samples instead: that reduces drift, but only `fresh-1` is exact. It adds no
+output column, and the other engines ignore it.
+
+See [docs/sliding-dft-drift.md](docs/sliding-dft-drift.md) for the
+measurements and a guide to choosing N.
+
 ## Benchmarks
 
 ![Benchmark Trends](.jules/benchmark_trends.png)

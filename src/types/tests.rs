@@ -211,3 +211,23 @@ fn python_feature_samples_cover_every_variant() {
         "add these to tests/feature_samples.txt: {missing:?}"
     );
 }
+
+#[test]
+fn meta_features_are_split_off() {
+    use super::{MetaFeatures, split_meta};
+    let names = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+    let (rest, meta) = split_meta(names(&["mean", "fresh-8", "spectral_entropy", "fresh-3"])).unwrap();
+    assert_eq!(rest, names(&["mean", "spectral_entropy"]));
+    assert_eq!(meta.fresh_fft_every, Some(3), "the smallest N wins");
+
+    let (rest, meta) = split_meta(names(&["mean"])).unwrap();
+    assert_eq!(rest, names(&["mean"]));
+    assert_eq!(meta, MetaFeatures::default());
+
+    for bad in ["fresh-0", "fresh-", "fresh-x", "fresh--1", "fresh-1.5"] {
+        assert!(split_meta(names(&[bad])).is_err(), "{bad} should be rejected");
+    }
+    // A meta feature is not a feature: it never parses as one.
+    assert!("fresh-1".parse::<Feature>().is_err());
+}
