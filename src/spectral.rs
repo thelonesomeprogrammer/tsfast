@@ -334,7 +334,7 @@ pub fn finalize(
 
                         let mask = mag.simd_gt(thresh_vec) & prev.simd_lt(mag) & mag.simd_ge(next);
                         if mask.any() {
-                            min_bp = i + mask.first_set().unwrap();
+                            min_bp = i + mask.first_set().unwrap_or(0);
                             break;
                         }
                         i += 4;
