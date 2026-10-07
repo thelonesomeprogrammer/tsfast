@@ -622,49 +622,176 @@ fn plan_forward(len: usize) -> std::sync::Arc<dyn realfft::RealToComplex<f32>> {
     PLANNER.with_borrow_mut(|p| p.plan_fft_forward(len))
 }
 
+/// Reusable buffers for [`averaged_periodogram`], so repeated calls on the
+/// same column don't allocate.
+#[derive(Clone, Default)]
+pub struct PeriodogramScratch {
+    indata: Vec<f32>,
+    outdata: Vec<Complex<f32>>,
+    fft_scratch: Vec<Complex<f32>>,
+}
+
+/// Mean one-sided PSD over the segments of `values`, as scipy's
+/// `_spectral_helper` with `scaling='density'`, `detrend='constant'`, no
+/// padding: segments of `window.len()` samples every `len - noverlap`,
+/// each mean-removed and windowed, power averaged across segments. Writes
+/// `window.len() / 2 + 1` bins into `psd`. Leaves `psd` empty if `values` is
+/// shorter than one segment.
+pub fn averaged_periodogram(
+    values: &[f32],
+    window: &[f32],
+    noverlap: usize,
+    fs: f32,
+    psd: &mut Vec<f32>,
+    buf: &mut PeriodogramScratch,
+) -> Result<(), String> {
+    let nperseg = window.len();
+    let n = values.len();
+    psd.clear();
+    if nperseg == 0 || noverlap >= nperseg || n < nperseg {
+        return Ok(());
+    }
+    let r2c = plan_forward(nperseg);
+    buf.indata.resize(nperseg, 0.0);
+    buf.outdata.resize(nperseg / 2 + 1, Complex::default());
+    buf.fft_scratch.resize(r2c.get_scratch_len(), Complex::default());
+    psd.resize(nperseg / 2 + 1, 0.0);
+
+    let step = nperseg - noverlap;
+    let n_segments = (n - noverlap) / step;
+    let inv_len = 1.0 / nperseg as f32;
+    for seg in 0..n_segments {
+        let chunk = &values[seg * step..seg * step + nperseg];
+        let mean = chunk.iter().sum::<f32>() * inv_len;
+        for ((d, &v), &w) in buf.indata.iter_mut().zip(chunk).zip(window) {
+            *d = (v - mean) * w;
+        }
+        r2c.process_with_scratch(&mut buf.indata, &mut buf.outdata, &mut buf.fft_scratch)
+            .map_err(|e| e.to_string())?;
+        for (p, c) in psd.iter_mut().zip(&buf.outdata) {
+            *p += c.norm_sqr();
+        }
+    }
+
+    // Density scaling and segment mean folded into one pass; one-sided:
+    // double all bins except DC and (for even nperseg) Nyquist.
+    let scale = 1.0 / (fs * window.iter().map(|w| w * w).sum::<f32>() * n_segments as f32);
+    let last = if nperseg % 2 == 0 { psd.len() - 1 } else { psd.len() };
+    for (k, p) in psd.iter_mut().enumerate() {
+        let doubled = k != 0 && k < last;
+        *p *= if doubled { 2.0 * scale } else { scale };
+    }
+    Ok(())
+}
+
 /// scipy.signal.welch(values, fs, nperseg) with its defaults: periodic Hann
 /// window, 50% overlap, constant detrend per segment, one-sided density.
 pub fn welch_psd(values: &[f32], nperseg: usize, fs: f32) -> Result<Vec<f32>, String> {
-    let n = values.len();
-    if nperseg == 0 || n < nperseg {
-        return Ok(Vec::new());
-    }
-    let r2c = plan_forward(nperseg);
     let window: Vec<f32> = (0..nperseg)
         .map(|i| 0.5 - 0.5 * (2.0 * std::f32::consts::PI * i as f32 / nperseg as f32).cos())
         .collect();
-    let scale = 1.0 / (fs * window.iter().map(|w| w * w).sum::<f32>());
-    let step = nperseg - nperseg / 2;
-    let n_segments = (n - nperseg / 2) / step;
-
-    let mut psd = vec![0.0f32; nperseg / 2 + 1];
-    let mut indata = vec![0.0f32; nperseg];
-    let mut outdata = r2c.make_output_vec();
-    for seg in 0..n_segments {
-        let chunk = &values[seg * step..seg * step + nperseg];
-        let mean = chunk.iter().sum::<f32>() / nperseg as f32;
-        for ((d, &v), &w) in indata.iter_mut().zip(chunk).zip(&window) {
-            *d = (v - mean) * w;
-        }
-        r2c.process(&mut indata, &mut outdata)
-            .map_err(|e| e.to_string())?;
-        for (p, c) in psd.iter_mut().zip(&outdata) {
-            *p += c.norm_sqr() * scale;
-        }
-    }
-    // One-sided: double all bins except DC and (for even nperseg) Nyquist.
-    let last = if nperseg % 2 == 0 {
-        psd.len() - 1
-    } else {
-        psd.len()
-    };
-    for p in &mut psd[1..last] {
-        *p *= 2.0;
-    }
-    for p in &mut psd {
-        *p /= n_segments.max(1) as f32;
-    }
+    let mut psd = Vec::new();
+    averaged_periodogram(
+        values,
+        &window,
+        nperseg / 2,
+        fs,
+        &mut psd,
+        &mut PeriodogramScratch::default(),
+    )?;
     Ok(psd)
+}
+
+/// `scipy.signal.get_window(('tukey', alpha), n)`: the periodic Tukey window,
+/// i.e. the symmetric one of length `n + 1` without its last sample.
+fn periodic_tukey(n: usize, alpha: f64, out: &mut Vec<f32>) {
+    out.clear();
+    let m = n + 1;
+    let denom = alpha * (m - 1) as f64;
+    let width = (denom / 2.0).floor() as usize;
+    out.extend((0..n).map(|i| {
+        let x = i as f64;
+        let w = if i <= width {
+            0.5 * (1.0 + (std::f64::consts::PI * (-1.0 + 2.0 * x / denom)).cos())
+        } else if i + width + 1 < m {
+            1.0
+        } else {
+            0.5 * (1.0 + (std::f64::consts::PI * (-2.0 / alpha + 1.0 + 2.0 * x / denom)).cos())
+        };
+        w as f32
+    }));
+}
+
+/// One `bins` setting's spectrogram mean, cached per window: TSFEL asks for
+/// every coefficient separately, but they all come from one spectrogram.
+#[derive(Clone)]
+struct SpectrogramEntry {
+    bins: u16,
+    /// Segment length the window and `psd` were computed for (0 = none yet).
+    nperseg: usize,
+    valid: bool,
+    window: Vec<f32>,
+    psd: Vec<f32>,
+}
+
+/// Per-column state for `spectrogram_mean_coeff`.
+#[derive(Clone, Default)]
+pub struct SpectrogramCache {
+    entries: Vec<SpectrogramEntry>,
+    scratch: PeriodogramScratch,
+}
+
+impl SpectrogramCache {
+    /// Forget the previous window's results; keeps every allocation.
+    pub fn invalidate(&mut self) {
+        for e in &mut self.entries {
+            e.valid = false;
+        }
+    }
+
+    /// TSFEL `spectrogram_mean_coeff(values, FS, bins)["values"][coeff]`:
+    /// `scipy.signal.spectrogram(values, FS, nperseg=2*bins-2)` averaged over
+    /// time, with `bins` clamped to `len // 2 + 1` like TSFEL does. `None` if
+    /// the window is too short for a segment or for that many coefficients.
+    pub fn coefficient(&mut self, values: &[f32], coeff: u16, bins: u16) -> Option<f32> {
+        let bins_eff = (bins as usize).min(values.len() / 2 + 1);
+        if bins_eff < 2 || coeff as usize >= bins_eff {
+            return None;
+        }
+        let nperseg = 2 * bins_eff - 2;
+
+        let pos = match self.entries.iter().position(|e| e.bins == bins) {
+            Some(pos) => pos,
+            None => {
+                self.entries.push(SpectrogramEntry {
+                    bins,
+                    nperseg: 0,
+                    valid: false,
+                    window: Vec::new(),
+                    psd: Vec::new(),
+                });
+                self.entries.len() - 1
+            }
+        };
+        let entry = &mut self.entries[pos];
+        if !entry.valid || entry.nperseg != nperseg {
+            if entry.nperseg != nperseg {
+                periodic_tukey(nperseg, 0.25, &mut entry.window);
+                entry.nperseg = nperseg;
+            }
+            averaged_periodogram(
+                values,
+                &entry.window,
+                nperseg / 8,
+                FS,
+                &mut entry.psd,
+                &mut self.scratch,
+            )
+            .ok()?;
+            entry.valid = true;
+        }
+        entry.psd.get(coeff as usize).copied()
+    }
 }
 
 /// TSFEL mfcc(signal, fs=100): pre-emphasis 0.97, 512-point power spectrum,

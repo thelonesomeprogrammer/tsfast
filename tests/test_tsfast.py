@@ -1171,3 +1171,34 @@ def test_hist_mode_and_neighbourhood_peaks():
     check(np.full(64, 3.0))
     # Shorter than 2n + 1: no peaks.
     check(np.array([1.0, 3.0, 2.0, 5.0, 1.0]))
+
+
+def test_spectrogram_mean_coeff():
+    from tsfel.feature_extraction.features import spectrogram_mean_coeff
+
+    def check(x, bins):
+        x = np.asarray(x, dtype=np.float32)
+        names = [f"spectrogram_mean_coeff-{k}-{bins}" for k in range(bins)]
+        res = tsfast.Extractor(names).process_2d_floats(np.atleast_2d(x))[0]
+        expected = np.zeros(bins)
+        if len(x) >= 2:
+            # TSFEL clamps bins to len // 2 + 1; the extra coefficients report 0.
+            ref = spectrogram_mean_coeff(x.astype(np.float64), 100.0, bins)["values"]
+            expected[: len(ref)] = ref
+        atol = 1e-6 * max(np.abs(expected).max(), 1e-12)
+        np.testing.assert_allclose(res, expected, rtol=1e-3, atol=atol)
+
+    rng = np.random.RandomState(41)
+    check(rng.randn(500), 32)
+    check(rng.randn(300).cumsum(), 32)
+    check(np.sin(2 * np.pi * 7.3 * np.arange(400) / 100.0), 16)
+    for bins in (2, 3, 5, 64):
+        check(rng.randn(200), bins)
+    # Short windows: bins clamped to len // 2 + 1, single segment.
+    for n in (1, 2, 3, 10, 61, 62, 63):
+        check(rng.randn(n), 32)
+    # Constant series: every segment is zero after detrending.
+    check(np.full(100, 2.5), 32)
+    # Default bins=32 and the name it is reported under.
+    ext = tsfast.Extractor(["spectrogram_mean_coeff-4"])
+    assert ext.feature_names == ["spectrogram_mean_coeff-4"]

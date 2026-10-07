@@ -381,6 +381,14 @@ REFERENCES = {
     "average_power-100": ("tsfel", lambda x: F.average_power(x, 100.0)),
     "hist_mode-10": ("tsfel", lambda x: F.hist_mode(x, 10)),
     "hist_mode-3": ("tsfel", lambda x: F.hist_mode(x, 3)),
+    "spectrogram_mean_coeff-3": (
+        "tsfel",
+        lambda x: F.spectrogram_mean_coeff(x, FS)["values"][3],
+    ),
+    "spectrogram_mean_coeff-0-5": (
+        "tsfel",
+        lambda x: F.spectrogram_mean_coeff(x, FS, 5)["values"][0],
+    ),
     "neighbourhood_peaks-10": ("tsfel", lambda x: F.neighbourhood_peaks(x, 10)),
 }
 

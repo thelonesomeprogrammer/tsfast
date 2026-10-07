@@ -700,3 +700,29 @@ def test_expanding_hist_mode_and_neighbourhood_peaks():
     check([rng.randint(0, 4, size=50), rng.randint(0, 4, size=50)])
     # Constant series.
     check([np.full(40, -1.5), np.full(40, -1.5)])
+
+
+def test_expanding_spectrogram_mean_coeff():
+    from tsfel.feature_extraction.features import spectrogram_mean_coeff
+
+    features = ["spectrogram_mean_coeff-1", "spectrogram_mean_coeff-10"]
+
+    def check(chunks):
+        ext = ExpandingExtractor(features, 1)
+        seen = np.array([], dtype=np.float32)
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            ref = spectrogram_mean_coeff(seen.astype(np.float64), 100.0)["values"]
+            # Coefficients past the clamped bin count report 0.
+            expected = np.array([ref[k] if k < len(ref) else 0.0 for k in (1, 10)])
+            atol = 1e-6 * max(np.abs(ref).max(), 1e-12)
+            np.testing.assert_allclose(res[0], expected, rtol=1e-3, atol=atol)
+
+    rng = np.random.RandomState(31)
+    noise = rng.randn(300)
+    # Grows through the clamped regime (n < 62) into multi-segment windows.
+    check([noise[:10], noise[10:40], noise[40:100], noise[100:]])
+    # Constant series.
+    check([np.full(50, 1.5), np.full(50, 1.5)])

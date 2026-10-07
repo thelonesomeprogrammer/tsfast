@@ -16,9 +16,3 @@ implemented and verified within 1% of its reference by
 | Feature | Notes |
 | :--- | :--- |
 | **`linear_trend_timewise`** | OLS regression against an explicit `DatetimeIndex`. tsfast's engines take no timestamp input, so this needs a design decision before implementation, not just a port. |
-
-## TSFEL (1 missing)
-
-| Feature | Notes |
-| :--- | :--- |
-| **`spectrogram_mean_coeff`** | tsfast's existing `spectrogram-N-T` feature does **not** implement this — see the note in `tests/references.py` (it ignores the time parameter and returns a single spectrum bin). The real TSFEL spectrogram-mean-coefficient feature is unimplemented. |

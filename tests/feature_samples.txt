@@ -188,3 +188,5 @@ average_power-100
 hist_mode-10
 hist_mode-3
 neighbourhood_peaks-10
+spectrogram_mean_coeff-3
+spectrogram_mean_coeff-0-5

@@ -135,6 +135,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::SpectralSlope
         | F::SpectralSpread
         | F::SpectrogramCoefficients(..)
+        | F::SpectrogramMeanCoeff(..)
         | F::SpktWelchDensity(..)
         | F::WaveletEnergy(..)
         | F::WaveletEntropy

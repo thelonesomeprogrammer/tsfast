@@ -108,6 +108,7 @@ pub enum Feature {
     SignalDistance,
     WaveletFeatures(u32, u16), // mother wavelet (freq stored as f32 bits), feature type
     SpectrogramCoefficients(u16, u32), // time, freq stored as f32 bits
+    SpectrogramMeanCoeff(u16, u16),    // coefficient index, bins
     PkPkDistance,
     ZeroCross,
     MaxPowerSpectrum,
@@ -325,6 +326,7 @@ impl Feature {
             Self::QuerySimilarityCount(_, _) => C::QUERY_SIMILARITY | C::NEEDS_SORT,
             Self::MatrixProfile(_, _) => C::MATRIX_PROFILE | C::NEEDS_SORT,
             Self::SpectrogramCoefficients(_, _) => C::SPECTROGRAM | C::NEEDS_SORT,
+            Self::SpectrogramMeanCoeff(_, _) => C::empty(),
             Self::MeanSecondDerivativeCentral => C::empty(),
             Self::LargeStandardDeviation(_) => {
                 C::SUM | C::MEAN | C::VARIANCE | C::MIN | C::MAX | C::ENERGY | C::NEEDS_SORT
