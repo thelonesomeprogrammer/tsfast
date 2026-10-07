@@ -19,6 +19,7 @@ iqr
 entropy
 sample_entropy
 higuchi_fd
+maximum_fractal_length
 energy
 rms
 root_mean_square
@@ -156,10 +157,8 @@ spkt_welch_density__coeff_5
 number_cwt_peaks__n_1
 augmented_dickey_fuller-teststat
 augmented_dickey_fuller-usedlag
-<<<<<<< HEAD
 lempel_ziv
 lempel_ziv_complexity-3
-=======
 mse-3
 mse-2-10
 max_frequency
@@ -170,4 +169,6 @@ ecdf_percentile_count-0.5
 ecdf_slope-0.2-0.5
 dfa
 hurst_exponent
->>>>>>> master
+count_above-0.5
+count_below-0.5
+range_count-0-5

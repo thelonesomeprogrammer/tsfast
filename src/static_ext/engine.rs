@@ -9,6 +9,7 @@ use super::processors::fft_processor::FftProcessor;
 use super::processors::mean_processor::MeanProcessor;
 use super::processors::sort_processor::SortProcessor;
 use super::processors::stats_processor::StatsProcessor;
+use super::processors::threshold_processor::ThresholdProcessor;
 use super::processors::trend_processor::TrendProcessor;
 
 pub(crate) struct StaticEngine<'a> {
@@ -17,6 +18,9 @@ pub(crate) struct StaticEngine<'a> {
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
     pub(crate) unique_tra_lags: &'a [u16],
+    pub(crate) unique_count_above_thresholds: &'a [u32],
+    pub(crate) unique_count_below_thresholds: &'a [u32],
+    pub(crate) unique_range_counts: &'a [(u32, u32)],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
 }
@@ -34,6 +38,9 @@ impl<'a> StaticEngine<'a> {
             self.unique_c3_lags,
             &[],
             self.unique_tra_lags,
+            self.unique_count_above_thresholds,
+            self.unique_count_below_thresholds,
+            self.unique_range_counts,
             values[0],
         );
 
@@ -71,6 +78,14 @@ impl<'a> StaticEngine<'a> {
             let shifted = f32x4::from_array([state.prev_last, i[0], i[1], i[2]]);
 
             StatsProcessor::process_simd(self.compute, chunk, state);
+            ThresholdProcessor::process_simd(
+                self.compute,
+                chunk,
+                self.unique_count_above_thresholds,
+                self.unique_count_below_thresholds,
+                self.unique_range_counts,
+                state,
+            );
             DiffProcessor::process_simd(self.compute, chunk, shifted, offset, state);
             TrendProcessor::process_simd(
                 self.compute,
@@ -96,6 +111,14 @@ impl<'a> StaticEngine<'a> {
             let val = values[i];
 
             StatsProcessor::process_remainder(self.compute, val, state);
+            ThresholdProcessor::process_remainder(
+                self.compute,
+                val,
+                self.unique_count_above_thresholds,
+                self.unique_count_below_thresholds,
+                self.unique_range_counts,
+                state,
+            );
 
             if i > 0 {
                 let prev = values[i - 1];
@@ -152,6 +175,9 @@ impl<'a> StaticEngine<'a> {
             self.unique_tra_lags,
             self.unique_paa_totals,
             self.paa_boundaries,
+            self.unique_count_above_thresholds,
+            self.unique_count_below_thresholds,
+            self.unique_range_counts,
         );
 
         let mut feats = Vec::with_capacity(self.features.len());

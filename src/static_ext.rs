@@ -25,6 +25,9 @@ pub struct Extractor {
     pub unique_paa_totals: Vec<u16>,
     pub unique_c3_lags: Vec<u16>,
     pub unique_tra_lags: Vec<u16>,
+    pub unique_count_above_thresholds: Vec<u32>,
+    pub unique_count_below_thresholds: Vec<u32>,
+    pub unique_range_counts: Vec<(u32, u32)>,
     pub planner: Arc<Mutex<RealFftPlanner<f32>>>,
     pub max_size: Option<usize>,
 }
@@ -40,6 +43,9 @@ impl Extractor {
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
         let mut unique_tra_lags = std::collections::BTreeSet::new();
+        let mut unique_count_above_thresholds = std::collections::BTreeSet::new();
+        let mut unique_count_below_thresholds = std::collections::BTreeSet::new();
+        let mut unique_range_counts = std::collections::BTreeSet::new();
 
         for i in feature_str {
             let feat = std::str::FromStr::from_str(&i)
@@ -50,6 +56,12 @@ impl Extractor {
             } else if let Feature::C3(lag) = feat {
                 c3_args.push(lag);
                 unique_c3_lags.insert(lag);
+            } else if let Feature::CountAbove(t) = feat {
+                unique_count_above_thresholds.insert(t);
+            } else if let Feature::CountBelow(t) = feat {
+                unique_count_below_thresholds.insert(t);
+            } else if let Feature::RangeCount(min, max) = feat {
+                unique_range_counts.insert((min, max));
             }
             features.push(feat);
         }
@@ -74,6 +86,9 @@ impl Extractor {
             unique_paa_totals: unique_paa_totals.into_iter().collect(),
             unique_c3_lags: unique_c3_lags.into_iter().collect(),
             unique_tra_lags: unique_tra_lags.into_iter().collect(),
+            unique_count_above_thresholds: unique_count_above_thresholds.into_iter().collect(),
+            unique_count_below_thresholds: unique_count_below_thresholds.into_iter().collect(),
+            unique_range_counts: unique_range_counts.into_iter().collect(),
             planner: planner_arc,
             max_size,
         })
@@ -142,6 +157,9 @@ impl Extractor {
             unique_paa_totals: &self.unique_paa_totals,
             unique_c3_lags: &self.unique_c3_lags,
             unique_tra_lags: &self.unique_tra_lags,
+            unique_count_above_thresholds: &self.unique_count_above_thresholds,
+            unique_count_below_thresholds: &self.unique_count_below_thresholds,
+            unique_range_counts: &self.unique_range_counts,
             paa_boundaries: &paa_boundaries,
             r2c,
         };

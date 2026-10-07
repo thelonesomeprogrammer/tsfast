@@ -149,3 +149,9 @@ Date,CommitHash,Benchmark_Name,Metric_Value,Unit,Delta_From_Last
 2026-10-07 07:01:20,83a16cf,reference_all_features,211.38081449141126,ms,39.68
 2026-10-07 07:01:20,83a16cf,tsfast_features,156,count,0.0
 2026-10-07 07:01:20,83a16cf,referenced_features,147,count,0.0
+2026-10-07 11:34:57,851a2f0,tsfast_static_all_features,2.096505489989795,ms,-25.63
+2026-10-07 11:34:57,851a2f0,tsfast_sliding_all_features,1.4950175812515454,ms,-33.62
+2026-10-07 11:34:57,851a2f0,tsfast_expanding_all_features,2.045091499985574,ms,-24.93
+2026-10-07 11:34:57,851a2f0,reference_all_features,233.82395695550557,ms,10.62
+2026-10-07 11:34:57,851a2f0,tsfast_features,170,count,8.97
+2026-10-07 11:34:57,851a2f0,referenced_features,161,count,9.52

@@ -10,6 +10,7 @@ use super::processors::mean_processor::MeanProcessor;
 use super::processors::queue_processor::QueueProcessor;
 use super::processors::sort_processor::SortProcessor;
 use super::processors::stats_processor::StatsProcessor;
+use super::processors::threshold_processor::ThresholdProcessor;
 use super::processors::trend_processor::TrendProcessor;
 
 pub(crate) struct SlidingEngine<'a> {
@@ -18,6 +19,9 @@ pub(crate) struct SlidingEngine<'a> {
     pub(crate) unique_paa_totals: &'a [u16],
     pub(crate) unique_c3_lags: &'a [u16],
     pub(crate) unique_tra_lags: &'a [u16],
+    pub(crate) unique_count_above_thresholds: &'a [u32],
+    pub(crate) unique_count_below_thresholds: &'a [u32],
+    pub(crate) unique_range_counts: &'a [(u32, u32)],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn realfft::RealToComplex<f32>>>,
 }
@@ -41,6 +45,15 @@ impl<'a> SlidingEngine<'a> {
         }
 
         StatsProcessor::update_batch(self.compute, old_slice, new_slice, state);
+        ThresholdProcessor::update_batch(
+            self.compute,
+            old_slice,
+            new_slice,
+            self.unique_count_above_thresholds,
+            self.unique_count_below_thresholds,
+            self.unique_range_counts,
+            state,
+        );
         DiffProcessor::update_batch(
             self.compute,
             old_slice,
@@ -106,6 +119,15 @@ impl<'a> SlidingEngine<'a> {
         state: &mut ColumnState,
     ) {
         StatsProcessor::update_incremental(self.compute, old_val, new_val, state);
+        ThresholdProcessor::update_incremental(
+            self.compute,
+            old_val,
+            new_val,
+            self.unique_count_above_thresholds,
+            self.unique_count_below_thresholds,
+            self.unique_range_counts,
+            state,
+        );
         DiffProcessor::update_incremental(
             self.compute,
             old_val,
@@ -162,6 +184,9 @@ impl<'a> SlidingEngine<'a> {
         StatsProcessor::reset_state(state, is_incremental);
         DiffProcessor::reset_state(state, values, is_incremental);
         ComplexityProcessor::reset_state(state);
+        if !is_incremental {
+            ThresholdProcessor::reset_state(state);
+        }
         // The min/max queues are maintained incrementally by update_batch /
         // update_incremental; only rebuild them on a full recompute.
         if !is_incremental {
@@ -207,6 +232,14 @@ impl<'a> SlidingEngine<'a> {
 
             if !is_incremental {
                 StatsProcessor::process_simd(self.compute, chunk, global_idx, values.len(), state);
+                ThresholdProcessor::process_simd(
+                    self.compute,
+                    chunk,
+                    self.unique_count_above_thresholds,
+                    self.unique_count_below_thresholds,
+                    self.unique_range_counts,
+                    state,
+                );
                 TrendProcessor::process_simd(self.compute, chunk, global_idx, state);
 
                 if self
@@ -270,6 +303,14 @@ impl<'a> SlidingEngine<'a> {
 
             if !is_incremental {
                 StatsProcessor::process_remainder(self.compute, val, state);
+                ThresholdProcessor::process_remainder(
+                    self.compute,
+                    val,
+                    self.unique_count_above_thresholds,
+                    self.unique_count_below_thresholds,
+                    self.unique_range_counts,
+                    state,
+                );
                 TrendProcessor::process_remainder(self.compute, val, i, state);
             }
 
@@ -369,6 +410,9 @@ impl<'a> SlidingEngine<'a> {
             self.unique_tra_lags,
             self.unique_paa_totals,
             self.paa_boundaries,
+            self.unique_count_above_thresholds,
+            self.unique_count_below_thresholds,
+            self.unique_range_counts,
         );
 
         let mut feats = Vec::with_capacity(self.features.len());

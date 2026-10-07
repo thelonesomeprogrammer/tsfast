@@ -20,6 +20,9 @@ pub struct ExpandingExtractor {
     pub unique_c3_lags: Vec<u16>,
     pub unique_autocorr_lags: Vec<u16>,
     pub unique_tra_lags: Vec<u16>,
+    pub unique_count_above_thresholds: Vec<u32>,
+    pub unique_count_below_thresholds: Vec<u32>,
+    pub unique_range_counts: Vec<(u32, u32)>,
     pub paa_boundaries: Vec<Vec<usize>>,
     // State per column
     pub states: Vec<ColumnState>,
@@ -45,6 +48,9 @@ impl ExpandingExtractor {
         let mut unique_c3_lags = std::collections::BTreeSet::new();
         let mut unique_autocorr_lags = std::collections::BTreeSet::new();
         let mut unique_tra_lags = std::collections::BTreeSet::new();
+        let mut unique_count_above_thresholds = std::collections::BTreeSet::new();
+        let mut unique_count_below_thresholds = std::collections::BTreeSet::new();
+        let mut unique_range_counts = std::collections::BTreeSet::new();
 
         for i in feature_str {
             let feat = std::str::FromStr::from_str(&i)
@@ -68,6 +74,15 @@ impl ExpandingExtractor {
                 Feature::TimeReversalAsymmetry(lag) => {
                     unique_tra_lags.insert(lag);
                 }
+                Feature::CountAbove(t) => {
+                    unique_count_above_thresholds.insert(t);
+                }
+                Feature::CountBelow(t) => {
+                    unique_count_below_thresholds.insert(t);
+                }
+                Feature::RangeCount(min, max) => {
+                    unique_range_counts.insert((min, max));
+                }
                 _ => {}
             }
             features.push(feat);
@@ -77,6 +92,11 @@ impl ExpandingExtractor {
         let unique_c3_lags: Vec<u16> = unique_c3_lags.into_iter().collect();
         let unique_autocorr_lags: Vec<u16> = unique_autocorr_lags.into_iter().collect();
         let unique_tra_lags: Vec<u16> = unique_tra_lags.into_iter().collect();
+        let unique_count_above_thresholds: Vec<u32> =
+            unique_count_above_thresholds.into_iter().collect();
+        let unique_count_below_thresholds: Vec<u32> =
+            unique_count_below_thresholds.into_iter().collect();
+        let unique_range_counts: Vec<(u32, u32)> = unique_range_counts.into_iter().collect();
 
         let planned_size = max_size.map(next_good_fft_size);
         let planner = RealFftPlanner::<f32>::new();
@@ -96,6 +116,9 @@ impl ExpandingExtractor {
             unique_c3_lags: unique_c3_lags.clone(),
             unique_autocorr_lags: unique_autocorr_lags.clone(),
             unique_tra_lags: unique_tra_lags.clone(),
+            unique_count_above_thresholds: unique_count_above_thresholds.clone(),
+            unique_count_below_thresholds: unique_count_below_thresholds.clone(),
+            unique_range_counts: unique_range_counts.clone(),
             paa_boundaries: Vec::new(),
             states: (0..n_cols)
                 .map(|_| {
@@ -104,6 +127,9 @@ impl ExpandingExtractor {
                         &unique_c3_lags,
                         &unique_autocorr_lags,
                         &unique_tra_lags,
+                        &unique_count_above_thresholds,
+                        &unique_count_below_thresholds,
+                        &unique_range_counts,
                         0.0,
                     )
                 })
@@ -158,6 +184,9 @@ impl ExpandingExtractor {
                     &self.unique_c3_lags,
                     &self.unique_autocorr_lags,
                     &self.unique_tra_lags,
+                    &self.unique_count_above_thresholds,
+                    &self.unique_count_below_thresholds,
+                    &self.unique_range_counts,
                     0.0,
                 ));
                 self.histories.push(Vec::new());
@@ -203,6 +232,9 @@ impl ExpandingExtractor {
                         &self.unique_c3_lags,
                         &self.unique_autocorr_lags,
                         &self.unique_tra_lags,
+                        &self.unique_count_above_thresholds,
+                        &self.unique_count_below_thresholds,
+                        &self.unique_range_counts,
                         values[0],
                     );
                 }
@@ -214,6 +246,9 @@ impl ExpandingExtractor {
                     unique_c3_lags: &self.unique_c3_lags,
                     unique_autocorr_lags: &self.unique_autocorr_lags,
                     unique_tra_lags: &self.unique_tra_lags,
+                    unique_count_above_thresholds: &self.unique_count_above_thresholds,
+                    unique_count_below_thresholds: &self.unique_count_below_thresholds,
+                    unique_range_counts: &self.unique_range_counts,
                     paa_boundaries: &current_paa_boundaries,
                     r2c: r2c.as_ref().cloned(),
                     fft_update_period: self.fft_update_period,

@@ -64,13 +64,8 @@ REFERENCES = {
     "pk_pk_distance": ("tsfel", F.pk_pk_distance),
     "variation_coefficient": ("tsfresh", fc.variation_coefficient),
     "length": ("tsfresh", fc.length),
-<<<<<<< HEAD
     "lempel_ziv": ("tsfel", F.lempel_ziv),
     "lempel_ziv_complexity-3": ("tsfresh", lambda x: fc.lempel_ziv_complexity(x, 3)),
-    "variance_larger_than_standard_deviation": ("tsfresh", fc.variance_larger_than_standard_deviation),
-    "large_standard_deviation-0.05": ("tsfresh", lambda x: fc.large_standard_deviation(x, 0.05)),
-    "symmetry_looking-0.05": ("tsfresh", lambda x: _one(fc.symmetry_looking(x, [{"r": 0.05}]))),
-=======
     "variance_larger_than_standard_deviation": (
         "tsfresh",
         fc.variance_larger_than_standard_deviation,
@@ -83,7 +78,6 @@ REFERENCES = {
         "tsfresh",
         lambda x: _one(fc.symmetry_looking(x, [{"r": 0.05}])),
     ),
->>>>>>> master
     "ratio_beyond_r_sigma-1.5": ("tsfresh", lambda x: fc.ratio_beyond_r_sigma(x, 1.5)),
     "quantile-0.25": ("tsfresh", lambda x: fc.quantile(x, 0.25)),
     "quantile-0.9": ("tsfresh", lambda x: fc.quantile(x, 0.9)),
@@ -98,6 +92,9 @@ REFERENCES = {
     "mean_n_absolute_max-7": ("tsfresh", lambda x: fc.mean_n_absolute_max(x, 7)),
     "count_above_mean": ("tsfresh", fc.count_above_mean),
     "count_below_mean": ("tsfresh", fc.count_below_mean),
+    "count_above-0.5": ("tsfresh", lambda x: fc.count_above(x, 0.5)),
+    "count_below-0.5": ("tsfresh", lambda x: fc.count_below(x, 0.5)),
+    "range_count-0-5": ("tsfresh", lambda x: fc.range_count(x, 0, 5)),
     "longest_strike_above_mean": ("tsfresh", fc.longest_strike_above_mean),
     "longest_strike_below_mean": ("tsfresh", fc.longest_strike_below_mean),
     "first_loc_max": ("tsfresh", fc.first_location_of_maximum),
@@ -353,6 +350,7 @@ REFERENCES = {
     "wavelet_entropy": ("tsfel", lambda x: F.wavelet_entropy(x, FS)),
     "mse-3": ("tsfel", lambda x: F.mse(x, m=3, maxscale=None, tolerance=0.2 * np.std(x))),
     "mse-2-10": ("tsfel", lambda x: F.mse(x, m=2, maxscale=10, tolerance=0.2 * np.std(x))),
+    "maximum_fractal_length": ("tsfel", F.maximum_fractal_length),
 }
 
 # Lengths below which the reference returns NaN by policy rather than because
@@ -361,6 +359,7 @@ MIN_LENGTH = {
     "higuchi_fd": 160,  # TSFEL FEATURES_MIN_SIZE
     "dfa": 160,
     "hurst_exponent": 160,
+    "maximum_fractal_length": 160,  # TSFEL FEATURES_MIN_SIZE
 }
 
 NO_REFERENCE = {

@@ -500,3 +500,27 @@ def test_expanding_invalid_feature():
     # Verify unsupported features immediately error during initialization
     with pytest.raises(ValueError, match="Unknown feature"):
         ExpandingExtractor(["invalid_feature"], 1)
+
+
+def test_expanding_count_above_below_and_range_count():
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    features = ["count_above-3.0", "count_below-3.0", "range_count-2-4"]
+
+    def check(chunks):
+        ext = ExpandingExtractor(features, 1)
+        seen = np.array([], dtype=np.float32)
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            assert np.allclose(res[0][0], fc.count_above(seen, 3.0))
+            assert np.allclose(res[0][1], fc.count_below(seen, 3.0))
+            assert np.allclose(res[0][2], fc.range_count(seen, 2, 4))
+
+    # Values exactly equal to the threshold/boundaries, appended in two chunks.
+    check([[1.0, 2.0, 3.0], [3.0, 4.0, 5.0]])
+    # Constant series.
+    check([[2.0, 2.0, 2.0], [2.0, 2.0]])
+    # First window of length 1.
+    check([[3.0], [1.0, 4.0]])

@@ -50,6 +50,9 @@ pub enum Feature {
     AbsSumChange,
     CountAboveMean,
     CountBelowMean,
+    CountAbove(u32),       // t encoded as f32 bits
+    CountBelow(u32),       // t encoded as f32 bits
+    RangeCount(u32, u32),  // min, max encoded as f32 bits
     LongestStrikeAboveMean,
     LongestStrikeBelowMean,
     VariationCoefficient,
@@ -224,6 +227,9 @@ impl Feature {
             Self::AbsSumChange => C::MAC,
             Self::CountAboveMean => C::SUM | C::MEAN | C::CNT_ABOVE_MEAN | C::NEEDS_SORT,
             Self::CountBelowMean => C::SUM | C::MEAN | C::CNT_BELOW_MEAN | C::NEEDS_SORT,
+            Self::CountAbove(_) => C::COUNT_ABOVE,
+            Self::CountBelow(_) => C::COUNT_BELOW,
+            Self::RangeCount(_, _) => C::RANGE_COUNT,
             Self::LongestStrikeAboveMean => C::SUM | C::MEAN | C::STRIKE_ABOVE | C::NEEDS_SORT,
             Self::LongestStrikeBelowMean => C::SUM | C::MEAN | C::STRIKE_BELOW | C::NEEDS_SORT,
             Self::VariationCoefficient => {
