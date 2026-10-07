@@ -726,3 +726,35 @@ def test_expanding_spectrogram_mean_coeff():
     check([noise[:10], noise[10:40], noise[40:100], noise[100:]])
     # Constant series.
     check([np.full(50, 1.5), np.full(50, 1.5)])
+
+
+def _tsfresh_linear_trend_timewise(x, period_s):
+    import pandas as pd
+    from tsfresh.feature_extraction.feature_calculators import linear_trend_timewise
+
+    ix = pd.date_range("2000-01-01", periods=len(x), freq=pd.Timedelta(seconds=period_s))
+    res = linear_trend_timewise(pd.Series(x, index=ix), [{"attr": a} for a in LTT_ATTRS])
+    return np.array([v for _, v in res])
+
+
+LTT_ATTRS = ["slope", "intercept", "rvalue", "pvalue", "stderr"]
+
+
+def test_expanding_linear_trend_timewise():
+    def check(chunks, period_s, attrs=LTT_ATTRS):
+        ext = ExpandingExtractor([f"linear_trend_timewise-{a}-{period_s}" for a in attrs], 1)
+        idx = [LTT_ATTRS.index(a) for a in attrs]
+        seen = np.array([], dtype=np.float32)
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            expected = _tsfresh_linear_trend_timewise(seen.astype(np.float64), period_s)[idx]
+            np.testing.assert_allclose(res[0], expected, rtol=1e-3, atol=1e-4)
+
+    rng = np.random.RandomState(9)
+    noise = rng.randn(200).cumsum()
+    check([noise[:5], noise[5:40], noise[40:]], 60)
+    check([noise[:50], noise[50:]], 0.25)
+    # Constant series.
+    check([np.full(30, 4.0), np.full(30, 4.0)], 60, ["slope", "intercept"])

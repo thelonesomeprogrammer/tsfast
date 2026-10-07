@@ -1202,3 +1202,42 @@ def test_spectrogram_mean_coeff():
     # Default bins=32 and the name it is reported under.
     ext = tsfast.Extractor(["spectrogram_mean_coeff-4"])
     assert ext.feature_names == ["spectrogram_mean_coeff-4"]
+
+
+def _tsfresh_linear_trend_timewise(x, period_s):
+    import pandas as pd
+    from tsfresh.feature_extraction.feature_calculators import linear_trend_timewise
+
+    ix = pd.date_range("2000-01-01", periods=len(x), freq=pd.Timedelta(seconds=period_s))
+    res = linear_trend_timewise(pd.Series(x, index=ix), [{"attr": a} for a in LTT_ATTRS])
+    return np.array([v for _, v in res])
+
+
+LTT_ATTRS = ["slope", "intercept", "rvalue", "pvalue", "stderr"]
+
+
+def test_linear_trend_timewise():
+    def check(x, period_s, attrs=LTT_ATTRS):
+        x = np.asarray(x, dtype=np.float32)
+        ext = tsfast.Extractor([f"linear_trend_timewise-{a}-{period_s}" for a in attrs])
+        res = ext.process_2d_floats(np.atleast_2d(x))[0]
+        expected = _tsfresh_linear_trend_timewise(x.astype(np.float64), period_s)
+        expected = expected[[LTT_ATTRS.index(a) for a in attrs]]
+        np.testing.assert_allclose(res, expected, rtol=1e-3, atol=1e-5)
+
+    rng = np.random.RandomState(7)
+    check(rng.randn(300).cumsum(), 60)
+    check(np.arange(200.0) * 0.3 + rng.randn(200), 0.5)
+    check(rng.randn(100), 3600)
+    check(rng.randn(50) + 5.0, 86400)
+    # Constant series: flat line through the value (stderr: scipy NaN, tsfast 0 like linear_trend).
+    check(np.full(40, 2.5), 60, ["slope", "intercept"])
+    # Hourly sampling matches linear_trend exactly.
+    x = rng.randn(120).astype(np.float32)
+    a = tsfast.Extractor([f"linear_trend_timewise-{a}-3600" for a in LTT_ATTRS])
+    b = tsfast.Extractor([f"linear_trend-{a}" for a in LTT_ATTRS])
+    np.testing.assert_array_equal(a.process_2d_floats(x[None]), b.process_2d_floats(x[None]))
+    assert a.feature_names[0] == "linear_trend_timewise-slope-3600"
+    for bad in ["linear_trend_timewise-slope-0", "linear_trend_timewise-slope"]:
+        with pytest.raises(ValueError):
+            tsfast.Extractor([bad])
