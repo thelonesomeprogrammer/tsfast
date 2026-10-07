@@ -4,7 +4,7 @@ use super::feature::{AdfAttr, AggAttr, AggFunc, Feature, FftAggType, FftAttr};
 //
 // `Variant => "canonical_name", ["alias", ...];`
 // The canonical name is the output column name and is always accepted when
-// parsing; aliases are additionally accepted (tsfresh/TSFEL/torque spellings).
+// parsing; aliases are additionally accepted (tsfresh/TSFEL spellings).
 // Features with parameters are parsed in `from_str` / named in `name()` below.
 
 macro_rules! unit_features {
@@ -53,7 +53,7 @@ unit_features! {
     HurstExponent => "hurst_exponent";
     MaximumFractalLength => "maximum_fractal_length";
     PetrosianFractalDimension => "petrosian_fractal_dimension";
-    Energy => "energy", ["torque_Absolute energy"];
+    Energy => "energy";
     Rms => "rms";
     RootMeanSquare => "root_mean_square";
     LempelZiv => "lempel_ziv";
@@ -64,11 +64,11 @@ unit_features! {
     AutocorrLag1 => "autocorr_lag1", ["centered_autocorr_lag1"];
     AutocorrFirst1e => "autocorrelation", ["autocorr_first_1e"];
     MeanAbsChange => "mean_abs_change";
-    MeanChange => "mean_change", ["mean_diff", "torque_Mean diff"];
+    MeanChange => "mean_change", ["mean_diff"];
     MedianDiff => "median_diff";
     MedianAbsDiff => "median_abs_diff";
     CidCe => "cid_ce";
-    Slope => "slope", ["torque_Slope"];
+    Slope => "slope";
     Intercept => "intercept";
     AbsSumChange => "abs_sum_change";
     CountAboveMean => "count_above_mean";
@@ -94,25 +94,25 @@ unit_features! {
     RatioValueNumberToTimeSeriesLength => "ratio_value_number_to_time_series_length", ["value__ratio_value_number_to_time_series_length"];
     Length => "length", ["value__length"];
     VarianceLargerThanStandardDeviation => "variance_larger_than_standard_deviation", ["value__variance_larger_than_standard_deviation"];
-    SpectralCentroid => "spectral_centroid", ["torque_Centroid"];
-    SpectralDistance => "spectral_distance", ["torque_Spectral distance"];
-    SpectralDecrease => "spectral_decrease", ["torque_Spectral decrease"];
-    SpectralSlope => "spectral_slope", ["torque_Spectral slope"];
-    SpectralSpread => "spectral_spread", ["torque_Spectral spread"];
-    SpectralEntropy => "spectral_entropy", ["torque_Spectral entropy"];
-    SpectralRollOn => "spectral_roll_on", ["torque_Spectral roll-on"];
-    SpectralRollOff => "spectral_roll_off", ["torque_Spectral roll-off"];
-    MaxFrequency => "max_frequency", ["torque_Max frequency"];
-    MedianFrequency => "median_frequency", ["torque_Median frequency"];
-    FundamentalFrequency => "fundamental_frequency", ["torque_Fundamental frequency"];
+    SpectralCentroid => "spectral_centroid";
+    SpectralDistance => "spectral_distance";
+    SpectralDecrease => "spectral_decrease";
+    SpectralSlope => "spectral_slope";
+    SpectralSpread => "spectral_spread";
+    SpectralEntropy => "spectral_entropy";
+    SpectralRollOn => "spectral_roll_on";
+    SpectralRollOff => "spectral_roll_off";
+    MaxFrequency => "max_frequency";
+    MedianFrequency => "median_frequency";
+    FundamentalFrequency => "fundamental_frequency";
     PowerBandwidth => "power_bandwidth";
     SpectralPositiveTurning => "spectral_positive_turning";
     SpectralVariation => "spectral_variation";
-    SpectralSkewness => "spectral_skewness", ["torque_Spectral skewness"];
-    SpectralKurtosis => "spectral_kurtosis", ["torque_Spectral kurtosis"];
-    SignalDistance => "signal_distance", ["torque_Signal distance"];
+    SpectralSkewness => "spectral_skewness";
+    SpectralKurtosis => "spectral_kurtosis";
+    SignalDistance => "signal_distance";
     PkPkDistance => "pk_pk_distance";
-    ZeroCross => "zero_cross", ["torque_Zero_crossing_rate"];
+    ZeroCross => "zero_cross";
     MaxPowerSpectrum => "max_power_spectrum";
     MeanSecondDerivativeCentral => "mean_second_derivative_central";
     HasDuplicateMax => "has_duplicate_max";
@@ -157,7 +157,7 @@ impl std::str::FromStr for Feature {
             "augmented_dickey_fuller-usedlag" => {
                 return Ok(Feature::AugmentedDickeyFuller(AdfAttr::UsedLag));
             }
-            "human_range_energy" | "torque_Human range energy" => {
+            "human_range_energy" => {
                 return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
             }
             "hist_mode" => {
@@ -178,7 +178,7 @@ impl std::str::FromStr for Feature {
             return Ok(f);
         }
 
-        // 4. Legacy tsfresh / torque format
+        // 4. Legacy tsfresh format
         if let Some(f) = parse_legacy_format(s) {
             return Ok(f);
         }
@@ -415,6 +415,16 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let f: u16 = f_s.parse().ok()?;
         return Some(Feature::WaveletFeatures(w.to_bits(), f));
     }
+    if let Some(arg) = s.strip_prefix("spectrogram_mean_coeff-") {
+        // spectrogram_mean_coeff-COEFF[-BINS], TSFEL default bins=32.
+        let (c_s, b_s) = arg.split_once('-').unwrap_or((arg, "32"));
+        let coeff: u16 = c_s.parse().ok()?;
+        let bins: u16 = b_s.parse().ok()?;
+        if bins < 2 || coeff >= bins {
+            return None;
+        }
+        return Some(Feature::SpectrogramMeanCoeff(coeff, bins));
+    }
     if let Some(arg) = s.strip_prefix("spectrogram-") {
         let (t_s, f_s) = arg.split_once('-')?;
         let t: u16 = t_s.parse().ok()?;
@@ -504,7 +514,7 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     None
 }
 
-// ─── Legacy tsfresh / torque format parsers ─────────────────────────────────
+// ─── Legacy tsfresh format parsers ──────────────────────────────────────────
 
 fn parse_legacy_format(s: &str) -> Option<Feature> {
     if s.contains("number_crossing_m__m_") {
@@ -621,26 +631,6 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         let pos = s.find("number_of_maxima_")?;
         let n: u16 = s[pos + 17..].parse().ok()?;
         return Some(Feature::MeanNAbsoluteMax(n));
-    }
-    if s.contains("torque_Wavelet") {
-        let f_type: u16 = if s.contains("absolute mean") { 0 } else { 1 };
-        let freq = if let Some(pos) = s.rfind('_') {
-            if let Some(end) = s.find("Hz") {
-                s[pos + 1..end].parse::<f32>().unwrap_or(0.0)
-            } else {
-                0.0
-            }
-        } else {
-            0.0
-        };
-        return Some(Feature::WaveletFeatures(freq.to_bits(), f_type));
-    }
-    if s.contains("torque_Spectrogram mean coefficient_")
-        && let Some(pos) = s.rfind('_')
-        && let Some(end) = s.find("Hz")
-    {
-        let freq = s[pos + 1..end].parse::<f32>().unwrap_or(0.0);
-        return Some(Feature::SpectrogramCoefficients(0, freq.to_bits()));
     }
     if let Some(arg) = s.strip_prefix("spkt_welch_density__coeff_") {
         let coeff: u16 = arg.parse().ok()?;
@@ -890,6 +880,10 @@ impl Feature {
             }
             Feature::WaveletFeatures(w_bits, f) => {
                 format!("wavelet-{}-{}", f32::from_bits(*w_bits), f)
+            }
+            Feature::SpectrogramMeanCoeff(coeff, 32) => format!("spectrogram_mean_coeff-{}", coeff),
+            Feature::SpectrogramMeanCoeff(coeff, bins) => {
+                format!("spectrogram_mean_coeff-{}-{}", coeff, bins)
             }
             Feature::SpectrogramCoefficients(t, f_bits) => {
                 format!("spectrogram-{}-{}", t, f32::from_bits(*f_bits))

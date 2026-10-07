@@ -184,6 +184,9 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
                 0.0
             }
         }
+        Feature::SpectrogramMeanCoeff(coeff, bins) => {
+            return state.spectrogram.coefficient(values, *coeff, *bins);
+        }
         Feature::SpectralEntropy => spectral_entropy,
         Feature::WaveletFeatures(_w_bits, f_type) => {
             if values.len() >= 2 {

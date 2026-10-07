@@ -746,3 +746,29 @@ def test_sliding_hist_mode_and_neighbourhood_peaks():
     check(np.full(60, -2.0), window_size=20)
     # Window too short for any 3-peak.
     check(rng.randn(30), window_size=6)
+
+
+def test_sliding_spectrogram_mean_coeff():
+    from tsfel.feature_extraction.features import spectrogram_mean_coeff
+
+    features = ["spectrogram_mean_coeff-0", "spectrogram_mean_coeff-5", "spectrogram_mean_coeff-2-4"]
+
+    def check(x, window_size):
+        x = np.asarray(x, dtype=np.float32)
+        ext = SlidingExtractor(features, 1, window_size)
+        df = frame(ext, ext.update(x.reshape(1, -1)))
+        for w in range(len(df)):
+            window = x[w : w + window_size].astype(np.float64)
+            full = spectrogram_mean_coeff(window, 100.0)["values"]
+            small = spectrogram_mean_coeff(window, 100.0, 4)["values"]
+            got = df.iloc[w].to_numpy()
+            expected = np.array([full[0], full[5], small[2]])
+            atol = 1e-6 * max(np.abs(full).max(), 1e-12)
+            np.testing.assert_allclose(got, expected, rtol=1e-3, atol=atol)
+
+    rng = np.random.RandomState(17)
+    check(rng.randn(200), window_size=130)
+    # Window shorter than 2 * 32 - 2: bins clamped.
+    check(rng.randn(80).cumsum(), window_size=40)
+    # Constant window.
+    check(np.full(90, -2.0), window_size=70)

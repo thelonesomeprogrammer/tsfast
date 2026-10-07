@@ -149,6 +149,8 @@ pub struct ColumnState {
     pub sliding_dft: Option<SlidingDFT>,
     pub cwt_peaks: u16,
     pub welch_density: Vec<f32>,
+    /// Per-window spectrogram means for `spectrogram_mean_coeff`.
+    pub spectrogram: crate::spectral::SpectrogramCache,
     pub spectrum_buffer: Vec<f32>,
     pub adf_test_stat: f32,
     pub adf_p_value: f32,
@@ -203,6 +205,7 @@ impl ColumnState {
         self.lz_bit_buffer.clear();
         self.higuchi_lk.clear();
         self.higuchi_k_values.clear();
+        self.spectrogram.invalidate();
     }
 
     pub fn new(
@@ -312,6 +315,7 @@ impl ColumnState {
             sliding_dft: None,
             cwt_peaks: 0,
             welch_density: Vec::new(),
+            spectrogram: Default::default(),
             spectrum_buffer: Vec::new(),
             adf_test_stat: std::f32::NAN,
             adf_p_value: std::f32::NAN,
