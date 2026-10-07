@@ -379,6 +379,9 @@ REFERENCES = {
     "maximum_fractal_length": ("tsfel", F.maximum_fractal_length),
     "petrosian_fractal_dimension": ("tsfel", F.petrosian_fractal_dimension),
     "average_power-100": ("tsfel", lambda x: F.average_power(x, 100.0)),
+    "hist_mode-10": ("tsfel", lambda x: F.hist_mode(x, 10)),
+    "hist_mode-3": ("tsfel", lambda x: F.hist_mode(x, 3)),
+    "neighbourhood_peaks-10": ("tsfel", lambda x: F.neighbourhood_peaks(x, 10)),
 }
 
 # Lengths below which the reference returns NaN by policy rather than because

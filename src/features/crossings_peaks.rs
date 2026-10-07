@@ -1,5 +1,50 @@
 use crate::types::Feature;
 
+/// Number of points strictly greater than every neighbour within `p` on both
+/// sides (tsfresh `number_peaks`, TSFEL `neighbourhood_peaks`).
+///
+/// Linear-ish instead of O(len * p): a failed right scan at offset `j` means
+/// everything between `i` and `i + j` is below `values[i]` with `i` in its
+/// neighbourhood, so none of it can be a peak and we jump straight to `i + j`.
+/// `known` remembers the stretch left of `i` already proven smaller than
+/// `values[i]`, so monotone runs don't rescan the left side each step.
+fn count_n_peaks(values: &[f32], p: usize) -> usize {
+    let len = values.len();
+    if p == 0 || len <= 2 * p {
+        return 0;
+    }
+    let end = len - p;
+    let mut count = 0;
+    let mut i = p;
+    // Invariant: values[known..i] < values[i].
+    let mut known = i;
+    while i < end {
+        let v = values[i];
+        let lo = i - p;
+        // Nearest neighbours first: they're the likeliest to fail.
+        if !values[lo..known.clamp(lo, i)].iter().rev().all(|&x| x < v) {
+            i += 1;
+            known = i;
+            continue;
+        }
+        // Now values[lo..i] < v.
+        match values[i + 1..=i + p].iter().position(|&x| !(x < v)) {
+            Some(off) => {
+                let next = i + 1 + off;
+                known = if values[next] > v { lo } else { next };
+                i = next;
+            }
+            None => {
+                count += 1;
+                // values[i+1..=i+p] < v, and v is in each one's neighbourhood.
+                i += p + 1;
+                known = i;
+            }
+        }
+    }
+    count
+}
+
 #[inline(always)]
 pub fn eval_crossings_peaks(
     feat: &Feature,
@@ -69,38 +114,7 @@ pub fn eval_crossings_peaks(
             }
             count as f32
         }
-        Feature::NumberPeaks(peak_n) => {
-            let mut count = 0;
-            let p_n = *peak_n as usize;
-            let values = context.values;
-            let len = values.len();
-            if p_n > 0 && len > 2 * p_n {
-                for i in p_n..(len - p_n) {
-                    let mut is_peak = true;
-                    let val = values[i];
-                    // Check left neighbors
-                    for j in 1..=p_n {
-                        if values[i - j] >= val {
-                            is_peak = false;
-                            break;
-                        }
-                    }
-                    if is_peak {
-                        // Check right neighbors
-                        for j in 1..=p_n {
-                            if values[i + j] >= val {
-                                is_peak = false;
-                                break;
-                            }
-                        }
-                    }
-                    if is_peak {
-                        count += 1;
-                    }
-                }
-            }
-            count as f32
-        }
+        Feature::NumberPeaks(peak_n) => count_n_peaks(context.values, *peak_n as usize) as f32,
         Feature::ZeroCrossingMean => zc_mean,
         Feature::ZeroCrossingStd => zc_std,
         _ => return None,

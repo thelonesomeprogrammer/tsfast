@@ -160,6 +160,13 @@ impl std::str::FromStr for Feature {
             "human_range_energy" | "torque_Human range energy" => {
                 return Ok(Feature::HumanRangeEnergy(100.0f32.to_bits())); // Default fs=100
             }
+            "hist_mode" => {
+                return Ok(Feature::HistMode(10)); // TSFEL default nbins=10
+            }
+            // TSFEL's neighbourhood_peaks is tsfresh's number_peaks under another name.
+            "neighbourhood_peaks" => {
+                return Ok(Feature::NumberPeaks(10)); // TSFEL default n=10
+            }
             "average_power" => {
                 return Ok(Feature::AveragePower(100.0f32.to_bits())); // Default fs=100
             }
@@ -252,6 +259,20 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         } else {
             return None;
         }
+    }
+    if let Some(arg) = s.strip_prefix("hist_mode-") {
+        let nbins: u16 = arg.parse().ok()?;
+        if nbins == 0 {
+            return None;
+        }
+        return Some(Feature::HistMode(nbins));
+    }
+    if let Some(arg) = s.strip_prefix("neighbourhood_peaks-") {
+        let n: u16 = arg.parse().ok()?;
+        if n == 0 {
+            return None;
+        }
+        return Some(Feature::NumberPeaks(n));
     }
     if let Some(arg) = s.strip_prefix("ecdf_percentile_count-") {
         let p: f32 = arg.parse().ok()?;
@@ -860,6 +881,7 @@ impl Feature {
                 format!("matrix_profile-{}-{}", l, agg_str)
             }
             Feature::MeanNAbsoluteMax(n) => format!("mean_n_absolute_max-{}", n),
+            Feature::HistMode(nbins) => format!("hist_mode-{}", nbins),
             Feature::HumanRangeEnergy(fs_bits) => {
                 format!("human_range_energy-{}", f32::from_bits(*fs_bits))
             }

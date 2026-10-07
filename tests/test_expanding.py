@@ -674,3 +674,29 @@ def test_expanding_petrosian_fractal_dimension_and_average_power():
     check([rng.randn(5), noise[:30]])
     # Constant series.
     check([np.full(40, -1.5), np.full(40, -1.5)])
+
+
+def test_expanding_hist_mode_and_neighbourhood_peaks():
+    from tsfel.feature_extraction.features import hist_mode, neighbourhood_peaks
+
+    features = ["hist_mode-10", "neighbourhood_peaks-3"]
+
+    def check(chunks):
+        ext = ExpandingExtractor(features, 1)
+        seen = np.array([], dtype=np.float32)
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            seen64 = seen.astype(np.float64)
+            assert np.isclose(res[0][0], hist_mode(seen64, 10), rtol=1e-5, atol=1e-6)
+            assert res[0][1] == neighbourhood_peaks(seen64, 3)
+
+    rng = np.random.RandomState(29)
+    noise = rng.randn(100)
+    check([noise[:40], noise[40:]])
+    # Short first window (no peaks possible yet).
+    check([rng.randn(5), noise[:30]])
+    check([rng.randint(0, 4, size=50), rng.randint(0, 4, size=50)])
+    # Constant series.
+    check([np.full(40, -1.5), np.full(40, -1.5)])
