@@ -55,7 +55,6 @@ uv run python -c "import numpy as np, tsfast; e = tsfast.Extractor(['mean', 'hum
 | `tsfast/` | Python package (`__init__.py`, `selection.py`, `_tsfast.pyi` stubs); the built `.so` lands here |
 | `tests/` | `test_tsfast.py` = static, `test_sliding.py`, `test_expanding.py`, plus topic files; `helpers.py` for shared helpers |
 | `tests/feature_samples.txt`, `tests/references.py` | one valid name per feature; its tsfresh/TSFEL reference function |
-| `missing.md` | backlog of unimplemented tsfresh/TSFEL features |
 | `.jules/*.md` | historical learning journals; may mention files that no longer exist |
 
 ## Adding a feature (checklist)
@@ -103,7 +102,6 @@ and tells you where to look.
    requires every feature within 1% of its reference. If tsfresh and TSFEL
    define the same quantity differently, add one feature per definition
    (e.g. `skewness` / `biased_skewness`) rather than picking one.
-7. Delete the feature's row from `missing.md`.
 
 Reference implementation: `EnergyRatioByChunks`. Before starting, grep
 `src/types/parse.rs` for the feature name: several features have already been
