@@ -702,3 +702,33 @@ def test_process_2d_floats_rejects_bad_input():
         ext.process_2d_floats(np.zeros((2, 3), dtype=np.int64))
     with pytest.raises(TypeError, match="list"):
         ext.process_2d_floats([[1.0, 2.0]])
+
+def test_count_above():
+    from tsfresh.feature_extraction.feature_calculators import count_above
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 6.0], dtype=np.float32)
+    batch = np.stack([x, np.zeros_like(x), np.ones_like(x)])
+    got = tsfast.Extractor(['count_above-5']).process_2d_floats(batch)
+    want = count_above(x, 5.0)
+    np.testing.assert_allclose(got[0][0], want, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(got[1][0], count_above(np.zeros_like(x), 5.0), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(got[2][0], count_above(np.ones_like(x), 5.0), rtol=1e-5, atol=1e-5)
+
+def test_count_below():
+    from tsfresh.feature_extraction.feature_calculators import count_below
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 6.0], dtype=np.float32)
+    batch = np.stack([x, np.zeros_like(x), np.ones_like(x)])
+    got = tsfast.Extractor(['count_below-5']).process_2d_floats(batch)
+    want = count_below(x, 5.0)
+    np.testing.assert_allclose(got[0][0], want, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(got[1][0], count_below(np.zeros_like(x), 5.0), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(got[2][0], count_below(np.ones_like(x), 5.0), rtol=1e-5, atol=1e-5)
+
+def test_range_count():
+    from tsfresh.feature_extraction.feature_calculators import range_count
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 6.0], dtype=np.float32)
+    batch = np.stack([x, np.zeros_like(x), np.ones_like(x)])
+    got = tsfast.Extractor(['range_count-3-5']).process_2d_floats(batch)
+    want = range_count(x, 3.0, 5.0)
+    np.testing.assert_allclose(got[0][0], want, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(got[1][0], range_count(np.zeros_like(x), 3.0, 5.0), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(got[2][0], range_count(np.ones_like(x), 3.0, 5.0), rtol=1e-5, atol=1e-5)

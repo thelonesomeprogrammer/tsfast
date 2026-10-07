@@ -348,3 +348,23 @@ def test_expanding_output_shape_and_names():
     np.testing.assert_allclose(out, [[1.5, 2.0], [15.0, 20.0]])
     # float64 is accepted and converted; features cover everything seen so far.
     np.testing.assert_allclose(extractor.update(np.array([[3.0], [30.0]])), [[2.0, 3.0], [20.0, 30.0]])
+
+def test_expanding_count_features():
+    import numpy as np
+    import tsfast
+    from tsfresh.feature_extraction.feature_calculators import count_above, count_below, range_count
+
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 6.0, 1.0, 2.0], dtype=np.float32)
+    batch = np.stack([x])
+    extractor = tsfast.ExpandingExtractor(
+        ['count_above-3', 'count_below-3', 'range_count-2-5'], 1
+    )
+    res = extractor.update(batch)
+
+    expected_above = count_above(x, 3.0)
+    expected_below = count_below(x, 3.0)
+    expected_range = range_count(x, 2.0, 5.0)
+
+    np.testing.assert_allclose(res[0][0], expected_above, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(res[0][1], expected_below, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(res[0][2], expected_range, rtol=1e-5, atol=1e-5)

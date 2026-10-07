@@ -1,11 +1,8 @@
 use crate::types::Feature;
 
 #[inline(always)]
-pub fn eval_runs(
-    feat: &Feature,
-    context: &mut crate::context::FeatureContext,
-) -> Option<f32> {
-    let _values = context.values;
+pub fn eval_runs(feat: &Feature, context: &mut crate::context::FeatureContext) -> Option<f32> {
+    let values = context.values;
     let _state = &mut *context.state;
     let _n = context.n;
     let _mean = context.mean;
@@ -40,10 +37,41 @@ pub fn eval_runs(
     let _paa_boundaries = context.paa_boundaries;
 
     let res = match feat {
-                Feature::CountAboveMean => count_a as f32,
-                Feature::CountBelowMean => count_b as f32,
-                Feature::LongestStrikeAboveMean => max_strike_a as f32,
-                Feature::LongestStrikeBelowMean => max_strike_b as f32,
+        Feature::CountAboveMean => count_a as f32,
+        Feature::CountBelowMean => count_b as f32,
+        Feature::LongestStrikeAboveMean => max_strike_a as f32,
+        Feature::LongestStrikeBelowMean => max_strike_b as f32,
+        Feature::CountAbove(t_bits) => {
+            let t = f32::from_bits(*t_bits);
+            let mut count = 0;
+            for &v in values {
+                if v >= t {
+                    count += 1;
+                }
+            }
+            count as f32 / values.len() as f32
+        }
+        Feature::CountBelow(t_bits) => {
+            let t = f32::from_bits(*t_bits);
+            let mut count = 0;
+            for &v in values {
+                if v <= t {
+                    count += 1;
+                }
+            }
+            count as f32 / values.len() as f32
+        }
+        Feature::RangeCount(min_bits, max_bits) => {
+            let min = f32::from_bits(*min_bits);
+            let max = f32::from_bits(*max_bits);
+            let mut count = 0;
+            for &v in values {
+                if v >= min && v < max {
+                    count += 1;
+                }
+            }
+            count as f32
+        }
         _ => return None,
     };
     Some(res)

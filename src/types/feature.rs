@@ -45,6 +45,9 @@ pub enum Feature {
     Paa(u16, u16),
     AbsSumChange,
     CountAboveMean,
+    CountAbove(u32),
+    CountBelow(u32),
+    RangeCount(u32, u32),
     CountBelowMean,
     LongestStrikeAboveMean,
     LongestStrikeBelowMean,
@@ -170,7 +173,9 @@ impl Feature {
             Self::Max => C::MAX,
             Self::Median => C::MEDIAN | C::NEEDS_SORT,
             Self::MedianAbsDeviation => C::MEDIAN | C::MEDIAN_ABS_DEV | C::NEEDS_SORT,
-            Self::Skew | Self::BiasedSkew => C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT,
+            Self::Skew | Self::BiasedSkew => {
+                C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::ENERGY | C::NEEDS_SORT
+            }
             // The 4th central moment needs the sum of cubes, accumulated under SKEW.
             Self::UnbiasedFisherKurtosis | Self::BiasedFisherKurtosis => {
                 C::SUM | C::MEAN | C::VARIANCE | C::SKEW | C::KURTOSIS | C::ENERGY | C::NEEDS_SORT
@@ -206,6 +211,9 @@ impl Feature {
             Self::Paa(_, _) => C::empty(),
             Self::AbsSumChange => C::MAC,
             Self::CountAboveMean => C::SUM | C::MEAN | C::CNT_ABOVE_MEAN | C::NEEDS_SORT,
+            Self::CountAbove(_) => C::COUNT_ABOVE_T,
+            Self::CountBelow(_) => C::COUNT_BELOW_T,
+            Self::RangeCount(_, _) => C::RANGE_COUNT,
             Self::CountBelowMean => C::SUM | C::MEAN | C::CNT_BELOW_MEAN | C::NEEDS_SORT,
             Self::LongestStrikeAboveMean => C::SUM | C::MEAN | C::STRIKE_ABOVE | C::NEEDS_SORT,
             Self::LongestStrikeBelowMean => C::SUM | C::MEAN | C::STRIKE_BELOW | C::NEEDS_SORT,

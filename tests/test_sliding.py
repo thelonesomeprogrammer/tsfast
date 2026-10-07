@@ -396,3 +396,24 @@ def test_sliding_output_shape_and_names():
     assert extractor.update(np.zeros((2, 0), dtype=np.float32)).shape == (2, 0, 2)
     # float64 is accepted and converted.
     np.testing.assert_array_equal(extractor.update(np.array([[5.0], [10.0]]))[:, 0, 1], [5.0, 10.0])
+
+def test_sliding_count_features():
+    import numpy as np
+    import tsfast
+    from tsfresh.feature_extraction.feature_calculators import count_above, count_below, range_count
+
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 6.0, 1.0, 2.0], dtype=np.float32)
+    window_size = 4
+    batch = np.stack([x])
+    extractor = tsfast.SlidingExtractor(
+        ['count_above-3', 'count_below-3', 'range_count-2-5'], 1, window_size, 1
+    )
+    res = extractor.update(batch)
+
+    expected_above = [count_above(x[i:i+window_size], 3.0) for i in range(len(x) - window_size + 1)]
+    expected_below = [count_below(x[i:i+window_size], 3.0) for i in range(len(x) - window_size + 1)]
+    expected_range = [range_count(x[i:i+window_size], 2.0, 5.0) for i in range(len(x) - window_size + 1)]
+
+    np.testing.assert_allclose([r[0] for r in res[0]], expected_above, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose([r[1] for r in res[0]], expected_below, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose([r[2] for r in res[0]], expected_range, rtol=1e-5, atol=1e-5)

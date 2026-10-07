@@ -86,12 +86,19 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             }
             super::cwt::mexh_cwt(values, *w as f64)[c] as f32
         }
-        Feature::NumberCwtPeaks(n_val) => super::cwt::number_cwt_peaks(values, *n_val as usize) as f32,
+        Feature::NumberCwtPeaks(n_val) => {
+            super::cwt::number_cwt_peaks(values, *n_val as usize) as f32
+        }
         // TSFEL: max(scipy.signal.welch(x / std(x), fs, nperseg=len(x))[1]).
         Feature::MaxPowerSpectrum => {
             let n_vals = values.len() as f64;
             let mean = values.iter().map(|&v| v as f64).sum::<f64>() / n_vals;
-            let std = (values.iter().map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / n_vals).sqrt();
+            let std = (values
+                .iter()
+                .map(|&v| (v as f64 - mean).powi(2))
+                .sum::<f64>()
+                / n_vals)
+                .sqrt();
             let scaled: Vec<f32> = if std > 0.0 {
                 values.iter().map(|&v| (v as f64 / std) as f32).collect()
             } else {
@@ -121,7 +128,13 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             let len = spectrum.len();
             if len > 1 {
                 let mut cum = 0.0f64;
-                let cums: Vec<f64> = spectrum.iter().map(|&s| { cum += s as f64; cum }).collect();
+                let cums: Vec<f64> = spectrum
+                    .iter()
+                    .map(|&s| {
+                        cum += s as f64;
+                        cum
+                    })
+                    .collect();
                 let total = cum;
                 cums.iter()
                     .enumerate()

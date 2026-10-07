@@ -67,6 +67,9 @@ compute_flags! {
     STRIKE_ABOVE,
     STRIKE_BELOW,
     VAR_COEFF,
+    COUNT_ABOVE_T,
+    COUNT_BELOW_T,
+    RANGE_COUNT,
     C3,
     ZC_STATS,             // zero-crossing mean
     ZC_STD,
@@ -153,9 +156,6 @@ impl Compute {
     );
 
     pub const ANY_DIFF: Self = Self::from_bits_retain(
-        Self::ZERO_CROSS.bits()
-            | Self::MAC.bits()
-            | Self::MC.bits()
-            | Self::CID_CE.bits(),
+        Self::ZERO_CROSS.bits() | Self::MAC.bits() | Self::MC.bits() | Self::CID_CE.bits(),
     );
 }

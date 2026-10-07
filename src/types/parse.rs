@@ -337,6 +337,30 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     {
         return Some(Feature::BinnedEntropy(bins));
     }
+    if let Some(arg) = s.strip_prefix("count_above-") {
+        let t: f32 = arg.parse().ok()?;
+        if t.is_nan() {
+            return None;
+        }
+        return Some(Feature::CountAbove(t.to_bits()));
+    }
+    if let Some(arg) = s.strip_prefix("count_below-") {
+        let t: f32 = arg.parse().ok()?;
+        if t.is_nan() {
+            return None;
+        }
+        return Some(Feature::CountBelow(t.to_bits()));
+    }
+    if let Some(arg) = s.strip_prefix("range_count-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.len() == 2 {
+            let min: f32 = parts[0].parse().ok()?;
+            let max: f32 = parts[1].parse().ok()?;
+            if !min.is_nan() && !max.is_nan() && min <= max {
+                return Some(Feature::RangeCount(min.to_bits(), max.to_bits()));
+            }
+        }
+    }
     if let Some(arg) = s.strip_prefix("ratio_beyond_r_sigma-") {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::RatioBeyondRSigma(r.to_bits()));
@@ -704,6 +728,19 @@ impl Feature {
             }
             Feature::SymmetryLooking(r_bits) => {
                 format!("symmetry_looking-{}", f32::from_bits(*r_bits))
+            }
+            Feature::CountAbove(t_bits) => {
+                format!("count_above-{}", f32::from_bits(*t_bits))
+            }
+            Feature::CountBelow(t_bits) => {
+                format!("count_below-{}", f32::from_bits(*t_bits))
+            }
+            Feature::RangeCount(min_bits, max_bits) => {
+                format!(
+                    "range_count-{}-{}",
+                    f32::from_bits(*min_bits),
+                    f32::from_bits(*max_bits)
+                )
             }
             Feature::RatioBeyondRSigma(r_bits) => {
                 format!("ratio_beyond_r_sigma-{}", f32::from_bits(*r_bits))
