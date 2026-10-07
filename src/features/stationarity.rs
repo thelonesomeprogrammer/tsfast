@@ -28,7 +28,10 @@ fn mackinnonp(teststat: f64) -> f64 {
             val = val * teststat + c;
         }
     }
-    let norm = Normal::new(0.0, 1.0).unwrap();
+    let norm = match Normal::new(0.0, 1.0) {
+        Ok(n) => n,
+        Err(_) => return f64::NAN,
+    };
     norm.cdf(val)
 }
 
