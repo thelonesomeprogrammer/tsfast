@@ -1,9 +1,6 @@
-use super::dynamic::solve_ols_f64;
 use crate::types::{AdfAttr, Feature};
-use ndarray::{Array1, Array2};
 use statrs::distribution::{ContinuousCDF, Normal};
 use std::f32;
-use std::simd::{f64x8, num::SimdFloat};
 
 // MacKinnon (1994) critical values (regression "c")
 const MAC_MAX: f64 = 2.74;
@@ -51,288 +48,23 @@ pub fn eval_stationarity(
                     return Some(f32::NAN);
                 }
 
-                // Default maxlag based on statsmodels: int(12 * (n / 100)^(1/4))
-                let maxlag = (12.0 * ((n as f64) / 100.0).powf(0.25)) as usize;
-                let maxlag = maxlag.min(n / 2 - 1); // Ensure we have enough data
-
-                let mut xdiff = Vec::with_capacity(n - 1);
-                for i in 1..n {
-                    xdiff.push((values[i] - values[i - 1]) as f64);
-                }
-
-                let mut best_aic = f64::INFINITY;
-                let mut best_lag = 0;
-
-                let y_len = xdiff.len() - maxlag;
-                if y_len <= 2 {
+                // statsmodels: maxlag = min(n // 2 - ntrend - 1, ceil(12 * (n / 100)^(1/4))),
+                // ntrend = 1 for regression="c"; it raises (tsfresh: NaN) below 0.
+                let Some(cap) = (n / 2).checked_sub(2) else {
                     return Some(f32::NAN);
-                }
+                };
+                let maxlag = ((12.0 * ((n as f64) / 100.0).powf(0.25)).ceil() as usize).min(cap);
 
-                // Test lags from maxlag down to 0
-                for lag in (0..=maxlag).rev() {
-                    // Number of predictors: 1 (x_{t-1}) + lag (diffs) + 1 (const)
-                    let k_vars = 1 + lag + 1;
-
-                    // Create X matrix (y_len x k_vars)
-                    let mut xtx = Array2::<f64>::zeros((k_vars, k_vars));
-                    let mut xty = Array1::<f64>::zeros(k_vars);
-                    let mut y_arr = Array1::<f64>::zeros(y_len);
-
-                    let mut x_mat = Array2::<f64>::zeros((y_len, k_vars));
-
-                    for t in 0..y_len {
-                        let idx = t + maxlag;
-                        let y_val = xdiff[idx];
-                        y_arr[t] = y_val;
-
-                        x_mat[[t, 0]] = values[idx] as f64; // x_{t-1}
-                        for i in 0..lag {
-                            x_mat[[t, 1 + i]] = xdiff[idx - 1 - i]; // diff terms
-                        }
-                        x_mat[[t, k_vars - 1]] = 1.0; // constant
-                    }
-
-                    // compute xtx and xty
-                    for i in 0..k_vars {
-                        let mut sum_xty = 0.0;
-                        let mut t = 0;
-                        let mut sum_vec_xty = f64x8::splat(0.0);
-                        while t + 8 <= y_len {
-                            let x_vec = f64x8::from_array([
-                                x_mat[[t, i]],
-                                x_mat[[t + 1, i]],
-                                x_mat[[t + 2, i]],
-                                x_mat[[t + 3, i]],
-                                x_mat[[t + 4, i]],
-                                x_mat[[t + 5, i]],
-                                x_mat[[t + 6, i]],
-                                x_mat[[t + 7, i]],
-                            ]);
-                            let y_vec =
-                                f64x8::from_slice(&y_arr.as_slice().unwrap_or(&[])[t..t + 8]);
-                            sum_vec_xty += x_vec * y_vec;
-                            t += 8;
-                        }
-                        sum_xty += sum_vec_xty.reduce_sum();
-                        while t < y_len {
-                            sum_xty += x_mat[[t, i]] * y_arr[t];
-                            t += 1;
-                        }
-                        xty[i] = sum_xty;
-
-                        for j in i..k_vars {
-                            let mut sum = 0.0;
-                            let mut t = 0;
-                            let mut sum_vec = f64x8::splat(0.0);
-                            while t + 8 <= y_len {
-                                let xi_vec = f64x8::from_array([
-                                    x_mat[[t, i]],
-                                    x_mat[[t + 1, i]],
-                                    x_mat[[t + 2, i]],
-                                    x_mat[[t + 3, i]],
-                                    x_mat[[t + 4, i]],
-                                    x_mat[[t + 5, i]],
-                                    x_mat[[t + 6, i]],
-                                    x_mat[[t + 7, i]],
-                                ]);
-                                let xj_vec = f64x8::from_array([
-                                    x_mat[[t, j]],
-                                    x_mat[[t + 1, j]],
-                                    x_mat[[t + 2, j]],
-                                    x_mat[[t + 3, j]],
-                                    x_mat[[t + 4, j]],
-                                    x_mat[[t + 5, j]],
-                                    x_mat[[t + 6, j]],
-                                    x_mat[[t + 7, j]],
-                                ]);
-                                sum_vec += xi_vec * xj_vec;
-                                t += 8;
-                            }
-                            sum += sum_vec.reduce_sum();
-                            while t < y_len {
-                                sum += x_mat[[t, i]] * x_mat[[t, j]];
-                                t += 1;
-                            }
-                            xtx[[i, j]] = sum;
-                            xtx[[j, i]] = sum;
-                        }
-                    }
-
-                    if let Some(coeffs) = solve_ols_f64(&xtx, &xty) {
-                        let mut rss = 0.0;
-                        for t in 0..y_len {
-                            let mut y_pred = 0.0;
-                            for i in 0..k_vars {
-                                y_pred += x_mat[[t, i]] * (coeffs[i] as f64);
-                            }
-                            let res = y_arr[t] - y_pred;
-                            rss += res * res;
-                        }
-
-                        let n_obs = y_len as f64;
-                        let llf = -n_obs / 2.0
-                            * ((2.0 * std::f64::consts::PI).ln() + (rss / n_obs).ln() + 1.0);
-                        let aic = -2.0 * llf + 2.0 * (k_vars as f64);
-
-                        if aic < best_aic || best_aic.is_infinite() {
-                            best_aic = aic;
-                            best_lag = lag;
-                        }
-                    }
-                }
-                // Now re-run with best_lag using full available data
-                let final_lag = best_lag;
-                let mut best_t_stat = f32::NAN;
-
-                let y_len = xdiff.len() - final_lag;
-                if y_len > final_lag + 2 {
-                    let k_vars = 1 + final_lag + 1;
-                    let mut xtx = Array2::<f64>::zeros((k_vars, k_vars));
-                    let mut xty = Array1::<f64>::zeros(k_vars);
-                    let mut y_arr = Array1::<f64>::zeros(y_len);
-                    let mut x_mat = Array2::<f64>::zeros((y_len, k_vars));
-
-                    for t in 0..y_len {
-                        let idx = t + final_lag;
-                        y_arr[t] = xdiff[idx];
-                        x_mat[[t, 0]] = values[idx] as f64;
-                        for i in 0..final_lag {
-                            x_mat[[t, 1 + i]] = xdiff[idx - 1 - i];
-                        }
-                        x_mat[[t, k_vars - 1]] = 1.0;
-                    }
-
-                    for i in 0..k_vars {
-                        let mut sum_xty = 0.0;
-                        let mut t = 0;
-                        let mut sum_vec_xty = f64x8::splat(0.0);
-                        while t + 8 <= y_len {
-                            let x_vec = f64x8::from_array([
-                                x_mat[[t, i]],
-                                x_mat[[t + 1, i]],
-                                x_mat[[t + 2, i]],
-                                x_mat[[t + 3, i]],
-                                x_mat[[t + 4, i]],
-                                x_mat[[t + 5, i]],
-                                x_mat[[t + 6, i]],
-                                x_mat[[t + 7, i]],
-                            ]);
-                            let y_vec =
-                                f64x8::from_slice(&y_arr.as_slice().unwrap_or(&[])[t..t + 8]);
-                            sum_vec_xty += x_vec * y_vec;
-                            t += 8;
-                        }
-                        sum_xty += sum_vec_xty.reduce_sum();
-                        while t < y_len {
-                            sum_xty += x_mat[[t, i]] * y_arr[t];
-                            t += 1;
-                        }
-                        xty[i] = sum_xty;
-
-                        for j in i..k_vars {
-                            let mut sum = 0.0;
-                            let mut t = 0;
-                            let mut sum_vec = f64x8::splat(0.0);
-                            while t + 8 <= y_len {
-                                let xi_vec = f64x8::from_array([
-                                    x_mat[[t, i]],
-                                    x_mat[[t + 1, i]],
-                                    x_mat[[t + 2, i]],
-                                    x_mat[[t + 3, i]],
-                                    x_mat[[t + 4, i]],
-                                    x_mat[[t + 5, i]],
-                                    x_mat[[t + 6, i]],
-                                    x_mat[[t + 7, i]],
-                                ]);
-                                let xj_vec = f64x8::from_array([
-                                    x_mat[[t, j]],
-                                    x_mat[[t + 1, j]],
-                                    x_mat[[t + 2, j]],
-                                    x_mat[[t + 3, j]],
-                                    x_mat[[t + 4, j]],
-                                    x_mat[[t + 5, j]],
-                                    x_mat[[t + 6, j]],
-                                    x_mat[[t + 7, j]],
-                                ]);
-                                sum_vec += xi_vec * xj_vec;
-                                t += 8;
-                            }
-                            sum += sum_vec.reduce_sum();
-                            while t < y_len {
-                                sum += x_mat[[t, i]] * x_mat[[t, j]];
-                                t += 1;
-                            }
-                            xtx[[i, j]] = sum;
-                            xtx[[j, i]] = sum;
-                        }
-                    }
-
-                    if let Some(coeffs) = solve_ols_f64(&xtx, &xty) {
-                        let mut rss = 0.0;
-                        for t in 0..y_len {
-                            let mut y_pred = 0.0;
-                            for i in 0..k_vars {
-                                y_pred += x_mat[[t, i]] * (coeffs[i] as f64);
-                            }
-                            let res = y_arr[t] - y_pred;
-                            rss += res * res;
-                        }
-
-                        let n_k = k_vars;
-                        let mut a = xtx.clone();
-                        let mut b = Array1::<f64>::zeros(n_k);
-                        b[0] = 1.0;
-                        let mut invertible = true;
-                        for i in 0..n_k {
-                            let mut max_row = i;
-                            for row in i + 1..n_k {
-                                if a[[row, i]].abs() > a[[max_row, i]].abs() {
-                                    max_row = row;
-                                }
-                            }
-                            if a[[max_row, i]].abs() < 1e-12 {
-                                invertible = false;
-                                break;
-                            }
-                            if max_row != i {
-                                for j in i..n_k {
-                                    let temp = a[[i, j]];
-                                    a[[i, j]] = a[[max_row, j]];
-                                    a[[max_row, j]] = temp;
-                                }
-                                let temp = b[i];
-                                b[i] = b[max_row];
-                                b[max_row] = temp;
-                            }
-                            for row in i + 1..n_k {
-                                let factor = a[[row, i]] / a[[i, i]];
-                                for j in i..n_k {
-                                    a[[row, j]] -= factor * a[[i, j]];
-                                }
-                                b[row] -= factor * b[i];
-                            }
-                        }
-
-                        if invertible {
-                            let mut x_res = vec![0.0; n_k];
-                            for i in (0..n_k).rev() {
-                                let mut sum = 0.0;
-                                for j in i + 1..n_k {
-                                    sum += a[[i, j]] * x_res[j];
-                                }
-                                x_res[i] = (b[i] - sum) / a[[i, i]];
-                            }
-                            let inv_xtx00 = x_res[0];
-                            let n_obs = y_len as f64;
-                            let sigma2 = rss / (n_obs - k_vars as f64);
-                            let var_coeff0 = sigma2 * inv_xtx00;
-
-                            if var_coeff0 > 0.0 {
-                                best_t_stat = (coeffs[0] as f64 / var_coeff0.sqrt()) as f32;
-                            }
-                        }
-                    }
-                }
+                let mut xdiff = std::mem::take(&mut state.workspace_f64_3);
+                xdiff.clear();
+                xdiff.extend((1..n).map(|i| (values[i] - values[i - 1]) as f64));
+                let mut cols = std::mem::take(&mut state.workspace_f64_4);
+                let result = adf(values, &xdiff, maxlag, &mut cols);
+                state.workspace_f64_3 = xdiff;
+                state.workspace_f64_4 = cols;
+                let Some((best_t_stat, best_lag)) = result else {
+                    return Some(f32::NAN);
+                };
 
                 state.adf_test_stat = best_t_stat;
                 state.adf_used_lag = best_lag as f32;
@@ -349,4 +81,159 @@ pub fn eval_stationarity(
         }
         _ => None,
     }
+}
+
+/// ADF regression `Δx_t ~ x_{t-1} + Δx_{t-1} + ... + Δx_{t-lags} + 1`, rows
+/// `t = first..xdiff.len()`, laid out column-major in `cols` (constant last).
+fn adf_design(values: &[f32], xdiff: &[f64], lags: usize, first: usize, cols: &mut Vec<f64>) {
+    let rows = xdiff.len() - first;
+    cols.clear();
+    cols.extend((first..xdiff.len()).map(|t| values[t] as f64));
+    for i in 0..lags {
+        cols.extend((first..xdiff.len()).map(|t| xdiff[t - 1 - i]));
+    }
+    cols.extend(std::iter::repeat_n(1.0, rows));
+}
+
+fn dot(a: &[f64], b: &[f64]) -> f64 {
+    a.iter().zip(b).map(|(x, y)| x * y).sum()
+}
+
+/// Solves `a x = b` (`a` is k x k row-major) in place by Gaussian elimination
+/// with partial pivoting; the solution is left in `b`. False if singular.
+fn solve_in_place(a: &mut [f64], b: &mut [f64], k: usize) -> bool {
+    for i in 0..k {
+        let mut max_row = i;
+        for row in i + 1..k {
+            if a[row * k + i].abs() > a[max_row * k + i].abs() {
+                max_row = row;
+            }
+        }
+        if a[max_row * k + i].abs() < 1e-12 {
+            return false;
+        }
+        if max_row != i {
+            for j in 0..k {
+                a.swap(i * k + j, max_row * k + j);
+            }
+            b.swap(i, max_row);
+        }
+        for row in i + 1..k {
+            let factor = a[row * k + i] / a[i * k + i];
+            for j in i..k {
+                a[row * k + j] -= factor * a[i * k + j];
+            }
+            b[row] -= factor * b[i];
+        }
+    }
+    for i in (0..k).rev() {
+        let sum: f64 = (i + 1..k).map(|j| a[i * k + j] * b[j]).sum();
+        b[i] = (b[i] - sum) / a[i * k + i];
+    }
+    true
+}
+
+/// OLS of `y` on the columns `idx` of the column-major design `cols`, given
+/// the full Gram matrix `gram` (`kk` x `kk`) and `xty`. Returns the
+/// coefficients and the residual sum of squares, computed from the residuals.
+fn ols_subset(
+    cols: &[f64],
+    rows: usize,
+    y: &[f64],
+    gram: &[f64],
+    xty: &[f64],
+    kk: usize,
+    idx: &[usize],
+) -> Option<(Vec<f64>, f64)> {
+    let k = idx.len();
+    let mut a: Vec<f64> = idx
+        .iter()
+        .flat_map(|&r| idx.iter().map(move |&c| gram[r * kk + c]))
+        .collect();
+    let mut coeffs: Vec<f64> = idx.iter().map(|&r| xty[r]).collect();
+    if !solve_in_place(&mut a, &mut coeffs, k) {
+        return None;
+    }
+    let mut resid = y.to_vec();
+    for (&c, &b) in idx.iter().zip(&coeffs) {
+        for (r, &x) in resid.iter_mut().zip(&cols[c * rows..(c + 1) * rows]) {
+            *r -= x * b;
+        }
+    }
+    Some((coeffs, dot(&resid, &resid)))
+}
+
+fn gram_matrix(cols: &[f64], rows: usize, y: &[f64], kk: usize) -> (Vec<f64>, Vec<f64>) {
+    let col = |c: usize| &cols[c * rows..(c + 1) * rows];
+    let mut gram = vec![0.0; kk * kk];
+    for i in 0..kk {
+        for j in i..kk {
+            let v = dot(col(i), col(j));
+            gram[i * kk + j] = v;
+            gram[j * kk + i] = v;
+        }
+    }
+    let xty = (0..kk).map(|i| dot(col(i), y)).collect();
+    (gram, xty)
+}
+
+/// statsmodels `adfuller(x, regression="c", autolag="AIC")`: picks the lag
+/// by AIC over a common sample (rows from `maxlag` on), then refits that lag
+/// on all available rows. Every lag's regressors are a subset of `maxlag`'s,
+/// so one Gram matrix serves the whole search. Returns (t-stat, lag).
+fn adf(values: &[f32], xdiff: &[f64], maxlag: usize, cols: &mut Vec<f64>) -> Option<(f32, usize)> {
+    let rows = xdiff.len().checked_sub(maxlag)?;
+    if rows <= 2 {
+        return None;
+    }
+
+    adf_design(values, xdiff, maxlag, maxlag, cols);
+    let kk = maxlag + 2;
+    let y = &xdiff[maxlag..];
+    let (gram, xty) = gram_matrix(cols, rows, y, kk);
+
+    let mut best_aic = f64::INFINITY;
+    let mut best_lag = 0;
+    let n_obs = rows as f64;
+    let mut idx = Vec::with_capacity(kk);
+    // statsmodels picks min((aic, lag)): ties go to the smallest lag, so scan
+    // upwards and only replace on a strictly smaller AIC.
+    for lag in 0..=maxlag {
+        idx.clear();
+        idx.extend(0..=lag);
+        idx.push(kk - 1);
+        if let Some((_, rss)) = ols_subset(cols, rows, y, &gram, &xty, kk, &idx) {
+            let llf = -n_obs / 2.0 * ((2.0 * std::f64::consts::PI).ln() + (rss / n_obs).ln() + 1.0);
+            let aic = -2.0 * llf + 2.0 * (idx.len() as f64);
+            if aic < best_aic || best_aic.is_infinite() {
+                best_aic = aic;
+                best_lag = lag;
+            }
+        }
+    }
+
+    // Now re-run with best_lag using full available data
+    let rows = xdiff.len() - best_lag;
+    let mut t_stat = f32::NAN;
+    if rows > best_lag + 2 {
+        adf_design(values, xdiff, best_lag, best_lag, cols);
+        let kk = best_lag + 2;
+        let y = &xdiff[best_lag..];
+        let (gram, xty) = gram_matrix(cols, rows, y, kk);
+        let idx: Vec<usize> = (0..kk).collect();
+        if let Some((coeffs, rss)) = ols_subset(cols, rows, y, &gram, &xty, kk, &idx) {
+            // (X'X)^-1 [0, 0]
+            let mut a = gram.clone();
+            let mut e0 = vec![0.0; kk];
+            e0[0] = 1.0;
+            if solve_in_place(&mut a, &mut e0, kk) {
+                let sigma2 = rss / (rows as f64 - kk as f64);
+                let var_coeff0 = sigma2 * e0[0];
+                if var_coeff0 > 0.0 {
+                    t_stat = (coeffs[0] / var_coeff0.sqrt()) as f32;
+                }
+            }
+        }
+    }
+    Some((t_stat, best_lag))
 }

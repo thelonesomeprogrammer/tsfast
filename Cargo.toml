@@ -30,3 +30,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 [[bench]]
 name = "feature_benchmarks"
 harness = false
+
+[profile.release]
+lto = "fat"
+codegen-units = 1

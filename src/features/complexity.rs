@@ -50,15 +50,23 @@ pub fn eval_complexity(
             let m_val = *m as usize;
             // tsfresh: r is relative to the population std.
             let r = f32::from_bits(*r_bits) * population_std(values);
-            (crate::common::approx_entropy_simd(m_val, r, values)
-                - crate::common::approx_entropy_simd(m_val + 1, r, values))
-            .abs()
+            crate::common::approx_entropy(m_val, r, values, &mut context.state.approx_entropy_counts)
         }
         Feature::SampleEntropy => {
-            crate::common::sample_entropy_simd(values, 2, 0.2 * population_std(values))
+            let r = 0.2 * population_std(values);
+            if values.len() <= 2 {
+                return Some(f32::NAN);
+            }
+            let (a, b) = cached_sample_entropy_counts(values, r, context.state);
+            crate::common::sample_entropy_from_counts(a, b)
         }
         Feature::TsfreshSampleEntropy => {
-            crate::common::tsfresh_sample_entropy(values, 2, 0.2 * population_std(values))
+            let r = 0.2 * population_std(values);
+            if values.len() <= 2 {
+                return Some(f32::NAN);
+            }
+            let (a, b) = cached_sample_entropy_counts(values, r, context.state);
+            crate::common::tsfresh_sample_entropy_from_counts(values, 2, r, a, b)
         }
         Feature::PermutationEntropy(tau, dimension) => {
             crate::common::permutation_entropy(values, *tau, *dimension)
@@ -74,6 +82,23 @@ pub fn eval_complexity(
         _ => return None,
     };
     Some(res)
+}
+
+/// `sample_entropy_counts(values, 2, r)` for the current window, computed once
+/// for `sample_entropy` and `tsfresh_sample_entropy`.
+fn cached_sample_entropy_counts(
+    values: &[f32],
+    r: f32,
+    state: &mut crate::common::ColumnState,
+) -> (u32, u32) {
+    match state.sample_entropy_counts {
+        Some((bits, a, b)) if bits == r.to_bits() => (a, b),
+        _ => {
+            let (a, b) = crate::common::sample_entropy_counts(values, 2, r);
+            state.sample_entropy_counts = Some((r.to_bits(), a, b));
+            (a, b)
+        }
+    }
 }
 
 fn calc_mse(

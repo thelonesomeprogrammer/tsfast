@@ -1312,3 +1312,26 @@ def test_fresh_fft_meta_feature_is_ignored():
     )
     with pytest.raises(ValueError, match="fresh-N"):
         tsfast.Extractor(["mean", "fresh-0"])
+
+
+@pytest.mark.parametrize("n", [10, 50, 101, 256, 1000])
+def test_augmented_dickey_fuller_lag_selection_matches_tsfresh(n):
+    # statsmodels' default maxlag is ceil(12 * (n / 100) ** 0.25), capped at
+    # n // 2 - 2, and AIC ties go to the smallest lag. Getting either wrong
+    # picked a different lag on ~16% of random series of length 256.
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    rng = np.random.default_rng(n)
+    attrs = ["teststat", "pvalue", "usedlag"]
+    ext = tsfast.Extractor([f"augmented_dickey_fuller-{a}" for a in attrs])
+    for i in range(30):
+        x = [
+            rng.normal(size=n),
+            np.cumsum(rng.normal(size=n)),
+            np.sin(np.arange(n) * 0.3) + rng.normal(size=n) * 0.1,
+        ][i % 3].astype(np.float32)
+        got = ext.process_2d_floats(x[None])[0]
+        want = [fc.augmented_dickey_fuller(x, [{"attr": a}])[0][1] for a in attrs]
+        assert got[2] == want[2], f"series {i}"
+        assert got[0] == pytest.approx(want[0], rel=1e-4)
+        assert got[1] == pytest.approx(want[1], rel=1e-3, abs=1e-6)
