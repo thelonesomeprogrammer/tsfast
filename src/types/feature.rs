@@ -121,6 +121,7 @@ pub enum Feature {
     Ecdf(u32),
     EcdfPercentile(u32),
     EcdfPercentileCount(u32),
+    HistMode(u16), // nbins
     EcdfSlope(u32, u32),
     PermutationEntropy(u32, u32),
     ValueCount(u32),
@@ -343,6 +344,7 @@ impl Feature {
             Self::Ecdf(_) => C::LENGTH,
             Self::EcdfPercentile(_) => C::MIN | C::MAX,
             Self::EcdfPercentileCount(_) => C::MIN | C::MAX,
+            Self::HistMode(_) => C::MIN | C::MAX,
             Self::EcdfSlope(_, _) => C::MIN | C::MAX,
             Self::PermutationEntropy(_, _) => C::empty(),
             Self::ValueCount(_) => C::empty(),

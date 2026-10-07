@@ -1131,3 +1131,43 @@ def test_petrosian_fractal_dimension_and_average_power():
     # Short window with a flat run then a step, to exercise the
     # flat-to-nonflat sign transition.
     check(np.array([1.0, 1.0, 2.0, 2.0, -1.0]))
+
+
+def test_hist_mode_and_neighbourhood_peaks():
+    from tsfel.feature_extraction.features import hist_mode, neighbourhood_peaks
+
+    features = ["hist_mode", "hist_mode-3", "neighbourhood_peaks", "neighbourhood_peaks-2"]
+    ext = tsfast.Extractor(features)
+    # Defaults resolve to explicit parameters; neighbourhood_peaks is
+    # tsfresh's number_peaks.
+    assert ext.feature_names == [
+        "hist_mode-10",
+        "hist_mode-3",
+        "number_peaks__n_10",
+        "number_peaks__n_2",
+    ]
+
+    def check(x):
+        x = np.asarray(x, dtype=np.float32)
+        res = ext.process_2d_floats(np.atleast_2d(x))[0]
+        x64 = x.astype(np.float64)
+        assert np.isclose(res[0], hist_mode(x64, 10), rtol=1e-5, atol=1e-6)
+        assert np.isclose(res[1], hist_mode(x64, 3), rtol=1e-5, atol=1e-6)
+        assert res[2] == neighbourhood_peaks(x64, 10)
+        assert res[3] == neighbourhood_peaks(x64, 2)
+
+    rng = np.random.RandomState(5)
+    check(rng.randn(300))
+    check(np.sin(np.arange(200) / 3.0))
+    # Few distinct levels: many values sit exactly on bin edges, and equal
+    # neighbours (plateaus) must not count as peaks.
+    for _ in range(50):
+        check(rng.randint(0, 5, size=rng.randint(5, 80)))
+    # Monotone runs exercise the peak scan's skip logic.
+    check(np.arange(100.0))
+    check(np.arange(100.0)[::-1])
+    check(np.concatenate([np.arange(30.0), np.arange(30.0)[::-1], np.arange(30.0)]))
+    # Constant series: histogram range widens to [c - 0.5, c + 0.5].
+    check(np.full(64, 3.0))
+    # Shorter than 2n + 1: no peaks.
+    check(np.array([1.0, 3.0, 2.0, 5.0, 1.0]))

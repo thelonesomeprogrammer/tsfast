@@ -122,6 +122,8 @@ pub struct ColumnState {
     pub sort_buffer: Vec<f32>,
     pub mad_buffer: Vec<f32>,
     pub diff_buffer: Vec<f32>,
+    /// Bin counts for `hist_mode`.
+    pub hist_counts: Vec<u32>,
     pub pacf_buffer: Vec<f32>,
     pub cwt_final_energy: Vec<f32>,
     pub cwt_final_sum_abs: Vec<f32>,
@@ -286,6 +288,7 @@ impl ColumnState {
             sort_buffer: Vec::new(),
             mad_buffer: Vec::new(),
             diff_buffer: Vec::new(),
+            hist_counts: Vec::new(),
             pacf_buffer: Vec::new(),
             cwt_final_energy: Vec::new(),
             cwt_final_sum_abs: Vec::new(),

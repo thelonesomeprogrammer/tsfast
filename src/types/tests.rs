@@ -38,6 +38,7 @@ fn parameterized_samples() -> Vec<Feature> {
         F::IndexMassQuantile(f(0.5)),
         F::EcdfPercentile(f(0.5)),
         F::EcdfPercentileCount(f(0.5)),
+        F::HistMode(10),
         F::EcdfSlope(f(0.2), f(0.5)),
         F::MaxLangevinFixedPoint(3, f(30.0)),
         F::ArCoefficient(10, 1),
@@ -124,6 +125,8 @@ fn invalid_parameters_are_rejected() {
     for s in [
         "paa-2-2",
         "mse-0",
+        "hist_mode-0",
+        "neighbourhood_peaks-0",
         "mse--1",
         "ar_coefficient-1-10",
         "ar_coefficient-0-0",

@@ -57,6 +57,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::Ecdf(..)
         | F::EcdfPercentile(..)
         | F::EcdfPercentileCount(..)
+        | F::HistMode(..)
         | F::EcdfSlope(..)
         | F::Entropy
         | F::IndexMassQuantile(..)

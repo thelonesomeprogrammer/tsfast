@@ -20,6 +20,50 @@ fn compute_quantile(sorted: &[f32], q: f32) -> f32 {
     }
 }
 
+/// Midpoint of the fullest bin of `np.histogram(values, bins=nbins)`.
+///
+/// One pass over the window: equal-width bins over [min, max] (already
+/// accumulated), index by multiplication, then the same one-step edge
+/// correction numpy applies so values landing exactly on a bin edge are
+/// counted in the same bin as the reference. Edges are computed in f64 like
+/// `np.linspace`.
+fn hist_mode(values: &[f32], min: f32, max: f32, nbins: usize, counts: &mut Vec<u32>) -> f32 {
+    if values.is_empty() || !(min.is_finite() && max.is_finite()) {
+        return f32::NAN; // np.histogram raises on a non-finite range
+    }
+    let (first, last) = if min == max {
+        (min as f64 - 0.5, max as f64 + 0.5)
+    } else {
+        (min as f64, max as f64)
+    };
+    let step = (last - first) / nbins as f64;
+    let edge = |k: usize| if k == nbins { last } else { k as f64 * step + first };
+    let norm = nbins as f64 / (last - first);
+    let top = nbins - 1;
+
+    counts.clear();
+    counts.resize(nbins, 0);
+    for &v in values {
+        let x = v as f64;
+        let mut idx = (((x - first) * norm) as usize).min(top);
+        if x < edge(idx) {
+            idx -= 1;
+        } else if idx != top && x >= edge(idx + 1) {
+            idx += 1;
+        }
+        counts[idx] += 1;
+    }
+
+    // First bin with the highest count, as np.argmax.
+    let mut best = 0;
+    for (k, &c) in counts.iter().enumerate().skip(1) {
+        if c > counts[best] {
+            best = k;
+        }
+    }
+    ((edge(best) + edge(best + 1)) / 2.0) as f32
+}
+
 #[inline(always)]
 pub fn eval_distribution(
     feat: &Feature,
@@ -113,6 +157,12 @@ pub fn eval_distribution(
                 state.sort_buffer = copy;
                 res
             }
+        }
+        Feature::HistMode(nbins) => {
+            let mut counts = std::mem::take(&mut state.hist_counts);
+            let res = hist_mode(values, min_val, max_val, *nbins as usize, &mut counts);
+            state.hist_counts = counts;
+            res
         }
         Feature::EcdfPercentileCount(p_bits) => {
             let p = f32::from_bits(*p_bits);

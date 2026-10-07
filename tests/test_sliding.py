@@ -721,3 +721,28 @@ def test_sliding_petrosian_fractal_dimension_and_average_power():
     check(np.sin(2 * np.pi * 5.37 * np.arange(150) / 100.0), window_size=50)
     # Constant window.
     check(np.full(80, -2.0), window_size=40)
+
+
+def test_sliding_hist_mode_and_neighbourhood_peaks():
+    from tsfel.feature_extraction.features import hist_mode, neighbourhood_peaks
+
+    features = ["hist_mode-10", "neighbourhood_peaks-3"]
+
+    def check(x, window_size):
+        x = np.asarray(x, dtype=np.float32)
+        ext = SlidingExtractor(features, 1, window_size)
+        df = frame(ext, ext.update(x.reshape(1, -1)))
+        for w in range(len(df)):
+            window = x[w : w + window_size].astype(np.float64)
+            assert np.isclose(
+                df.iloc[w]["hist_mode-10"], hist_mode(window, 10), rtol=1e-5, atol=1e-6
+            )
+            assert df.iloc[w]["number_peaks__n_3"] == neighbourhood_peaks(window, 3)
+
+    rng = np.random.RandomState(13)
+    check(rng.randn(150), window_size=40)
+    check(rng.randint(0, 4, size=120), window_size=30)
+    # Constant window.
+    check(np.full(60, -2.0), window_size=20)
+    # Window too short for any 3-peak.
+    check(rng.randn(30), window_size=6)
