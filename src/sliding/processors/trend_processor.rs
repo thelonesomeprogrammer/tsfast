@@ -52,7 +52,8 @@ impl TrendProcessor {
                 energy_ix_new += (w_f - y_f + j as f32) * v * v;
             }
 
-            let old_total_energy = state.energy - (new_slice.iter().map(|&v| v * v).sum::<f32>() - energy_old);
+            let old_total_energy =
+                state.energy - (new_slice.iter().map(|&v| v * v).sum::<f32>() - energy_old);
             let rem_energy = old_total_energy - energy_old;
 
             state.t_energy = (state.t_energy - energy_ix_old) - (y_f * rem_energy) + energy_ix_new;
@@ -72,8 +73,8 @@ impl TrendProcessor {
                 state.sum_ix - (state.total_sum - new_val) + (window_size as f32 - 1.0) * new_val;
         }
         if compute.contains(Compute::CALC_CENTROID) {
-            state.t_energy =
-                state.t_energy - (state.energy - new_val * new_val) + (window_size as f32 - 1.0) * new_val * new_val;
+            state.t_energy = state.t_energy - (state.energy - new_val * new_val)
+                + (window_size as f32 - 1.0) * new_val * new_val;
         }
     }
 

@@ -25,6 +25,8 @@ use crate::types::Feature;
 pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
     use Feature as F;
     let res = match feat {
+        F::HurstExponent => None,
+        F::MaximumFractalLength => None,
         F::BiasedFisherKurtosis
         | F::Iqr
         | F::Mad
@@ -53,6 +55,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::BinnedEntropy(..)
         | F::ChangeQuantiles(..)
         | F::Ecdf(..)
+        | F::EcdfPercentile(..)
+        | F::EcdfPercentileCount(..)
+        | F::EcdfSlope(..)
         | F::Entropy
         | F::IndexMassQuantile(..)
         | F::Median
@@ -102,8 +107,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::CountBelowMean
         | F::LongestStrikeAboveMean
         | F::LongestStrikeBelowMean => runs::eval_runs(feat, ctx),
-        F::MatrixProfile(..)
-        | F::QuerySimilarityCount(..) => subsequence::eval_subsequence(feat, ctx),
+        F::MatrixProfile(..) | F::QuerySimilarityCount(..) => {
+            subsequence::eval_subsequence(feat, ctx)
+        }
         F::C3(..)
         | F::CalcCentroid(..)
         | F::CwtCoefficients(..)
@@ -127,22 +133,27 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::SpktWelchDensity(..)
         | F::WaveletEnergy(..)
         | F::WaveletEntropy
+        | F::MaxFrequency
+        | F::MedianFrequency
+        | F::FundamentalFrequency
         | F::WaveletFeatures(..) => transform::eval_transform(feat, ctx),
         F::ApproxEntropy(..)
         | F::HiguchiFd
         | F::LempelZiv
         | F::LempelZivComplexity(..)
         | F::PermutationEntropy(..)
-        | F::SampleEntropy => complexity::eval_complexity(feat, ctx),
-        F::ArCoefficient(..)
-        | F::FriedrichCoefficients(..)
-        | F::MaxLangevinFixedPoint(..) => dynamic::eval_dynamic(feat, ctx),
+        | F::SampleEntropy
+        | F::Mse(..) => complexity::eval_complexity(feat, ctx),
+        F::ArCoefficient(..) | F::FriedrichCoefficients(..) | F::MaxLangevinFixedPoint(..) => {
+            dynamic::eval_dynamic(feat, ctx)
+        }
         F::AugmentedDickeyFuller(..) => stationarity::eval_stationarity(feat, ctx),
         F::Length
         | F::PercentageOfReoccurringDatapointsToAllDatapoints
         | F::PercentageOfReoccurringValuesToAllValues
         | F::RatioValueNumberToTimeSeriesLength
         | F::VarianceLargerThanStandardDeviation => misc::eval_misc(feat, ctx),
+        F::Dfa => None,
     };
     // `None` means "not computable for this window" (e.g. zero variance, window
     // shorter than a lag); engines have always reported that as 0.0.

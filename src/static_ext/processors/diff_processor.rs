@@ -84,10 +84,7 @@ impl DiffProcessor {
         }
     }
 
-    pub fn finalize(
-        compute: Compute,
-        state: &ColumnState,
-    ) -> crate::metrics::ZcMetrics {
+    pub fn finalize(compute: Compute, state: &ColumnState) -> crate::metrics::ZcMetrics {
         let mut zc_mean = 0.0;
         let mut zc_std = 0.0;
 
@@ -103,9 +100,6 @@ impl DiffProcessor {
             }
         }
 
-        crate::metrics::ZcMetrics {
-            zc_mean,
-            zc_std,
-        }
+        crate::metrics::ZcMetrics { zc_mean, zc_std }
     }
 }

@@ -49,6 +49,9 @@ unit_features! {
     Entropy => "entropy";
     SampleEntropy => "sample_entropy";
     HiguchiFd => "higuchi_fd";
+    Dfa => "dfa";
+    HurstExponent => "hurst_exponent";
+    MaximumFractalLength => "maximum_fractal_length";
     Energy => "energy", ["torque_Absolute energy"];
     Rms => "rms";
     RootMeanSquare => "root_mean_square";
@@ -98,6 +101,9 @@ unit_features! {
     SpectralEntropy => "spectral_entropy", ["torque_Spectral entropy"];
     SpectralRollOn => "spectral_roll_on", ["torque_Spectral roll-on"];
     SpectralRollOff => "spectral_roll_off", ["torque_Spectral roll-off"];
+    MaxFrequency => "max_frequency", ["torque_Max frequency"];
+    MedianFrequency => "median_frequency", ["torque_Median frequency"];
+    FundamentalFrequency => "fundamental_frequency", ["torque_Fundamental frequency"];
     SpectralSkewness => "spectral_skewness", ["torque_Spectral skewness"];
     SpectralKurtosis => "spectral_kurtosis", ["torque_Spectral kurtosis"];
     SignalDistance => "signal_distance", ["torque_Signal distance"];
@@ -188,6 +194,26 @@ impl std::str::FromStr for Feature {
 // ─── Parameterized parsers ──────────────────────────────────────────────────
 
 fn parse_parameterized(s: &str) -> Option<Feature> {
+    if let Some(arg) = s.strip_prefix("mse-") {
+        let parts: Vec<&str> = arg.split('-').collect();
+        if parts.is_empty() || parts.len() > 2 {
+            return None;
+        }
+        let m: u8 = parts[0].parse().ok()?;
+        if m < 1 {
+            return None;
+        }
+        let maxscale: u16 = if parts.len() == 2 {
+            let val: u16 = parts[1].parse().ok()?;
+            if val < 1 {
+                return None;
+            }
+            val
+        } else {
+            0
+        };
+        return Some(Feature::Mse(m, maxscale));
+    }
     if let Some(arg) = s.strip_prefix("human_range_energy-") {
         let fs: f32 = arg.trim().parse().ok()?;
         if !(fs.is_finite() && fs > 0.0) {
@@ -199,6 +225,34 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let bins: u16 = arg.trim().parse().ok()?;
         if bins >= 2 {
             return Some(Feature::LempelZivComplexity(bins));
+        } else {
+            return None;
+        }
+    }
+    if let Some(arg) = s.strip_prefix("ecdf_slope-") {
+        let (p1, p2) = arg.split_once('-')?;
+        let p_init: f32 = p1.parse().ok()?;
+        let p_end: f32 = p2.parse().ok()?;
+        if p_init > 0.0 && p_init < p_end && p_end <= 1.0 {
+            return Some(Feature::EcdfSlope(p_init.to_bits(), p_end.to_bits()));
+        } else {
+            return None;
+        }
+    }
+    if let Some(arg) = s.strip_prefix("ecdf_percentile_count-") {
+        let p: f32 = arg.parse().ok()?;
+        if p > 0.0 && p <= 1.0 {
+            return Some(Feature::EcdfPercentileCount(p.to_bits()));
+        } else {
+            return None;
+        }
+    }
+    if let Some(arg) = s.strip_prefix("ecdf_percentile-") {
+        let p: f32 = arg.parse().ok()?;
+        if p > 0.0 && p <= 1.0 {
+            return Some(Feature::EcdfPercentile(p.to_bits()));
+        } else {
+            return None;
         }
     }
     if let Some(arg) = s.strip_prefix("lpcc-") {
@@ -342,7 +396,11 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
         && let Ok(bins) = arg.parse::<u32>()
     {
-        return Some(Feature::BinnedEntropy(bins));
+        if bins > 0 {
+            return Some(Feature::BinnedEntropy(bins));
+        } else {
+            return None;
+        }
     }
     if let Some(arg) = s.strip_prefix("ratio_beyond_r_sigma-") {
         let r: f32 = arg.parse().ok()?;
@@ -556,7 +614,11 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("binned_entropy__max_bins_")
         && let Ok(bins) = arg.parse::<u32>()
     {
-        return Some(Feature::BinnedEntropy(bins));
+        if bins > 0 {
+            return Some(Feature::BinnedEntropy(bins));
+        } else {
+            return None;
+        }
     }
     if s.contains("value__ratio_beyond_r_sigma__r_") {
         let pos = s.find("r_")?;
@@ -597,6 +659,22 @@ impl Feature {
             return name.to_string();
         }
         match self {
+            Feature::Mse(m, maxscale) => {
+                if *maxscale == 0 {
+                    format!("mse-{m}")
+                } else {
+                    format!("mse-{m}-{maxscale}")
+                }
+            }
+            Feature::EcdfPercentile(p) => format!("ecdf_percentile-{}", f32::from_bits(*p)),
+            Feature::EcdfPercentileCount(p) => {
+                format!("ecdf_percentile_count-{}", f32::from_bits(*p))
+            }
+            Feature::EcdfSlope(p_init, p_end) => format!(
+                "ecdf_slope-{}-{}",
+                f32::from_bits(*p_init),
+                f32::from_bits(*p_end)
+            ),
             Feature::EnergyRatioByChunks(num, focus) => format!(
                 "energy_ratio_by_chunks_num_segments_{}__segment_focus_{}",
                 num, focus

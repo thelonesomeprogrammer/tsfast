@@ -1,4 +1,5 @@
 """Every feature must be within 1% of its tsfresh/TSFEL reference (references.py)."""
+
 from pathlib import Path
 
 import numpy as np
@@ -17,7 +18,6 @@ ATOL = 1e-5
 LENGTHS = [64, 150, 200, 600]  # 600: several Welch segments
 
 
-
 def _series(n):
     # Same generator as test_engines: repeated levels, offset from zero.
     rng = np.random.default_rng(n)
@@ -29,7 +29,9 @@ def test_every_feature_has_a_reference_entry():
     listed = set(REFERENCES) | set(NO_REFERENCE)
     assert set(REFERENCES).isdisjoint(NO_REFERENCE)
     assert sorted(set(FEATURES) - listed) == [], "add to tests/references.py"
-    assert sorted(listed - set(FEATURES)) == [], "remove stale entries from tests/references.py"
+    assert sorted(listed - set(FEATURES)) == [], (
+        "remove stale entries from tests/references.py"
+    )
 
 
 @pytest.mark.parametrize("n", LENGTHS)

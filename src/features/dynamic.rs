@@ -35,34 +35,39 @@ pub fn eval_dynamic(feat: &Feature, context: &mut crate::context::FeatureContext
                     res = Some(0.0);
                 }
             }
-        },
+        }
         Feature::FriedrichCoefficients(m, r_bits, coeff) => {
             let m_val = *m as usize;
             let r_val = f32::from_bits(*r_bits);
             let coeff_val = *coeff as usize;
 
-            let coeffs = state.friedrich_coeffs.entry((*m, *r_bits)).or_insert_with(|| {
-                compute_friedrich_coeffs(values, m_val, r_val)
-            });
+            let coeffs = state
+                .friedrich_coeffs
+                .entry((*m, *r_bits))
+                .or_insert_with(|| compute_friedrich_coeffs(values, m_val, r_val));
 
             if coeff_val < coeffs.len() {
                 res = Some(coeffs[coeff_val]);
             } else {
                 res = Some(f32::NAN);
             }
-        },
+        }
         Feature::MaxLangevinFixedPoint(m, r_bits) => {
             let m_val = *m as usize;
             let r_val = f32::from_bits(*r_bits);
 
-            let max_root = *state.max_langevin_fixed_point_cache.entry((*m, *r_bits)).or_insert_with(|| {
-                let coeffs = state.friedrich_coeffs.entry((*m, *r_bits)).or_insert_with(|| {
-                    compute_friedrich_coeffs(values, m_val, r_val)
+            let max_root = *state
+                .max_langevin_fixed_point_cache
+                .entry((*m, *r_bits))
+                .or_insert_with(|| {
+                    let coeffs = state
+                        .friedrich_coeffs
+                        .entry((*m, *r_bits))
+                        .or_insert_with(|| compute_friedrich_coeffs(values, m_val, r_val));
+                    compute_max_langevin(coeffs)
                 });
-                compute_max_langevin(coeffs)
-            });
             res = Some(max_root);
-        },
+        }
         _ => return None,
     }
 
@@ -84,7 +89,7 @@ fn compute_ar_matrices_full(values: &[f32], k: usize) -> (Array2<f64>, Array1<f6
             let mut t = k;
             let mut sum_vec = f64x8::splat(0.0);
             while t + 8 <= n {
-                let y_vec = f64x8::from_slice(&v64[t..t+8]);
+                let y_vec = f64x8::from_slice(&v64[t..t + 8]);
                 sum_vec += y_vec;
                 t += 8;
             }
@@ -99,14 +104,14 @@ fn compute_ar_matrices_full(values: &[f32], k: usize) -> (Array2<f64>, Array1<f6
             let mut t = k;
             let mut sum_vec = f64x8::splat(0.0);
             while t + 8 <= n {
-                let x_vec = f64x8::from_slice(&v64[t-i..t-i+8]);
-                let y_vec = f64x8::from_slice(&v64[t..t+8]);
+                let x_vec = f64x8::from_slice(&v64[t - i..t - i + 8]);
+                let y_vec = f64x8::from_slice(&v64[t..t + 8]);
                 sum_vec += x_vec * y_vec;
                 t += 8;
             }
             sum += sum_vec.reduce_sum();
             while t < n {
-                sum += v64[t-i] * v64[t];
+                sum += v64[t - i] * v64[t];
                 t += 1;
             }
             xty[i] = sum;
@@ -120,27 +125,27 @@ fn compute_ar_matrices_full(values: &[f32], k: usize) -> (Array2<f64>, Array1<f6
                 let mut t = k;
                 let mut sum_vec = f64x8::splat(0.0);
                 while t + 8 <= n {
-                    let x_vec = f64x8::from_slice(&v64[t-j..t-j+8]);
+                    let x_vec = f64x8::from_slice(&v64[t - j..t - j + 8]);
                     sum_vec += x_vec;
                     t += 8;
                 }
                 sum += sum_vec.reduce_sum();
                 while t < n {
-                    sum += v64[t-j];
+                    sum += v64[t - j];
                     t += 1;
                 }
             } else {
                 let mut t = k;
                 let mut sum_vec = f64x8::splat(0.0);
                 while t + 8 <= n {
-                    let xi_vec = f64x8::from_slice(&v64[t-i..t-i+8]);
-                    let xj_vec = f64x8::from_slice(&v64[t-j..t-j+8]);
+                    let xi_vec = f64x8::from_slice(&v64[t - i..t - i + 8]);
+                    let xj_vec = f64x8::from_slice(&v64[t - j..t - j + 8]);
                     sum_vec += xi_vec * xj_vec;
                     t += 8;
                 }
                 sum += sum_vec.reduce_sum();
                 while t < n {
-                    sum += v64[t-i] * v64[t-j];
+                    sum += v64[t - i] * v64[t - j];
                     t += 1;
                 }
             }
@@ -227,7 +232,7 @@ fn compute_ar_coeffs(values: &[f32], k: usize) -> Vec<f32> {
             let mut t = k;
             let mut sum_vec = f64x8::splat(0.0);
             while t + 8 <= n {
-                let y_vec = f64x8::from_slice(&v64[t..t+8]);
+                let y_vec = f64x8::from_slice(&v64[t..t + 8]);
                 sum_vec += y_vec;
                 t += 8;
             }
@@ -242,14 +247,14 @@ fn compute_ar_coeffs(values: &[f32], k: usize) -> Vec<f32> {
             let mut t = k;
             let mut sum_vec = f64x8::splat(0.0);
             while t + 8 <= n {
-                let x_vec = f64x8::from_slice(&v64[t-i..t-i+8]);
-                let y_vec = f64x8::from_slice(&v64[t..t+8]);
+                let x_vec = f64x8::from_slice(&v64[t - i..t - i + 8]);
+                let y_vec = f64x8::from_slice(&v64[t..t + 8]);
                 sum_vec += x_vec * y_vec;
                 t += 8;
             }
             sum += sum_vec.reduce_sum();
             while t < n {
-                sum += v64[t-i] * v64[t];
+                sum += v64[t - i] * v64[t];
                 t += 1;
             }
             xty[i] = sum;
@@ -263,27 +268,27 @@ fn compute_ar_coeffs(values: &[f32], k: usize) -> Vec<f32> {
                 let mut t = k;
                 let mut sum_vec = f64x8::splat(0.0);
                 while t + 8 <= n {
-                    let x_vec = f64x8::from_slice(&v64[t-j..t-j+8]);
+                    let x_vec = f64x8::from_slice(&v64[t - j..t - j + 8]);
                     sum_vec += x_vec;
                     t += 8;
                 }
                 sum += sum_vec.reduce_sum();
                 while t < n {
-                    sum += v64[t-j];
+                    sum += v64[t - j];
                     t += 1;
                 }
             } else {
                 let mut t = k;
                 let mut sum_vec = f64x8::splat(0.0);
                 while t + 8 <= n {
-                    let xi_vec = f64x8::from_slice(&v64[t-i..t-i+8]);
-                    let xj_vec = f64x8::from_slice(&v64[t-j..t-j+8]);
+                    let xi_vec = f64x8::from_slice(&v64[t - i..t - i + 8]);
+                    let xj_vec = f64x8::from_slice(&v64[t - j..t - j + 8]);
                     sum_vec += xi_vec * xj_vec;
                     t += 8;
                 }
                 sum += sum_vec.reduce_sum();
                 while t < n {
-                    sum += v64[t-i] * v64[t-j];
+                    sum += v64[t - i] * v64[t - j];
                     t += 1;
                 }
             }
@@ -368,7 +373,11 @@ fn compute_friedrich_coeffs(values: &[f32], m: usize, r: f32) -> Vec<f32> {
         }
     }
 
-    let x = Array2::from_shape_vec((n_pts, m + 1), x_mat_vec).unwrap();
+    let x = if let Ok(mat) = Array2::from_shape_vec((n_pts, m + 1), x_mat_vec) {
+        mat
+    } else {
+        return vec![f32::NAN; m + 1];
+    };
     let y = Array1::from(y_means);
 
     if let Some(coeffs) = solve_ols_polyfit(&x, &y) {
@@ -445,9 +454,5 @@ fn compute_max_langevin(coeffs: &[f32]) -> f32 {
         }
     }
 
-    if found {
-        max_real
-    } else {
-        f32::NAN
-    }
+    if found { max_real } else { f32::NAN }
 }

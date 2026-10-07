@@ -1,9 +1,9 @@
+use super::dynamic::solve_ols_f64;
 use crate::types::{AdfAttr, Feature};
 use ndarray::{Array1, Array2};
+use statrs::distribution::{ContinuousCDF, Normal};
 use std::f32;
 use std::simd::{f64x8, num::SimdFloat};
-use statrs::distribution::{ContinuousCDF, Normal};
-use super::dynamic::solve_ols_f64;
 
 // MacKinnon (1994) critical values (regression "c")
 const MAC_MAX: f64 = 2.74;
@@ -28,11 +28,17 @@ fn mackinnonp(teststat: f64) -> f64 {
             val = val * teststat + c;
         }
     }
-    let norm = Normal::new(0.0, 1.0).unwrap();
+    let norm = match Normal::new(0.0, 1.0) {
+        Ok(n) => n,
+        Err(_) => return f64::NAN,
+    };
     norm.cdf(val)
 }
 
-pub fn eval_stationarity(feat: &Feature, context: &mut crate::context::FeatureContext) -> Option<f32> {
+pub fn eval_stationarity(
+    feat: &Feature,
+    context: &mut crate::context::FeatureContext,
+) -> Option<f32> {
     let values = context.values;
     let n = values.len();
 
@@ -56,7 +62,6 @@ pub fn eval_stationarity(feat: &Feature, context: &mut crate::context::FeatureCo
 
                 let mut best_aic = f64::INFINITY;
                 let mut best_lag = 0;
-
 
                 let y_len = xdiff.len() - maxlag;
                 if y_len <= 2 {
@@ -94,10 +99,17 @@ pub fn eval_stationarity(feat: &Feature, context: &mut crate::context::FeatureCo
                         let mut sum_vec_xty = f64x8::splat(0.0);
                         while t + 8 <= y_len {
                             let x_vec = f64x8::from_array([
-                                x_mat[[t, i]], x_mat[[t+1, i]], x_mat[[t+2, i]], x_mat[[t+3, i]],
-                                x_mat[[t+4, i]], x_mat[[t+5, i]], x_mat[[t+6, i]], x_mat[[t+7, i]],
+                                x_mat[[t, i]],
+                                x_mat[[t + 1, i]],
+                                x_mat[[t + 2, i]],
+                                x_mat[[t + 3, i]],
+                                x_mat[[t + 4, i]],
+                                x_mat[[t + 5, i]],
+                                x_mat[[t + 6, i]],
+                                x_mat[[t + 7, i]],
                             ]);
-                            let y_vec = f64x8::from_slice(&y_arr.as_slice().unwrap()[t..t+8]);
+                            let y_vec =
+                                f64x8::from_slice(&y_arr.as_slice().unwrap_or(&[])[t..t + 8]);
                             sum_vec_xty += x_vec * y_vec;
                             t += 8;
                         }
@@ -114,12 +126,24 @@ pub fn eval_stationarity(feat: &Feature, context: &mut crate::context::FeatureCo
                             let mut sum_vec = f64x8::splat(0.0);
                             while t + 8 <= y_len {
                                 let xi_vec = f64x8::from_array([
-                                    x_mat[[t, i]], x_mat[[t+1, i]], x_mat[[t+2, i]], x_mat[[t+3, i]],
-                                    x_mat[[t+4, i]], x_mat[[t+5, i]], x_mat[[t+6, i]], x_mat[[t+7, i]],
+                                    x_mat[[t, i]],
+                                    x_mat[[t + 1, i]],
+                                    x_mat[[t + 2, i]],
+                                    x_mat[[t + 3, i]],
+                                    x_mat[[t + 4, i]],
+                                    x_mat[[t + 5, i]],
+                                    x_mat[[t + 6, i]],
+                                    x_mat[[t + 7, i]],
                                 ]);
                                 let xj_vec = f64x8::from_array([
-                                    x_mat[[t, j]], x_mat[[t+1, j]], x_mat[[t+2, j]], x_mat[[t+3, j]],
-                                    x_mat[[t+4, j]], x_mat[[t+5, j]], x_mat[[t+6, j]], x_mat[[t+7, j]],
+                                    x_mat[[t, j]],
+                                    x_mat[[t + 1, j]],
+                                    x_mat[[t + 2, j]],
+                                    x_mat[[t + 3, j]],
+                                    x_mat[[t + 4, j]],
+                                    x_mat[[t + 5, j]],
+                                    x_mat[[t + 6, j]],
+                                    x_mat[[t + 7, j]],
                                 ]);
                                 sum_vec += xi_vec * xj_vec;
                                 t += 8;
@@ -146,7 +170,8 @@ pub fn eval_stationarity(feat: &Feature, context: &mut crate::context::FeatureCo
                         }
 
                         let n_obs = y_len as f64;
-                        let llf = -n_obs / 2.0 * ((2.0 * std::f64::consts::PI).ln() + (rss / n_obs).ln() + 1.0);
+                        let llf = -n_obs / 2.0
+                            * ((2.0 * std::f64::consts::PI).ln() + (rss / n_obs).ln() + 1.0);
                         let aic = -2.0 * llf + 2.0 * (k_vars as f64);
 
                         if aic < best_aic || best_aic.is_infinite() {
@@ -183,10 +208,17 @@ pub fn eval_stationarity(feat: &Feature, context: &mut crate::context::FeatureCo
                         let mut sum_vec_xty = f64x8::splat(0.0);
                         while t + 8 <= y_len {
                             let x_vec = f64x8::from_array([
-                                x_mat[[t, i]], x_mat[[t+1, i]], x_mat[[t+2, i]], x_mat[[t+3, i]],
-                                x_mat[[t+4, i]], x_mat[[t+5, i]], x_mat[[t+6, i]], x_mat[[t+7, i]],
+                                x_mat[[t, i]],
+                                x_mat[[t + 1, i]],
+                                x_mat[[t + 2, i]],
+                                x_mat[[t + 3, i]],
+                                x_mat[[t + 4, i]],
+                                x_mat[[t + 5, i]],
+                                x_mat[[t + 6, i]],
+                                x_mat[[t + 7, i]],
                             ]);
-                            let y_vec = f64x8::from_slice(&y_arr.as_slice().unwrap()[t..t+8]);
+                            let y_vec =
+                                f64x8::from_slice(&y_arr.as_slice().unwrap_or(&[])[t..t + 8]);
                             sum_vec_xty += x_vec * y_vec;
                             t += 8;
                         }
@@ -203,12 +235,24 @@ pub fn eval_stationarity(feat: &Feature, context: &mut crate::context::FeatureCo
                             let mut sum_vec = f64x8::splat(0.0);
                             while t + 8 <= y_len {
                                 let xi_vec = f64x8::from_array([
-                                    x_mat[[t, i]], x_mat[[t+1, i]], x_mat[[t+2, i]], x_mat[[t+3, i]],
-                                    x_mat[[t+4, i]], x_mat[[t+5, i]], x_mat[[t+6, i]], x_mat[[t+7, i]],
+                                    x_mat[[t, i]],
+                                    x_mat[[t + 1, i]],
+                                    x_mat[[t + 2, i]],
+                                    x_mat[[t + 3, i]],
+                                    x_mat[[t + 4, i]],
+                                    x_mat[[t + 5, i]],
+                                    x_mat[[t + 6, i]],
+                                    x_mat[[t + 7, i]],
                                 ]);
                                 let xj_vec = f64x8::from_array([
-                                    x_mat[[t, j]], x_mat[[t+1, j]], x_mat[[t+2, j]], x_mat[[t+3, j]],
-                                    x_mat[[t+4, j]], x_mat[[t+5, j]], x_mat[[t+6, j]], x_mat[[t+7, j]],
+                                    x_mat[[t, j]],
+                                    x_mat[[t + 1, j]],
+                                    x_mat[[t + 2, j]],
+                                    x_mat[[t + 3, j]],
+                                    x_mat[[t + 4, j]],
+                                    x_mat[[t + 5, j]],
+                                    x_mat[[t + 6, j]],
+                                    x_mat[[t + 7, j]],
                                 ]);
                                 sum_vec += xi_vec * xj_vec;
                                 t += 8;
