@@ -40,12 +40,8 @@ pub fn eval_complexity(
     let _paa_boundaries = context.paa_boundaries;
 
     let res = match feat {
-        Feature::LempelZiv => {
-            eval_lempel_ziv(context)
-        }
-        Feature::LempelZivComplexity(bins) => {
-            eval_lempel_ziv_complexity(context, *bins)
-        }
+        Feature::LempelZiv => eval_lempel_ziv(context),
+        Feature::LempelZivComplexity(bins) => eval_lempel_ziv_complexity(context, *bins),
         Feature::ApproxEntropy(m, r_bits) if values.len() > *m as usize + 1 => {
             let m_val = *m as usize;
             // tsfresh: r is relative to the population std.
@@ -669,9 +665,8 @@ fn population_std(values: &[f32]) -> f32 {
     var.sqrt() as f32
 }
 
-
-use std::simd::prelude::*;
 use std::simd::f32x8;
+use std::simd::prelude::*;
 
 #[inline(always)]
 fn lz_complexity_bits(state: &mut crate::common::ColumnState, n: usize) -> f32 {
@@ -684,46 +679,34 @@ fn lz_complexity_bits(state: &mut crate::common::ColumnState, n: usize) -> f32 {
     let mut num_substrings = 0;
 
     let mut ind = 0;
-    let mut inc = 1;
 
-    while ind + inc <= n {
+    // ⚡ Bolt optimization: Maintain tree state (`curr_node`) while walking down the string
+    // instead of restarting from the root node on every single character.
+    // This reduces the complexity from O(N^2) worst-case to O(N).
+    while ind < n {
         let mut curr_node = 0;
-        let mut found = true;
+        let mut inc = 1;
 
-        for i in 0..inc {
-            let symbol_idx = ind + i;
+        while ind + inc <= n {
+            let symbol_idx = ind + inc - 1;
             let bit = ((state.lz_bit_buffer[symbol_idx / 64] >> (symbol_idx % 64)) & 1) as usize;
 
             let next_node = state.lz_binary_trie[curr_node][bit];
             if next_node != 0 {
                 curr_node = next_node;
+                inc += 1;
             } else {
-                found = false;
+                let new_node = state.lz_binary_trie.len();
+                state.lz_binary_trie.push([0, 0]);
+                state.lz_binary_trie[curr_node][bit] = new_node;
+                num_substrings += 1;
+                ind += inc;
                 break;
             }
         }
 
-        if found {
-            inc += 1;
-        } else {
-            let mut curr = 0;
-            for i in 0..inc {
-                let symbol_idx = ind + i;
-                let bit = ((state.lz_bit_buffer[symbol_idx / 64] >> (symbol_idx % 64)) & 1) as usize;
-
-                let next_node = state.lz_binary_trie[curr][bit];
-                if next_node != 0 {
-                    curr = next_node;
-                } else {
-                    let new_node = state.lz_binary_trie.len();
-                    state.lz_binary_trie.push([0, 0]);
-                    state.lz_binary_trie[curr][bit] = new_node;
-                    curr = new_node;
-                }
-            }
-            num_substrings += 1;
-            ind += inc;
-            inc = 1;
+        if ind + inc > n {
+            break;
         }
     }
 
@@ -743,14 +726,16 @@ fn lz_complexity(state: &mut crate::common::ColumnState) -> f32 {
     let mut num_substrings = 0;
 
     let mut ind = 0;
-    let mut inc = 1;
 
-    while ind + inc <= n {
+    // ⚡ Bolt optimization: Maintain tree state (`curr_node`) while walking down the string
+    // instead of restarting from the root node on every single character.
+    // This reduces the complexity from O(N^2) worst-case to O(N).
+    while ind < n {
         let mut curr_node = 0;
-        let mut found = true;
+        let mut inc = 1;
 
-        for i in 0..inc {
-            let symbol = sequence[ind + i] as u16;
+        while ind + inc <= n {
+            let symbol = sequence[ind + inc - 1] as u16;
 
             // Search children
             let mut next_node = None;
@@ -763,40 +748,19 @@ fn lz_complexity(state: &mut crate::common::ColumnState) -> f32 {
 
             if let Some(child_idx) = next_node {
                 curr_node = child_idx;
+                inc += 1;
             } else {
-                found = false;
+                let new_node = state.lz_trie_nodes.len();
+                state.lz_trie_nodes.push(Vec::new());
+                state.lz_trie_nodes[curr_node].push((symbol, new_node));
+                num_substrings += 1;
+                ind += inc;
                 break;
             }
         }
 
-        if found {
-            inc += 1;
-        } else {
-            // Add new substring to trie
-            let mut curr = 0;
-            for i in 0..inc {
-                let symbol = sequence[ind + i] as u16;
-
-                let mut next_node = None;
-                for &(s, child_idx) in &state.lz_trie_nodes[curr] {
-                    if s == symbol {
-                        next_node = Some(child_idx);
-                        break;
-                    }
-                }
-
-                if let Some(child_idx) = next_node {
-                    curr = child_idx;
-                } else {
-                    let new_node = state.lz_trie_nodes.len();
-                    state.lz_trie_nodes.push(Vec::new());
-                    state.lz_trie_nodes[curr].push((symbol, new_node));
-                    curr = new_node;
-                }
-            }
-            num_substrings += 1;
-            ind += inc;
-            inc = 1;
+        if ind + inc > n {
+            break;
         }
     }
 
