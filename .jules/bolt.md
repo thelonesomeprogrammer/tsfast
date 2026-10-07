@@ -23,3 +23,6 @@ Action: Reused fft_in_buffer and fft_out_buffer for realfft processing and remov
 ## 2026-10-07 - [Performance Insight: Vector capacity preallocation]
 **Learning:** For loops that unconditionally append a known amount of items to an empty vector (`Vec::push()`), failing to reserve capacity beforehand forces the allocator to resize the buffer up to $O(\log N)$ times.
 **Action:** Always call `.reserve(len)` on empty buffers that are populated in known-length loops to execute a single $O(1)$ allocation, e.g. for features like `MedianDiff`.
+## 2024-10-07 - Lempel-Ziv Complexity Bottleneck
+**Learning:** The nested loops traversing Lempel-Ziv substrings incremented nodes one-by-one by starting from zero every time a new character was hit instead of maintaining state throughout a string, resulting in O(N^2) behaviour during worst-cases where substrings get long.
+**Action:** By storing state (`ind`, `curr_node`) instead of restarting string searches and simply breaking when `ind + inc > n`, complexity is dramatically reduced resulting in near 5x to 10x faster execution for long sequences.
