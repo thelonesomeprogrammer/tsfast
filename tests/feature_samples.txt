@@ -190,3 +190,6 @@ hist_mode-3
 neighbourhood_peaks-10
 spectrogram_mean_coeff-3
 spectrogram_mean_coeff-0-5
+human_range_energy
+average_power
+calc_centroid

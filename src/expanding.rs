@@ -31,18 +31,25 @@ pub struct ExpandingExtractor {
     pub planner: Arc<Mutex<RealFftPlanner<f32>>>,
     pub max_size: Option<usize>,
     pub fft_update_period: usize,
+    pub fs: f32,
 }
 
 #[pymethods]
 impl ExpandingExtractor {
     #[new]
-    #[pyo3(signature = (feature_str, n_cols, max_size=None, fft_update_period=1))]
+    #[pyo3(signature = (feature_str, n_cols, max_size=None, fft_update_period=1, fs=100.0))]
     pub fn new(
         feature_str: Vec<String>,
         n_cols: usize,
         max_size: Option<usize>,
         fft_update_period: usize,
+        fs: f32,
     ) -> PyResult<Self> {
+        if !(fs.is_finite() && fs > 0.0) {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "fs must be a positive, finite sampling frequency, got {fs}"
+            )));
+        }
         let mut features = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
@@ -131,6 +138,7 @@ impl ExpandingExtractor {
                         &unique_count_below_thresholds,
                         &unique_range_counts,
                         0.0,
+                        fs,
                     )
                 })
                 .collect(), // Initial placeholder
@@ -139,6 +147,7 @@ impl ExpandingExtractor {
             planner: planner_arc,
             max_size,
             fft_update_period,
+            fs,
         })
     }
 
@@ -188,6 +197,7 @@ impl ExpandingExtractor {
                     &self.unique_count_below_thresholds,
                     &self.unique_range_counts,
                     0.0,
+                    self.fs,
                 ));
                 self.histories.push(Vec::new());
                 self.sorted_histories.push(Vec::new());
@@ -236,6 +246,7 @@ impl ExpandingExtractor {
                         &self.unique_count_below_thresholds,
                         &self.unique_range_counts,
                         values[0],
+                        self.fs,
                     );
                 }
 

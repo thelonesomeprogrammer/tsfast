@@ -41,7 +41,7 @@ pub fn eval_energy(feat: &Feature, context: &mut crate::context::FeatureContext)
         Feature::Rms | Feature::RootMeanSquare => (state.energy / n).sqrt(),
         // TSFEL: sum(x^2) / (time[-1] - time[0]), where time = arange(n) / fs.
         Feature::AveragePower(fs_bits) => {
-            let fs = f32::from_bits(*fs_bits);
+            let fs = fs_bits.map_or(state.fs, f32::from_bits);
             state.energy * fs / (n - 1.0)
         }
         Feature::EnergyRatioByChunks(num_segments, segment_focus) => {
@@ -98,7 +98,7 @@ pub fn eval_energy(feat: &Feature, context: &mut crate::context::FeatureContext)
         // TSFEL: sum(|X|^2 over [argmin|f - 0.6|, argmin|f - 2.5|)) / sum(|X|^2).
         Feature::HumanRangeEnergy(fs_bits) => {
             if !spectrum.is_empty() && context.dft_len > 0 {
-                let fs = f32::from_bits(*fs_bits) as f64;
+                let fs = fs_bits.map_or(state.fs, f32::from_bits) as f64;
                 let df = fs / context.dft_len as f64;
                 // Nearest bin; np.argmin keeps the lower bin on a tie.
                 let nearest = |hz: f64| {

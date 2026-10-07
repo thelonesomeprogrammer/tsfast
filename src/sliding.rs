@@ -25,6 +25,7 @@ pub struct SlidingExtractor {
     pub unique_range_counts: Vec<(u32, u32)>,
     pub window_size: usize,
     pub stride: usize,
+    pub fs: f32,
     // State per column
     pub states: Vec<ColumnState>,
     pub histories: Vec<Vec<f32>>,
@@ -34,13 +35,19 @@ pub struct SlidingExtractor {
 #[pymethods]
 impl SlidingExtractor {
     #[new]
-    #[pyo3(signature = (feature_str, n_cols, window_size, stride=1))]
+    #[pyo3(signature = (feature_str, n_cols, window_size, stride=1, fs=100.0))]
     pub fn new(
         feature_str: Vec<String>,
         n_cols: usize,
         window_size: usize,
         stride: usize,
+        fs: f32,
     ) -> PyResult<Self> {
+        if !(fs.is_finite() && fs > 0.0) {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "fs must be a positive, finite sampling frequency, got {fs}"
+            )));
+        }
         let mut features = Vec::new();
         let mut unique_paa_totals = std::collections::BTreeSet::new();
         let mut unique_c3_lags = std::collections::BTreeSet::new();
@@ -115,6 +122,7 @@ impl SlidingExtractor {
             unique_range_counts: unique_range_counts.clone(),
             window_size,
             stride,
+            fs,
             states: (0..n_cols)
                 .map(|_| {
                     ColumnState::new(
@@ -126,6 +134,7 @@ impl SlidingExtractor {
                         &unique_count_below_thresholds,
                         &unique_range_counts,
                         0.0,
+                        fs,
                     )
                 })
                 .collect(),
@@ -180,6 +189,7 @@ impl SlidingExtractor {
                     &self.unique_count_below_thresholds,
                     &self.unique_range_counts,
                     0.0,
+                    self.fs,
                 ));
                 self.histories
                     .push(Vec::with_capacity(self.window_size + self.stride));

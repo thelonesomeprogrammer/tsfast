@@ -30,13 +30,19 @@ pub struct Extractor {
     pub unique_range_counts: Vec<(u32, u32)>,
     pub planner: Arc<Mutex<RealFftPlanner<f32>>>,
     pub max_size: Option<usize>,
+    pub fs: f32,
 }
 
 #[pymethods]
 impl Extractor {
     #[new]
-    #[pyo3(signature = (feature_str, max_size=None))]
-    pub fn new(feature_str: Vec<String>, max_size: Option<usize>) -> PyResult<Self> {
+    #[pyo3(signature = (feature_str, max_size=None, fs=100.0))]
+    pub fn new(feature_str: Vec<String>, max_size: Option<usize>, fs: f32) -> PyResult<Self> {
+        if !(fs.is_finite() && fs > 0.0) {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "fs must be a positive, finite sampling frequency, got {fs}"
+            )));
+        }
         let mut features = Vec::new();
         let mut paa_args = Vec::new();
         let mut c3_args = Vec::new();
@@ -91,6 +97,7 @@ impl Extractor {
             unique_range_counts: unique_range_counts.into_iter().collect(),
             planner: planner_arc,
             max_size,
+            fs,
         })
     }
 
@@ -162,6 +169,7 @@ impl Extractor {
             unique_range_counts: &self.unique_range_counts,
             paa_boundaries: &paa_boundaries,
             r2c,
+            fs: self.fs,
         };
 
         // Time the first column to decide whether the rest are worth spreading
@@ -225,7 +233,7 @@ mod tests {
             "paa-2-0".to_string(),
             "paa-2-1".to_string(),
         ];
-        let extractor = Extractor::new(features, None).unwrap();
+        let extractor = Extractor::new(features, None, crate::spectral::DEFAULT_FS).unwrap();
         let result = extractor.extract(&[&data], data.len());
 
         assert_eq!(result.len(), 34);
@@ -251,7 +259,7 @@ mod tests {
             "rms".to_string(),
             "mad".to_string(),
         ];
-        let extractor = Extractor::new(features, None).unwrap();
+        let extractor = Extractor::new(features, None, crate::spectral::DEFAULT_FS).unwrap();
         let result = extractor.extract(&[&data], data.len());
 
         let n = data.len() as f32;

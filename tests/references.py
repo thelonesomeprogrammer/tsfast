@@ -17,7 +17,7 @@ import stumpy
 import tsfel.feature_extraction.features as F
 import tsfresh.feature_extraction.feature_calculators as fc
 
-FS = 100.0  # tsfast's sampling frequency for TSFEL spectral features
+FS = 100.0  # tsfast's default `fs`; test_sampling_frequency monkeypatches it
 
 
 def _matrix_profile(x, window):
@@ -390,6 +390,10 @@ REFERENCES = {
         lambda x: F.spectrogram_mean_coeff(x, FS, 5)["values"][0],
     ),
     "neighbourhood_peaks-10": ("tsfel", lambda x: F.neighbourhood_peaks(x, 10)),
+    # No fs in the name: evaluated at the extractor's `fs`.
+    "human_range_energy": ("tsfel", lambda x: F.human_range_energy(x, FS)),
+    "average_power": ("tsfel", lambda x: F.average_power(x, FS)),
+    "calc_centroid": ("tsfel", lambda x: F.calc_centroid(x, FS)),
 }
 
 # Lengths below which the reference returns NaN by policy rather than because

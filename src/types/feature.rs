@@ -94,7 +94,7 @@ pub enum Feature {
     VarianceLargerThanStandardDeviation,
     QuerySimilarityCount(u16, u32),
     MatrixProfile(u16, crate::types::AggFunc),
-    HumanRangeEnergy(u32), // fs as bits
+    HumanRangeEnergy(Option<u32>), // fs as bits; None = the extractor's fs
     SpectralCentroid,
     SpectralDistance,
     SpectralDecrease,
@@ -126,7 +126,7 @@ pub enum Feature {
     EcdfSlope(u32, u32),
     PermutationEntropy(u32, u32),
     ValueCount(u32),
-    CalcCentroid(u32),
+    CalcCentroid(Option<u32>), // fs as bits; None = the extractor's fs
     Mfcc(u16),
     Lpcc(u16),
     WaveletEnergy(u16),
@@ -147,7 +147,7 @@ pub enum Feature {
     FourierEntropy(u32),
     FftAggregated(FftAggType),
     PetrosianFractalDimension,
-    AveragePower(u32), // fs encoded as f32 bits
+    AveragePower(Option<u32>), // fs as bits; None = the extractor's fs
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
