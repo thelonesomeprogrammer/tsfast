@@ -122,6 +122,11 @@ pub struct ColumnState {
     pub binned_entropy_buffer: Vec<f32>,
     pub agg_linear_trend_buffer: Vec<f32>,
     pub mse_buffer: Vec<f32>,
+    /// Per-template match counts for `approx_entropy`.
+    pub approx_entropy_counts: Vec<i32>,
+    /// `(r bits, A, B)` from `sample_entropy_counts(values, 2, r)` on the current
+    /// window, shared by `sample_entropy` and `tsfresh_sample_entropy`.
+    pub sample_entropy_counts: Option<(u32, u32, u32)>,
     pub workspace_f64_1: Vec<f64>,
     pub workspace_f64_2: Vec<f64>,
     pub workspace_f64_3: Vec<f64>,
@@ -169,6 +174,11 @@ pub struct ColumnState {
     pub lz_symbol_buffer: Vec<u8>,
     pub lz_binary_trie: Vec<[usize; 2]>,
     pub lz_bit_buffer: Vec<u64>,
+    /// Matrix profile of the current window, shared by every `matrix_profile-m-*`
+    /// aggregate; valid for subsequence length `matrix_profile_m` (0 = not computed).
+    pub matrix_profile: Vec<f32>,
+    pub matrix_profile_m: usize,
+    pub matrix_profile_scratch: Vec<f32>,
     /// Sampling frequency (Hz) TSFEL's spectral features are evaluated at.
     pub fs: f32,
 }
@@ -215,6 +225,8 @@ impl ColumnState {
         self.lz_symbol_buffer.clear();
         self.lz_binary_trie.clear();
         self.lz_bit_buffer.clear();
+        self.matrix_profile_m = 0;
+        self.sample_entropy_counts = None;
         self.higuchi_lk.clear();
         self.higuchi_k_values.clear();
         self.spectrogram.invalidate();
@@ -294,6 +306,8 @@ impl ColumnState {
             binned_entropy_buffer: Vec::new(),
             agg_linear_trend_buffer: Vec::new(),
             mse_buffer: Vec::new(),
+            approx_entropy_counts: Vec::new(),
+            sample_entropy_counts: None,
             workspace_f64_1: Vec::new(),
             workspace_f64_2: Vec::new(),
             workspace_f64_3: Vec::new(),
@@ -328,6 +342,9 @@ impl ColumnState {
             sliding_dft: None,
             cwt_peaks: 0,
             welch_density: Vec::new(),
+            matrix_profile: Vec::new(),
+            matrix_profile_m: 0,
+            matrix_profile_scratch: Vec::new(),
             spectrogram: Default::default(),
             spectrum_buffer: Vec::new(),
             adf_test_stat: std::f32::NAN,
@@ -358,7 +375,10 @@ pub fn sample_entropy_simd(data: &[f32], m: usize, r: f32) -> f32 {
         return f32::NAN;
     }
     let (a_count, b_count) = sample_entropy_counts(data, m, r);
+    sample_entropy_from_counts(a_count, b_count)
+}
 
+pub fn sample_entropy_from_counts(a_count: u32, b_count: u32) -> f32 {
     if b_count == 0 || a_count == 0 {
         return f32::NAN;
     }
@@ -379,7 +399,22 @@ pub fn tsfresh_sample_entropy(data: &[f32], m: usize, r: f32) -> f32 {
     if n <= m {
         return f32::NAN;
     }
-    let (a_count, mut b_count) = sample_entropy_counts(data, m, r);
+    let (a_count, b_count) = sample_entropy_counts(data, m, r);
+    tsfresh_sample_entropy_from_counts(data, m, r, a_count, b_count)
+}
+
+/// `tsfresh_sample_entropy` given the `sample_entropy_counts(data, m, r)` result.
+pub fn tsfresh_sample_entropy_from_counts(
+    data: &[f32],
+    m: usize,
+    r: f32,
+    a_count: u32,
+    mut b_count: u32,
+) -> f32 {
+    let n = data.len();
+    if n <= m {
+        return f32::NAN;
+    }
     let last = n - m;
     let extra = (0..last)
         .filter(|&j| (0..m).all(|k| (data[j + k] - data[last + k]).abs() <= r))
@@ -390,10 +425,16 @@ pub fn tsfresh_sample_entropy(data: &[f32], m: usize, r: f32) -> f32 {
 
 /// Ordered pair counts (A, B) over the first n - m templates: B matches of
 /// length m, A matches of length m + 1 (Chebyshev distance <= r, i != j).
-fn sample_entropy_counts(data: &[f32], m: usize, r: f32) -> (u32, u32) {
+pub fn sample_entropy_counts(data: &[f32], m: usize, r: f32) -> (u32, u32) {
+    use std::simd::{Select, i32x4, num::SimdInt};
     let n = data.len();
     let r_vec = f32x4::splat(r);
+    let (one, zero) = (i32x4::splat(1), i32x4::splat(0));
 
+    // Per-lane counts, reduced once at the end. Two f32x4 per step (128-bit
+    // SIMD: SSE2, NEON) for instruction-level parallelism.
+    let mut b_acc = zero;
+    let mut a_acc = zero;
     let mut b_count = 0;
     let mut a_count = 0;
     let end_m = n - m; // Number of templates of length m+1 is end_m.
@@ -401,26 +442,28 @@ fn sample_entropy_counts(data: &[f32], m: usize, r: f32) -> (u32, u32) {
     // We only need to check i < j and then multiply by 2 because distance is symmetric!
     for i in 0..end_m {
         let mut j = i + 1; // only check j > i
-        while j + 4 <= end_m {
-            let mut max_m = f32x4::splat(0.0);
+        while j + 8 <= end_m {
+            let mut max_lo = f32x4::splat(0.0);
+            let mut max_hi = f32x4::splat(0.0);
             for k in 0..m {
                 let v_i = f32x4::splat(data[i + k]);
-                let v_j = f32x4::from_slice(&data[j + k..j + k + 4]);
-                let diff = (v_j - v_i).abs();
-                max_m = max_m.simd_max(diff);
+                let lo = f32x4::from_slice(&data[j + k..j + k + 4]);
+                let hi = f32x4::from_slice(&data[j + k + 4..j + k + 8]);
+                max_lo = max_lo.simd_max((lo - v_i).abs());
+                max_hi = max_hi.simd_max((hi - v_i).abs());
             }
-            let mask_m = max_m.simd_le(r_vec);
-            b_count += mask_m.to_bitmask().count_ones();
+            b_acc += max_lo.simd_le(r_vec).select(one, zero);
+            b_acc += max_hi.simd_le(r_vec).select(one, zero);
 
-            let v_i_last = f32x4::splat(data[i + m]);
-            let v_j_last = f32x4::from_slice(&data[j + m..j + m + 4]);
-            let diff_last = (v_j_last - v_i_last).abs();
-            let max_mp1 = max_m.simd_max(diff_last);
-            let mask_mp1 = max_mp1.simd_le(r_vec);
-            let valid_a = mask_m & mask_mp1;
-            a_count += valid_a.to_bitmask().count_ones();
+            // The length-(m + 1) distance is at least the length-m one, so a
+            // match of m + 1 is also a match of m.
+            let v_i = f32x4::splat(data[i + m]);
+            let lo = f32x4::from_slice(&data[j + m..j + m + 4]);
+            let hi = f32x4::from_slice(&data[j + m + 4..j + m + 8]);
+            a_acc += max_lo.simd_max((lo - v_i).abs()).simd_le(r_vec).select(one, zero);
+            a_acc += max_hi.simd_max((hi - v_i).abs()).simd_le(r_vec).select(one, zero);
 
-            j += 4;
+            j += 8;
         }
         // Remainder
         for j_rem in j..end_m {
@@ -437,6 +480,8 @@ fn sample_entropy_counts(data: &[f32], m: usize, r: f32) -> (u32, u32) {
             }
         }
     }
+    b_count += b_acc.reduce_sum() as u32;
+    a_count += a_acc.reduce_sum() as u32;
 
     // TSFEL drops the last length-m template from B (templates_B[:-1]); the
     // loop `0..end_m` matches that. tsfresh keeps it: see tsfresh_sample_entropy.
@@ -445,45 +490,80 @@ fn sample_entropy_counts(data: &[f32], m: usize, r: f32) -> (u32, u32) {
     (a_count * 2, b_count * 2)
 }
 
-pub fn approx_entropy_simd(m: usize, r: f32, data: &[f32]) -> f32 {
+/// tsfresh approximate entropy, `|phi(m) - phi(m + 1)|`, where
+/// `phi(m) = mean_i ln(C_m[i] / (n - m + 1))` and `C_m[i]` counts the length-m
+/// templates (itself included) within Chebyshev distance `r` of template `i`.
+///
+/// The distance is symmetric, so each diagonal `j = i + d` is scanned once and
+/// credits both `i` and `j`, and the length-(m + 1) distance extends the
+/// length-m one by a single element: one pass instead of two full n² passes.
+/// Counts are exact, so the result is the same as the direct definition.
+pub fn approx_entropy(m: usize, r: f32, data: &[f32], counts: &mut Vec<i32>) -> f32 {
+    use std::simd::{Select, i32x4};
     let n = data.len();
-    if n <= m {
+    if n <= m + 1 {
         return 0.0;
     }
+    let len_m = n - m + 1;
+    let len_m1 = n - m;
+    counts.clear();
+    counts.resize(len_m + len_m1, 1); // every template matches itself
+    let (cm, cm1) = counts.split_at_mut(len_m);
     let r_vec = f32x4::splat(r);
 
-    let mut result = 0.0;
-    let end = n - m + 1;
-    for i in 0..end {
-        let mut count = 0;
+    let (one, zero) = (i32x4::splat(1), i32x4::splat(0));
 
-        let mut j = 0;
-        while j + 4 <= end {
-            let mut max_diff = f32x4::splat(0.0);
-            for k in 0..m {
-                let v_i = f32x4::splat(data[i + k]);
-                let v_j = f32x4::from_slice(&data[j + k..j + k + 4]);
-                let diff = (v_j - v_i).abs();
-                max_diff = max_diff.simd_max(diff);
-            }
-            let mask = max_diff.simd_le(r_vec);
-            count += mask.to_bitmask().count_ones();
-            j += 4;
-        }
-        for j_rem in j..end {
-            let mut max_diff = 0.0_f32;
-            for k in 0..m {
-                max_diff = max_diff.max((data[j_rem + k] - data[i + k]).abs());
-            }
-            if max_diff <= r {
-                count += 1;
-            }
-        }
-
-        result += (count as f32 / end as f32).ln();
+    #[inline(always)]
+    fn add_hits(c: &mut [i32], at: usize, hits: i32x4) {
+        let v = i32x4::from_slice(&c[at..at + 4]) + hits;
+        v.copy_to_slice(&mut c[at..at + 4]);
     }
 
-    result / end as f32
+    for d in 1..len_m {
+        // i in 0..pairs pairs template i with j = i + d <= n - m; the last of
+        // those has no length-(m + 1) template at j.
+        let pairs = len_m - d;
+        let pairs1 = pairs - 1;
+        let mut i = 0;
+        while i + 4 <= pairs1 {
+            let mut dist = f32x4::splat(0.0);
+            for k in 0..m {
+                let a = f32x4::from_slice(&data[i + k..i + k + 4]);
+                let b = f32x4::from_slice(&data[i + d + k..i + d + k + 4]);
+                dist = dist.simd_max((a - b).abs());
+            }
+            let a = f32x4::from_slice(&data[i + m..i + m + 4]);
+            let b = f32x4::from_slice(&data[i + d + m..i + d + m + 4]);
+            let dist1 = dist.simd_max((a - b).abs());
+            let hits = dist.simd_le(r_vec).select(one, zero);
+            let hits1 = dist1.simd_le(r_vec).select(one, zero);
+            add_hits(cm, i, hits);
+            add_hits(cm, i + d, hits);
+            add_hits(cm1, i, hits1);
+            add_hits(cm1, i + d, hits1);
+            i += 4;
+        }
+        for i in i..pairs {
+            let mut dist = 0.0_f32;
+            for k in 0..m {
+                dist = dist.max((data[i + k] - data[i + d + k]).abs());
+            }
+            if dist <= r {
+                cm[i] += 1;
+                cm[i + d] += 1;
+            }
+            if i < pairs1 && dist.max((data[i + m] - data[i + d + m]).abs()) <= r {
+                cm1[i] += 1;
+                cm1[i + d] += 1;
+            }
+        }
+    }
+
+    let phi = |c: &[i32]| {
+        let len = c.len() as f32;
+        c.iter().map(|&k| (k as f32 / len).ln()).sum::<f32>() / len
+    };
+    (phi(cm) - phi(cm1)).abs()
 }
 
 pub fn permutation_entropy(data: &[f32], tau: u32, dimension: u32) -> f32 {

@@ -545,19 +545,20 @@ pub fn finalize(
         cwt_std = vec![0.0; 9];
         cwt_var = vec![0.0; 9];
         if !values.is_empty() {
-            let n_vals = values.len() as f64;
-            let mut abs_sums = Vec::with_capacity(9);
+            let n_vals = values.len() as f32;
+            let mut abs_sums = [0.0f32; 9];
+            let mut row = Vec::with_capacity(values.len());
             for (i, scale) in (1..10).enumerate() {
-                let row = crate::features::cwt::mexh_cwt(values, scale as f64);
-                cwt_energy[i] = (row.iter().map(|c| c * c).sum::<f64>() / n_vals).sqrt() as f32;
-                abs_sums.push(row.iter().map(|c| c.abs()).sum::<f64>());
-                let row_mean = row.iter().sum::<f64>() / n_vals;
-                cwt_abs_mean[i] = row_mean.abs() as f32;
-                let row_var = row.iter().map(|c| (c - row_mean).powi(2)).sum::<f64>() / n_vals;
-                cwt_var[i] = row_var as f32;
-                cwt_std[i] = row_var.sqrt() as f32;
+                crate::features::cwt::mexh_cwt_into(values, scale, &mut row);
+                cwt_energy[i] = (row.iter().map(|c| c * c).sum::<f32>() / n_vals).sqrt();
+                abs_sums[i] = row.iter().map(|c| c.abs()).sum::<f32>();
+                let row_mean = row.iter().sum::<f32>() / n_vals;
+                cwt_abs_mean[i] = row_mean.abs();
+                let row_var = row.iter().map(|c| (c - row_mean).powi(2)).sum::<f32>() / n_vals;
+                cwt_var[i] = row_var;
+                cwt_std[i] = row_var.sqrt();
             }
-            let total: f64 = abs_sums.iter().sum();
+            let total: f32 = abs_sums.iter().sum();
             // TSFEL returns 0 when sum(signal) == 0.
             if total > 0.0 && values.iter().map(|&v| v as f64).sum::<f64>() != 0.0 {
                 cwt_entropy = -abs_sums
@@ -565,7 +566,7 @@ pub fn finalize(
                     .map(|&e| e / total)
                     .filter(|&p| p > 0.0)
                     .map(|p| p * p.ln())
-                    .sum::<f64>() as f32;
+                    .sum::<f32>();
             }
         }
     }

@@ -22,12 +22,18 @@ pub fn eval_subsequence(feat: &Feature, context: &mut FeatureContext) -> Option<
         }
         Feature::MatrixProfile(l, agg) => {
             let l = *l as usize;
-            if l == 0 || context.values.len() < l * 2 {
-                if context.values.len() < l {
-                    return None;
-                }
+            if l == 0 || context.values.len() < l {
+                return None;
             }
-            let profile = stomp_matrix_profile(context.values, l);
+            // One profile per window serves every aggregate over it.
+            let state = &mut *context.state;
+            if state.matrix_profile_m != l {
+                let mut scratch = std::mem::take(&mut state.matrix_profile_scratch);
+                stomp_matrix_profile(context.values, l, &mut state.matrix_profile, &mut scratch);
+                state.matrix_profile_scratch = scratch;
+                state.matrix_profile_m = l;
+            }
+            let profile = &state.matrix_profile;
             if profile.is_empty() {
                 return None;
             }
@@ -110,56 +116,87 @@ fn mass_distance_profile(x: &[f32], q: &[f32]) -> Vec<f32> {
     distances
 }
 
-fn stomp_matrix_profile(x: &[f32], m: usize) -> Vec<f32> {
+/// Matrix profile with an exact dot product per pair (rolling STOMP/MPX
+/// updates drift by more than f32 can afford on smooth series). Subsequences
+/// are z-normalised once into a transposed `m x l` table, then the upper
+/// triangle is scanned row by row, four columns per SIMD step, and each pair
+/// updates both ends: `l²/2` dot products with no divisions.
+fn stomp_matrix_profile(x: &[f32], m: usize, profile: &mut Vec<f32>, scratch: &mut Vec<f32>) {
+    use std::simd::{cmp::SimdPartialOrd as _, f32x4, num::SimdFloat as _};
+    profile.clear();
     let n = x.len();
     if n <= m {
-        return vec![0.0];
+        profile.push(0.0);
+        return;
     }
 
     let l = n - m + 1;
-    let mut means = vec![0.0; l];
-    let mut stds = vec![0.0; l];
+    let mf = m as f32;
+    // Centre on the series mean first: window means of a large-offset series
+    // would otherwise round away most of the signal.
+    let mu = x.iter().sum::<f32>() / n as f32;
 
-    for i in 0..l {
-        let window = &x[i..i + m];
-        let mut mean = 0.0;
-        for &v in window {
-            mean += v;
-        }
-        mean /= m as f32;
-
-        let mut std = 0.0;
-        for &v in window {
-            std += (v - mean) * (v - mean);
-        }
-        std = (std / m as f32).sqrt();
+    // z[t * l + j] = (x[j + t] - mean_j) / std_j
+    scratch.clear();
+    scratch.resize(m * l, 0.0);
+    let z = scratch.as_mut_slice();
+    for j in 0..l {
+        let window = &x[j..j + m];
+        let mean = window.iter().map(|&v| v - mu).sum::<f32>() / mf;
+        let var = window
+            .iter()
+            .map(|&v| (v - mu - mean) * (v - mu - mean))
+            .sum::<f32>()
+            / mf;
+        let mut std = var.sqrt();
         if std < 1e-6 {
             std = 1.0; // avoid div by zero, standardize flat line
         }
-        means[i] = mean;
-        stds[i] = std;
-    }
-
-    let mut profile = vec![f32::INFINITY; l];
-    // stumpy / matrixprofile: neighbours within ceil(m / 4) are trivial matches.
-    let exclusion_zone = m.div_ceil(4);
-
-    for i in 0..l {
-        for j in 0..l {
-            if i.abs_diff(j) > exclusion_zone {
-                let mut dot = 0.0;
-                for k in 0..m {
-                    let vi = (x[i + k] - means[i]) / stds[i];
-                    let vj = (x[j + k] - means[j]) / stds[j];
-                    dot += vi * vj;
-                }
-                let d = (2.0 * m as f32 * (1.0 - dot / m as f32).max(0.0)).sqrt();
-                if d < profile[i] {
-                    profile[i] = d;
-                }
-            }
+        let inv = 1.0 / std;
+        for (t, &v) in window.iter().enumerate() {
+            z[t * l + j] = (v - mu - mean) * inv;
         }
     }
 
-    profile
+    // Squared distances 2m - 2 dot while scanning; sqrt once at the end.
+    profile.resize(l, f32::INFINITY);
+    // stumpy / matrixprofile: neighbours within ceil(m / 4) are trivial matches.
+    let exclusion_zone = m.div_ceil(4);
+    let two_m = 2.0 * mf;
+    let two_m_v = f32x4::splat(two_m);
+    let zero = f32x4::splat(0.0);
+
+    for i in 0..l {
+        let mut j = i + exclusion_zone + 1;
+        if j >= l {
+            continue;
+        }
+        let mut row_min = f32x4::splat(f32::INFINITY);
+        while j + 4 <= l {
+            let mut dot = zero;
+            for t in 0..m {
+                let row = &z[t * l..(t + 1) * l];
+                dot += f32x4::splat(row[i]) * f32x4::from_slice(&row[j..j + 4]);
+            }
+            let d2 = (two_m_v - dot - dot).simd_max(zero);
+            row_min = row_min.simd_min(d2);
+            let col = f32x4::from_slice(&profile[j..j + 4]).simd_min(d2);
+            col.copy_to_slice(&mut profile[j..j + 4]);
+            j += 4;
+        }
+        let mut best = row_min.reduce_min().min(profile[i]);
+        for j in j..l {
+            let dot: f32 = (0..m).map(|t| z[t * l + i] * z[t * l + j]).sum();
+            let d2 = (two_m - 2.0 * dot).max(0.0);
+            best = best.min(d2);
+            if d2 < profile[j] {
+                profile[j] = d2;
+            }
+        }
+        profile[i] = best;
+    }
+
+    for p in profile.iter_mut() {
+        *p = p.sqrt();
+    }
 }

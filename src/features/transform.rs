@@ -100,7 +100,7 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             if c >= values.len() {
                 return Some(f32::NAN);
             }
-            super::cwt::mexh_cwt(values, *w as f64)[c] as f32
+            super::cwt::mexh_cwt_coeff(values, *w as u16, c)
         }
         Feature::NumberCwtPeaks(n_val) => {
             super::cwt::number_cwt_peaks(values, *n_val as usize) as f32
