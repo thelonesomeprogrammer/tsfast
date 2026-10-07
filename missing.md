@@ -2,65 +2,29 @@
 
 > **Agents:** this is the backlog. Pick tasks from here, and delete a row in the same PR that implements it.
 
-Based on a comprehensive audit of **TSFresh** (76 features) and **TSFEL** (68 features), here are the features that are **NOT yet implemented** in `tsfast`. The estimated complexity indicates the effort and algorithmic difficulty of implementing these optimally in Rust using SIMD.
+Audited against the installed `tsfresh` (76 feature calculators) and `tsfel`
+(67 feature functions). Every name below was checked against
+`src/types/feature.rs`, `src/types/parse.rs`, and `tests/feature_samples.txt`
+and does not exist under any alias. Everything *not* listed here is
+implemented and verified within 1% of its reference by
+`tests/test_references.py`.
 
 ---
 
-## 1. High-Priority Algorithms
-These features are heavily used in Python but suffer from extreme performance bottlenecks. Implementing them in Rust provides massive (10x-500x) speedups.
+## TSFresh (3 missing)
 
-| Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
-| :--- | :--- | :--- | :--- |
+| Feature | Notes |
+| :--- | :--- |
+| **`fourier_entropy`** | Binned entropy of the FFT power spectrum (histogram over `bins` parameter). |
+| **`fft_aggregated`** | Centroid/variance/skew/kurtosis of the power spectrum, tsfresh's own normalization (distinct from TSFEL's `spectral_centroid`/`spectral_spread`/etc., which use `FS` and are already implemented). |
+| **`linear_trend_timewise`** | OLS regression against an explicit `DatetimeIndex`. tsfast's engines take no timestamp input, so this needs a design decision before implementation, not just a port. |
 
----
+## TSFEL (5 missing)
 
-## 2. Statistical & Distribution Domain
-Features summarizing signal amplitude distribution, central tendency, and dispersion.
-
-| Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
-| :--- | :--- | :--- | :--- |
-| **`hist_mode`** | TSFEL | **Medium** | Fast SIMD min/max to establish bin edges, vectorized binning. |
-| **`ecdf_percentile`** | TSFEL | **Medium** | Value corresponding to target ECDF percentile. Quickselect / linear interpolation in Rust. |
-| **`ecdf_percentile_count`**| TSFEL | **Low** | Vectorized compare `_mm256_cmp_pd` + mask sum/popcount. |
-| **`ecdf_slope`** | TSFEL | **Medium** | Slope between two ECDF percentiles. Quickselect + division. |
-
----
-
-## 3. Temporal & Difference Domain
-Features sensitive to the temporal order, differences, and zero crossings.
-
-| Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
-| :--- | :--- | :--- | :--- |
-| **`neighbourhood_peaks`**| TSFEL | **Medium** | Peaks that dominate window neighbourhood. Vectorized sliding window maximum. |
-| **`abs_percentage_sum_of_changes`**| TSFresh | **Low** | Total absolute change divided by mean/sum. |
-
----
-
-## 4. Spectral & Frequency Domain
-Features derived from Fourier transforms, PSD, or Cepstrum. Many can share a single FFT calculation in `tsfast`.
-
-| Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
-| :--- | :--- | :--- | :--- |
-| **`fundamental_frequency`** | TSFEL | **Medium** | Dominant pitch frequency. Peak search in FFT magnitude or Cepstrum using SIMD argmax. |
-| **`max_frequency`** | TSFEL | **Low** | Frequency of max spectral amplitude. Post-FFT SIMD argmax over magnitude. |
-| **`median_frequency`** | TSFEL | **Medium** | Frequency dividing power into two equal halves. Prefix sum scan over power spectrum. |
-
----
-
-## 6. Stationarity, Autoregressive & Correlation
-| Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
-| :--- | :--- | :--- | :--- |
-| **`linear_trend_timewise`** | TSFresh | **Specialized**| OLS regression against explicit DatetimeIndex (requires timestamp injection). |
-
----
-
-## 7. Fractal / Complexity Domain (Non-linear Dynamics)
-Features measuring signal non-linearity, self-similarity, and fractal dimension.
-
-| Feature | Source | Complexity | Rust/SIMD Implementation Strategy |
-| :--- | :--- | :--- | :--- |
-| **`petrosian_fractal_dimension`**| TSFEL | **Low** | Relies on derivative sign changes. SIMD adjacent diff + sign mask + popcount (extremely fast). |
-| **`maximum_fractal_length`** | TSFEL | **High** | Shared computation with HFD; vectorized max reduction. |
-| **`dfa`** (Detrended Fluct.) | TSFEL | **High** | Cumulative sum + chunked linear regressions and residual sum of squares. |
-| **`hurst_exponent`** | TSFEL | **High** | Parallelized multi-scale chunking, vectorized prefix sum and Rescaled Range (R/S). |
-| **`mse`** (Multiscale Entropy)| TSFEL | **Very High**| Coarse-graining via SIMD chunk mean, followed by 2D Chebyshev distance count. |
+| Feature | Notes |
+| :--- | :--- |
+| **`petrosian_fractal_dimension`** | Derivative sign-change count; cheap to add (adjacent diff + sign mask + popcount). |
+| **`neighbourhood_peaks`** | Peaks that dominate a local window neighbourhood. |
+| **`hist_mode`** | Mode of the value histogram; needs SIMD min/max for bin edges + vectorized binning. |
+| **`average_power`** | `abs_energy / length`, i.e. mean square value (distinct from `rms`, which is its square root). |
+| **`spectrogram_mean_coeff`** | tsfast's existing `spectrogram-N-T` feature does **not** implement this — see the note in `tests/references.py` (it ignores the time parameter and returns a single spectrum bin). The real TSFEL spectrogram-mean-coefficient feature is unimplemented. |

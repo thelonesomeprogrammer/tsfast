@@ -1038,3 +1038,28 @@ def test_power_bandwidth_positive_turning_variation():
         assert np.allclose(res[0], 0.0)
         assert np.allclose(res[1], 0.0)
         assert np.allclose(res[2], 1.0)
+
+
+def test_wavelet_abs_mean_std_var():
+    import tsfel.feature_extraction.features as F
+
+    fs = 100.0
+    features = ["wavelet_abs_mean-3", "wavelet_std-3", "wavelet_var-3"]
+    extractor = tsfast.Extractor(features)
+
+    np.random.seed(0)
+    x = np.random.randn(100).astype(np.float32)
+    results = extractor.process_2d_floats(np.stack([x]))[0]
+
+    assert np.allclose(results[0], F.wavelet_abs_mean(x, fs)["values"][3], atol=1e-3)
+    assert np.allclose(results[1], F.wavelet_std(x, fs)["values"][3], atol=1e-3)
+    assert np.allclose(results[2], F.wavelet_var(x, fs)["values"][3], atol=1e-3)
+
+    # Constant series: the mexh wavelet's coefficients on a flat signal are
+    # nonzero near the boundary (finite-support truncation), so TSFEL's own
+    # values are nonzero too; compare against those rather than zero.
+    const = np.full(50, 2.0, dtype=np.float32)
+    results = extractor.process_2d_floats(np.stack([const]))[0]
+    assert np.allclose(results[0], F.wavelet_abs_mean(const, fs)["values"][3], atol=1e-3)
+    assert np.allclose(results[1], F.wavelet_std(const, fs)["values"][3], atol=1e-3)
+    assert np.allclose(results[2], F.wavelet_var(const, fs)["values"][3], atol=1e-3)

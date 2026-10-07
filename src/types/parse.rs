@@ -267,6 +267,15 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     if let Some(arg) = s.strip_prefix("wavelet_energy-") {
         return Some(Feature::WaveletEnergy(arg.trim().parse().ok()?));
     }
+    if let Some(arg) = s.strip_prefix("wavelet_abs_mean-") {
+        return Some(Feature::WaveletAbsMean(arg.trim().parse().ok()?));
+    }
+    if let Some(arg) = s.strip_prefix("wavelet_std-") {
+        return Some(Feature::WaveletStd(arg.trim().parse().ok()?));
+    }
+    if let Some(arg) = s.strip_prefix("wavelet_var-") {
+        return Some(Feature::WaveletVar(arg.trim().parse().ok()?));
+    }
     if let Some(arg) = s.strip_prefix("paa-") {
         let (n, m) = arg.split_once('-')?;
         let total = n.parse::<u16>().ok()?;
@@ -841,6 +850,9 @@ impl Feature {
             Feature::CalcCentroid(fs) => format!("calc_centroid-{}", f32::from_bits(*fs)),
             Feature::Mfcc(idx) => format!("mfcc-{}", idx),
             Feature::WaveletEnergy(idx) => format!("wavelet_energy-{}", idx),
+            Feature::WaveletAbsMean(idx) => format!("wavelet_abs_mean-{}", idx),
+            Feature::WaveletStd(idx) => format!("wavelet_std-{}", idx),
+            Feature::WaveletVar(idx) => format!("wavelet_var-{}", idx),
 
             Feature::SpktWelchDensity(coeff) => format!("spkt_welch_density__coeff_{}", coeff),
             Feature::CwtCoefficients(widths, len, coeff, w) => {

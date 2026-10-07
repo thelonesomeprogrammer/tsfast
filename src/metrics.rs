@@ -55,6 +55,9 @@ pub struct FftResult {
     pub lpcc: Vec<f32>,
     pub cwt_energy: Vec<f32>,
     pub cwt_entropy: f32,
+    pub cwt_abs_mean: Vec<f32>,
+    pub cwt_std: Vec<f32>,
+    pub cwt_var: Vec<f32>,
     pub cwt_peaks: u16,
     pub welch_density: Vec<f32>,
 }

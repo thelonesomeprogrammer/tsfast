@@ -566,3 +566,40 @@ def test_expanding_power_bandwidth_positive_turning_variation():
         assert np.allclose(res[0][0], 0.0)
         assert np.allclose(res[0][1], 0.0)
         assert np.allclose(res[0][2], 1.0)
+
+
+def test_expanding_wavelet_abs_mean_std_var():
+    import tsfel.feature_extraction.features as F
+
+    fs = 100.0
+    features = ["wavelet_abs_mean-3", "wavelet_std-3", "wavelet_var-3"]
+
+    def check(chunks):
+        ext = ExpandingExtractor(features, 1)
+        seen = np.array([], dtype=np.float32)
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            assert np.allclose(res[0][0], F.wavelet_abs_mean(seen, fs)["values"][3], atol=1e-3)
+            assert np.allclose(res[0][1], F.wavelet_std(seen, fs)["values"][3], atol=1e-3)
+            assert np.allclose(res[0][2], F.wavelet_var(seen, fs)["values"][3], atol=1e-3)
+
+    rng = np.random.RandomState(17)
+    noise = rng.randn(100)
+    check([noise[:40], noise[40:]])
+    # Short first window.
+    check([rng.randn(5), noise[:30]])
+
+    # Constant series: the mexh wavelet's coefficients on a flat signal are
+    # nonzero near the boundary (finite-support truncation), so TSFEL's own
+    # values are nonzero too; compare against those rather than zero.
+    constant = np.full(80, -1.5, dtype=np.float32)
+    ext = ExpandingExtractor(features, 1)
+    seen = np.array([], dtype=np.float32)
+    for chunk in (constant[:40], constant[40:]):
+        res = ext.update(chunk.reshape(1, -1))
+        seen = np.concatenate([seen, chunk])
+        assert np.allclose(res[0][0], F.wavelet_abs_mean(seen, fs)["values"][3], atol=1e-3)
+        assert np.allclose(res[0][1], F.wavelet_std(seen, fs)["values"][3], atol=1e-3)
+        assert np.allclose(res[0][2], F.wavelet_var(seen, fs)["values"][3], atol=1e-3)

@@ -618,3 +618,35 @@ def test_sliding_power_bandwidth_positive_turning_variation():
     assert np.allclose(res["power_bandwidth"].values, 0.0)
     assert np.allclose(res["spectral_positive_turning"].values, 0.0)
     assert np.allclose(res["spectral_variation"].values, 1.0)
+
+
+def test_sliding_wavelet_abs_mean_std_var():
+    import tsfel.feature_extraction.features as F
+
+    fs = 100.0
+    features = ["wavelet_abs_mean-3", "wavelet_std-3", "wavelet_var-3"]
+    window_size = 50
+
+    rng = np.random.RandomState(7)
+    x = rng.randn(120).astype(np.float32)
+    ext = SlidingExtractor(features, 1, window_size)
+    df = frame(ext, ext.update(x.reshape(1, -1)))
+
+    for w in range(len(df)):
+        window = x[w : w + window_size]
+        tsfel_abs_mean = F.wavelet_abs_mean(window, fs)["values"][3]
+        tsfel_std = F.wavelet_std(window, fs)["values"][3]
+        tsfel_var = F.wavelet_var(window, fs)["values"][3]
+        assert np.allclose(df.iloc[w]["wavelet_abs_mean-3"], tsfel_abs_mean, atol=1e-3)
+        assert np.allclose(df.iloc[w]["wavelet_std-3"], tsfel_std, atol=1e-3)
+        assert np.allclose(df.iloc[w]["wavelet_var-3"], tsfel_var, atol=1e-3)
+
+    # Constant window: the mexh wavelet's coefficients on a flat signal are
+    # nonzero near the boundary (finite-support truncation), so TSFEL's own
+    # values are nonzero too; compare against those rather than zero.
+    const = np.full(window_size, 3.0, dtype=np.float32)
+    ext = SlidingExtractor(features, 1, window_size)
+    res = frame(ext, ext.update(const.reshape(1, -1)))
+    assert np.allclose(res["wavelet_abs_mean-3"].values, F.wavelet_abs_mean(const, fs)["values"][3], atol=1e-3)
+    assert np.allclose(res["wavelet_std-3"].values, F.wavelet_std(const, fs)["values"][3], atol=1e-3)
+    assert np.allclose(res["wavelet_var-3"].values, F.wavelet_var(const, fs)["values"][3], atol=1e-3)
