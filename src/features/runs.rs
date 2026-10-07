@@ -35,12 +35,48 @@ pub fn eval_runs(feat: &Feature, context: &mut crate::context::FeatureContext) -
     let _unique_c3_lags = context.unique_c3_lags;
     let _unique_paa_totals = context.unique_paa_totals;
     let _paa_boundaries = context.paa_boundaries;
+    let unique_count_above_thresholds = context.unique_count_above_thresholds;
+    let unique_count_below_thresholds = context.unique_count_below_thresholds;
+    let unique_range_counts = context.unique_range_counts;
 
     let res = match feat {
         Feature::CountAboveMean => count_a as f32,
         Feature::CountBelowMean => count_b as f32,
         Feature::LongestStrikeAboveMean => max_strike_a as f32,
         Feature::LongestStrikeBelowMean => max_strike_b as f32,
+        Feature::CountAbove(t_bits) => {
+            let idx = if let Some(idx) = unique_count_above_thresholds
+                .iter()
+                .position(|&b| b == *t_bits)
+            {
+                idx
+            } else {
+                return Some(0.0);
+            };
+            context.state.count_above_counts[idx] as f32 / context.n
+        }
+        Feature::CountBelow(t_bits) => {
+            let idx = if let Some(idx) = unique_count_below_thresholds
+                .iter()
+                .position(|&b| b == *t_bits)
+            {
+                idx
+            } else {
+                return Some(0.0);
+            };
+            context.state.count_below_counts[idx] as f32 / context.n
+        }
+        Feature::RangeCount(min_bits, max_bits) => {
+            let idx = if let Some(idx) = unique_range_counts
+                .iter()
+                .position(|&(mn, mx)| mn == *min_bits && mx == *max_bits)
+            {
+                idx
+            } else {
+                return Some(0.0);
+            };
+            context.state.range_counts[idx] as f32
+        }
         _ => return None,
     };
     Some(res)

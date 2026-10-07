@@ -19,6 +19,7 @@ iqr
 entropy
 sample_entropy
 higuchi_fd
+maximum_fractal_length
 energy
 rms
 root_mean_square
@@ -168,3 +169,6 @@ ecdf_percentile_count-0.5
 ecdf_slope-0.2-0.5
 dfa
 hurst_exponent
+count_above-0.5
+count_below-0.5
+range_count-0-5

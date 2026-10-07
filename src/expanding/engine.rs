@@ -10,6 +10,7 @@ use super::processors::fft_processor::FftProcessor;
 use super::processors::mean_processor::MeanProcessor;
 use super::processors::sort_processor::SortProcessor;
 use super::processors::stats_processor::StatsProcessor;
+use super::processors::threshold_processor::ThresholdProcessor;
 use super::processors::trend_processor::TrendProcessor;
 
 pub(crate) struct ExpandingEngine<'a> {
@@ -19,6 +20,9 @@ pub(crate) struct ExpandingEngine<'a> {
     pub(crate) unique_c3_lags: &'a [u16],
     pub(crate) unique_autocorr_lags: &'a [u16],
     pub(crate) unique_tra_lags: &'a [u16],
+    pub(crate) unique_count_above_thresholds: &'a [u32],
+    pub(crate) unique_count_below_thresholds: &'a [u32],
+    pub(crate) unique_range_counts: &'a [(u32, u32)],
     pub(crate) paa_boundaries: &'a [Vec<usize>],
     pub(crate) r2c: Option<Arc<dyn RealToComplex<f32>>>,
     pub(crate) fft_update_period: usize,
@@ -93,6 +97,14 @@ impl<'a> ExpandingEngine<'a> {
             let shifted = f32x4::from_array([state.prev_last, i[0], i[1], i[2]]);
 
             StatsProcessor::process_simd(self.compute, chunk, i, offset_usize, state);
+            ThresholdProcessor::process_simd(
+                self.compute,
+                chunk,
+                self.unique_count_above_thresholds,
+                self.unique_count_below_thresholds,
+                self.unique_range_counts,
+                state,
+            );
             DiffProcessor::process_simd(self.compute, chunk, shifted, offset, state);
             TrendProcessor::process_simd(self.compute, chunk, offset, state);
 
@@ -131,6 +143,14 @@ impl<'a> ExpandingEngine<'a> {
             let global_idx = global_start_idx + i;
 
             StatsProcessor::process_remainder(self.compute, val, global_idx, state);
+            ThresholdProcessor::process_remainder(
+                self.compute,
+                val,
+                self.unique_count_above_thresholds,
+                self.unique_count_below_thresholds,
+                self.unique_range_counts,
+                state,
+            );
 
             if global_idx > 0 {
                 let prev = if i > 0 {
@@ -223,6 +243,9 @@ impl<'a> ExpandingEngine<'a> {
             &self.unique_tra_lags,
             &self.unique_paa_totals,
             &self.paa_boundaries,
+            self.unique_count_above_thresholds,
+            self.unique_count_below_thresholds,
+            self.unique_range_counts,
         );
 
         let mut feats = Vec::with_capacity(self.features.len());

@@ -92,6 +92,9 @@ REFERENCES = {
     "mean_n_absolute_max-7": ("tsfresh", lambda x: fc.mean_n_absolute_max(x, 7)),
     "count_above_mean": ("tsfresh", fc.count_above_mean),
     "count_below_mean": ("tsfresh", fc.count_below_mean),
+    "count_above-0.5": ("tsfresh", lambda x: fc.count_above(x, 0.5)),
+    "count_below-0.5": ("tsfresh", lambda x: fc.count_below(x, 0.5)),
+    "range_count-0-5": ("tsfresh", lambda x: fc.range_count(x, 0, 5)),
     "longest_strike_above_mean": ("tsfresh", fc.longest_strike_above_mean),
     "longest_strike_below_mean": ("tsfresh", fc.longest_strike_below_mean),
     "first_loc_max": ("tsfresh", fc.first_location_of_maximum),
@@ -347,6 +350,7 @@ REFERENCES = {
     "wavelet_entropy": ("tsfel", lambda x: F.wavelet_entropy(x, FS)),
     "mse-3": ("tsfel", lambda x: F.mse(x, m=3, maxscale=None, tolerance=0.2 * np.std(x))),
     "mse-2-10": ("tsfel", lambda x: F.mse(x, m=2, maxscale=10, tolerance=0.2 * np.std(x))),
+    "maximum_fractal_length": ("tsfel", F.maximum_fractal_length),
 }
 
 # Lengths below which the reference returns NaN by policy rather than because
@@ -355,6 +359,7 @@ MIN_LENGTH = {
     "higuchi_fd": 160,  # TSFEL FEATURES_MIN_SIZE
     "dfa": 160,
     "hurst_exponent": 160,
+    "maximum_fractal_length": 160,  # TSFEL FEATURES_MIN_SIZE
 }
 
 NO_REFERENCE = {

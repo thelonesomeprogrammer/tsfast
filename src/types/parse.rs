@@ -406,6 +406,38 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let r: f32 = arg.parse().ok()?;
         return Some(Feature::RatioBeyondRSigma(r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("count_above-") {
+        let t: f32 = arg.parse().ok()?;
+        if t.is_nan() {
+            return None;
+        }
+        return Some(Feature::CountAbove(t.to_bits()));
+    }
+    if let Some(arg) = s.strip_prefix("count_below-") {
+        let t: f32 = arg.parse().ok()?;
+        if t.is_nan() {
+            return None;
+        }
+        return Some(Feature::CountBelow(t.to_bits()));
+    }
+    if let Some(arg) = s.strip_prefix("range_count-") {
+        // min and max are both floats and either may be negative, so the '-'
+        // separating them can't be found with a plain split: try each '-' in
+        // turn (skipping index 0, min's own sign) until both sides parse.
+        for (idx, _) in arg.match_indices('-') {
+            if idx == 0 {
+                continue;
+            }
+            let (min_s, max_s) = (&arg[..idx], &arg[idx + 1..]);
+            if let (Ok(min_v), Ok(max_v)) = (min_s.parse::<f32>(), max_s.parse::<f32>()) {
+                if min_v.is_nan() || max_v.is_nan() || min_v > max_v {
+                    return None;
+                }
+                return Some(Feature::RangeCount(min_v.to_bits(), max_v.to_bits()));
+            }
+        }
+        return None;
+    }
     None
 }
 
@@ -794,6 +826,13 @@ impl Feature {
             Feature::RatioBeyondRSigma(r_bits) => {
                 format!("ratio_beyond_r_sigma-{}", f32::from_bits(*r_bits))
             }
+            Feature::CountAbove(t_bits) => format!("count_above-{}", f32::from_bits(*t_bits)),
+            Feature::CountBelow(t_bits) => format!("count_below-{}", f32::from_bits(*t_bits)),
+            Feature::RangeCount(min_bits, max_bits) => format!(
+                "range_count-{}-{}",
+                f32::from_bits(*min_bits),
+                f32::from_bits(*max_bits)
+            ),
             Feature::Lpcc(idx) => format!("lpcc-{}", idx),
             Feature::Ecdf(d) => format!("ecdf-{}", d),
             Feature::CalcCentroid(fs) => format!("calc_centroid-{}", f32::from_bits(*fs)),

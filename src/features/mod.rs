@@ -105,6 +105,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::MeanSecondDerivativeCentral => changes::eval_changes(feat, ctx),
         F::CountAboveMean
         | F::CountBelowMean
+        | F::CountAbove(..)
+        | F::CountBelow(..)
+        | F::RangeCount(..)
         | F::LongestStrikeAboveMean
         | F::LongestStrikeBelowMean => runs::eval_runs(feat, ctx),
         F::MatrixProfile(..) | F::QuerySimilarityCount(..) => {
@@ -143,6 +146,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::LempelZivComplexity(..)
         | F::PermutationEntropy(..)
         | F::SampleEntropy
+        | F::Dfa
+        | F::HurstExponent
+        | F::MaximumFractalLength
         | F::Mse(..) => complexity::eval_complexity(feat, ctx),
         F::ArCoefficient(..) | F::FriedrichCoefficients(..) | F::MaxLangevinFixedPoint(..) => {
             dynamic::eval_dynamic(feat, ctx)

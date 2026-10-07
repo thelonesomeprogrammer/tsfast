@@ -66,6 +66,9 @@ pub struct FeatureContext<'a> {
     pub unique_tra_lags: &'a [u16],
     pub unique_paa_totals: &'a [u16],
     pub paa_boundaries: &'a [Vec<usize>],
+    pub unique_count_above_thresholds: &'a [u32],
+    pub unique_count_below_thresholds: &'a [u32],
+    pub unique_range_counts: &'a [(u32, u32)],
 }
 
 impl<'a> FeatureContext<'a> {
@@ -84,6 +87,9 @@ impl<'a> FeatureContext<'a> {
         unique_tra_lags: &'a [u16],
         unique_paa_totals: &'a [u16],
         paa_boundaries: &'a [Vec<usize>],
+        unique_count_above_thresholds: &'a [u32],
+        unique_count_below_thresholds: &'a [u32],
+        unique_range_counts: &'a [(u32, u32)],
     ) -> Self {
         state.reset_window_caches();
         Self {
@@ -139,6 +145,9 @@ impl<'a> FeatureContext<'a> {
             unique_tra_lags,
             unique_paa_totals,
             paa_boundaries,
+            unique_count_above_thresholds,
+            unique_count_below_thresholds,
+            unique_range_counts,
             state,
         }
     }

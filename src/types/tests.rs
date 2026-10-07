@@ -62,6 +62,9 @@ fn parameterized_samples() -> Vec<Feature> {
         F::CwtCoefficients([2, 5, 10, 20, 0, 0, 0, 0], 4, 3, 5),
         F::NumberCwtPeaks(5),
         F::AugmentedDickeyFuller(AdfAttr::PValue),
+        F::CountAbove(f(0.5)),
+        F::CountBelow(f(0.5)),
+        F::RangeCount(f(-1.0), f(1.0)),
     ]
 }
 
@@ -126,6 +129,11 @@ fn invalid_parameters_are_rejected() {
         "ecdf_slope-0.6-0.5",
         "ecdf_slope-0.0-0.5",
         "ecdf_slope-0.5-1.1",
+        "count_above-nan",
+        "count_below-nan",
+        "range_count-nan-5",
+        "range_count-5-nan",
+        "range_count-5-0",
         "not_a_feature",
     ] {
         assert!(s.parse::<Feature>().is_err(), "{s:?} should be rejected");

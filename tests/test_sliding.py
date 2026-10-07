@@ -551,3 +551,27 @@ def test_sliding_maximum_fractal_length():
 
     np.testing.assert_allclose(res1[0][0], mfl1, atol=1e-5)
     np.testing.assert_allclose(res2[0][0], mfl2, atol=1e-5)
+
+
+def test_sliding_count_above_below_and_range_count():
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    features = ["count_above-3.0", "count_below-3.0", "range_count-2-4"]
+
+    def check(x, window_size, stride=1):
+        x = np.asarray(x, dtype=np.float32)
+        ext = SlidingExtractor(features, 1, window_size, stride)
+        res = frame(ext, ext.update(x.reshape(1, -1)))
+        for w in range(len(res)):
+            start = w * stride
+            window = x[start : start + window_size]
+            assert np.allclose(res.iloc[w]["count_above-3"], fc.count_above(window, 3.0))
+            assert np.allclose(res.iloc[w]["count_below-3"], fc.count_below(window, 3.0))
+            assert np.allclose(res.iloc[w]["range_count-2-4"], fc.range_count(window, 2, 4))
+
+    # Values exactly equal to the threshold/boundaries, strided across windows.
+    check([1.0, 2.0, 3.0, 3.0, 4.0, 5.0], window_size=3)
+    # Constant series.
+    check([2.0, 2.0, 2.0, 2.0, 2.0], window_size=3)
+    # Window of length 1.
+    check([1.0, 2.0, 3.0, 4.0, 5.0], window_size=1)

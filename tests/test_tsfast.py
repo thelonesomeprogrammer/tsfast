@@ -977,3 +977,24 @@ def test_maximum_fractal_length():
     # Below minimum size
     res_short = ext.process_2d_floats(np.atleast_2d(x_short))
     assert np.isnan(res_short[0][0])
+
+
+def test_count_above_below_and_range_count():
+    import tsfresh.feature_extraction.feature_calculators as fc
+
+    features = ["count_above-3.0", "count_below-3.0", "range_count-2-4"]
+    ext = tsfast.Extractor(features)
+
+    def check(x):
+        x = np.asarray(x, dtype=np.float32)
+        res = ext.process_2d_floats(np.atleast_2d(x))[0]
+        assert np.allclose(res[0], fc.count_above(x, 3.0))
+        assert np.allclose(res[1], fc.count_below(x, 3.0))
+        assert np.allclose(res[2], fc.range_count(x, 2, 4))
+
+    # Values exactly equal to the threshold/boundaries.
+    check([1.0, 2.0, 3.0, 3.0, 4.0, 5.0])
+    # Constant series.
+    check([2.0, 2.0, 2.0, 2.0])
+    # Series of length 1.
+    check([3.0])
