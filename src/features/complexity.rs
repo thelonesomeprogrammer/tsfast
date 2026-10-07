@@ -67,6 +67,7 @@ pub fn eval_complexity(
         Feature::HurstExponent => calc_hurst(values, context.state),
         Feature::HiguchiFd => calc_higuchi_fd(values, context.state),
         Feature::MaximumFractalLength => calc_maximum_fractal_length(values, context.state),
+        Feature::PetrosianFractalDimension => calc_petrosian_fractal_dimension(values),
         _ => return None,
     };
     Some(res)
@@ -611,6 +612,42 @@ fn calc_maximum_fractal_length(values: &[f32], state: &mut crate::common::Column
     let intercept = y_mean - slope * x_mean;
 
     intercept as f32
+}
+
+/// TSFEL: counts sign changes in `diff(sign(diff(signal)))`, where a
+/// transition to/from a flat run (sign 0) also counts as a change.
+#[inline(always)]
+fn calc_petrosian_fractal_dimension(values: &[f32]) -> f32 {
+    let n = values.len();
+    if n == 0 {
+        return f32::NAN;
+    }
+
+    let sign = |x: f32| -> i8 {
+        if x > 0.0 {
+            1
+        } else if x < 0.0 {
+            -1
+        } else {
+            0
+        }
+    };
+
+    let mut num_sign_changes: u32 = 0;
+    if n >= 3 {
+        let mut prev_sign = sign(values[1] - values[0]);
+        for i in 1..n - 1 {
+            let s = sign(values[i + 1] - values[i]);
+            if s != prev_sign {
+                num_sign_changes += 1;
+            }
+            prev_sign = s;
+        }
+    }
+
+    let n_f = n as f32;
+    let log_n = n_f.log10();
+    log_n / (log_n + (n_f / (n_f + 0.4 * num_sign_changes as f32)).log10())
 }
 
 /// np.std(x): computed here so the O(n^2) entropies don't depend on which

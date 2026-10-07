@@ -39,6 +39,11 @@ pub fn eval_energy(feat: &Feature, context: &mut crate::context::FeatureContext)
     let res = match feat {
         Feature::Energy => state.energy as f32,
         Feature::Rms | Feature::RootMeanSquare => (state.energy / n).sqrt(),
+        // TSFEL: sum(x^2) / (time[-1] - time[0]), where time = arange(n) / fs.
+        Feature::AveragePower(fs_bits) => {
+            let fs = f32::from_bits(*fs_bits);
+            state.energy * fs / (n - 1.0)
+        }
         Feature::EnergyRatioByChunks(num_segments, segment_focus) => {
             let num_segments = *num_segments as usize;
             let segment_focus = *segment_focus as usize;
