@@ -67,6 +67,7 @@ pub fn eval_changes(feat: &Feature, context: &mut crate::context::FeatureContext
 
             if values.len() > 1 {
                 let is_abs = matches!(feat, Feature::MedianAbsDiff);
+                diffs.reserve(values.len() - 1);
                 for i in 0..values.len() - 1 {
                     let mut d = values[i + 1] - values[i];
                     if is_abs {
