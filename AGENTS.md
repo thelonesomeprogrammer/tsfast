@@ -107,7 +107,6 @@ and tells you where to look.
    requires every feature within 1% of its reference. If tsfresh and TSFEL
    define the same quantity differently, add one feature per definition
    (e.g. `skewness` / `biased_skewness`) rather than picking one.
-7. Delete the feature's row from `missing.md`.
 
 Reference implementation: `EnergyRatioByChunks`. Before starting, grep
 `src/types/parse.rs` for the feature name: several features have already been

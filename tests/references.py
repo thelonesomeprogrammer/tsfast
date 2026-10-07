@@ -13,6 +13,7 @@ libraries per feature.
 """
 
 import numpy as np
+import pandas as pd
 import stumpy
 import tsfel.feature_extraction.features as F
 import tsfresh.feature_extraction.feature_calculators as fc
@@ -33,6 +34,13 @@ def _permutation_entropy(x, tau, dimension):
     _, counts = np.unique(ranks, axis=0, return_counts=True)
     probs = counts / len(ranks)
     return -np.sum(probs * np.log(probs))
+
+
+def _linear_trend_timewise(x, attr, period_s):
+    """tsfresh.linear_trend_timewise on a regular DatetimeIndex with period_s
+    seconds between samples, which is what tsfast assumes."""
+    ix = pd.date_range("2000-01-01", periods=len(x), freq=pd.Timedelta(seconds=period_s))
+    return _one(fc.linear_trend_timewise(pd.Series(x, index=ix), [{"attr": attr}]))
 
 
 def _one(result):
@@ -207,6 +215,19 @@ REFERENCES = {
             (lambda a: lambda x: _one(fc.linear_trend(x, [{"attr": a}])))(a),
         )
         for a in ["slope", "intercept", "rvalue", "pvalue", "stderr"]
+    },
+    **{
+        f"linear_trend_timewise-{a}-{p}": (
+            "tsfresh",
+            (lambda a, p: lambda x: _linear_trend_timewise(x, a, p))(a, p),
+        )
+        for a, p in [
+            ("slope", 60),
+            ("intercept", 3600),
+            ("rvalue", 1),
+            ("pvalue", 60),
+            ("stderr", 0.5),
+        ]
     },
     "agg_linear_trend-intercept-5-max": (
         "tsfresh",

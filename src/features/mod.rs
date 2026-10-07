@@ -98,6 +98,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::CidCe
         | F::Intercept
         | F::LinearTrend(..)
+        | F::LinearTrendTimewise(..)
         | F::MeanAbsChange
         | F::MeanChange
         | F::MedianAbsDiff

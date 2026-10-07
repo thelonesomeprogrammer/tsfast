@@ -386,6 +386,15 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
         let r: f32 = r_s.parse().ok()?;
         return Some(Feature::ApproxEntropy(m, r.to_bits()));
     }
+    if let Some(arg) = s.strip_prefix("linear_trend_timewise-") {
+        let (attr_s, period_s) = arg.split_once('-')?;
+        let attr = parse_agg_attr(attr_s)?;
+        let period: f32 = period_s.parse().ok()?;
+        if !(period.is_finite() && period > 0.0) {
+            return None;
+        }
+        return Some(Feature::LinearTrendTimewise(attr, period.to_bits()));
+    }
     if let Some(arg) = s.strip_prefix("linear_trend-") {
         let attr = parse_agg_attr(arg)?;
         return Some(Feature::LinearTrend(attr));
@@ -848,6 +857,20 @@ impl Feature {
                     AggAttr::PValue => "pvalue",
                 };
                 format!("linear_trend-{}", attr_str)
+            }
+            Feature::LinearTrendTimewise(attr, period_bits) => {
+                let attr_str = match attr {
+                    AggAttr::Slope => "slope",
+                    AggAttr::Intercept => "intercept",
+                    AggAttr::Stderr => "stderr",
+                    AggAttr::RValue => "rvalue",
+                    AggAttr::PValue => "pvalue",
+                };
+                format!(
+                    "linear_trend_timewise-{}-{}",
+                    attr_str,
+                    f32::from_bits(*period_bits)
+                )
             }
             Feature::AggLinearTrend(attr, chunk_len, func) => {
                 let attr_str = match attr {

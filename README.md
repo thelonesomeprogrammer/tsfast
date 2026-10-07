@@ -20,8 +20,17 @@ the same values in production.
 - **Small footprint**: the runtime doesn't need tsfresh, TSFEL or their
   dependency trees.
 
-TSFast implements a subset of tsfresh and TSFEL. See `missing.md` for features
-that are not supported yet.
+TSFast implements every tsfresh and TSFEL feature calculator.
+
+**Sampling assumption**: every series is assumed to be regularly sampled.
+TSFast takes no timestamps, so sample `i` is at time `i / fs`:
+
+- TSFEL spectral and time-domain features use `fs = 100` Hz unless the feature
+  takes the sampling frequency as a parameter (e.g. `human_range_energy-100`).
+- tsfresh's `linear_trend_timewise` takes the sampling period in seconds:
+  `linear_trend_timewise-slope-60` matches tsfresh on a regular
+  `DatetimeIndex` with one sample per minute. Irregularly sampled series are
+  not supported; resample them to a regular grid first.
 
 ## Key Features
 
