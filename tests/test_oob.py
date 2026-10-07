@@ -32,6 +32,10 @@ def test_paa_oob():
 
     # Binned Entropy invalid parameters
     "binned_entropy__max_bins_0", # bins > 0
+
+    # Peak finding features invalid parameters
+    "number_cwt_peaks__n_0", # n > 0
+    "number_peaks__n_0", # n > 0
 ])
 def test_invalid_ffi_boundaries(invalid_feature):
     # Verify that these malformed string arguments fail gracefully at the

@@ -563,6 +563,9 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
     if s.contains("number_peaks__n_") {
         let pos = s.find("n_")?;
         let n: u16 = s[pos + 2..].parse().ok()?;
+        if n == 0 {
+            return None;
+        }
         return Some(Feature::NumberPeaks(n));
     }
     if s.contains("c3__lag_") {
@@ -685,6 +688,9 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
 
     if let Some(arg) = s.strip_prefix("number_cwt_peaks__n_") {
         let n: u16 = arg.parse().ok()?;
+        if n == 0 {
+            return None;
+        }
         return Some(Feature::NumberCwtPeaks(n));
     }
     if s.starts_with("cwt_coefficients__coeff_") {

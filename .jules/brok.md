@@ -11,3 +11,6 @@
 ## 2026-10-06 - Parameterized Boundary Tests for FFI Vulnerabilities
 **Learning:** The tsfast Rust engine safely captures errors internally, but complex parameterized features (like `binned_entropy`, `ecdf_slope`, `ar_coefficient`) require rigorous validation of edge-case limits (e.g., bounds, zeros) directly at the string parsing FFI boundary (`src/types/parse.rs`). Without early `None` propagation returning a graceful `ValueError` to Python, invalid values can leak into core rust math causing panics, division-by-zero, or out-of-bounds indexing.
 **Action:** Add explicit parameterized boundary testing in `tests/test_oob.py` for all new features taking numerical string-parsed bounds to ensure they fail gracefully as `ValueError`s instead of failing ungracefully inside Rust.
+## 2026-10-07 - Boundary validations for legacy tsfresh features
+**Learning:** Boundary validation (e.g., checking for `0`) must be applied in both the prefix-based `parse_parameterized` function and the `parse_legacy_format` function in `src/types/parse.rs` to ensure legacy features do not bypass safety checks.
+**Action:** When adding validations for parameterized string parsing at the FFI boundary, search the codebase for alternative parsing pathways (like `parse_legacy_format`) to ensure the validation is universally enforced.
