@@ -772,3 +772,33 @@ def test_sliding_spectrogram_mean_coeff():
     check(rng.randn(80).cumsum(), window_size=40)
     # Constant window.
     check(np.full(90, -2.0), window_size=70)
+
+
+def _tsfresh_linear_trend_timewise(x, period_s):
+    import pandas as pd
+    from tsfresh.feature_extraction.feature_calculators import linear_trend_timewise
+
+    ix = pd.date_range("2000-01-01", periods=len(x), freq=pd.Timedelta(seconds=period_s))
+    res = linear_trend_timewise(pd.Series(x, index=ix), [{"attr": a} for a in LTT_ATTRS])
+    return np.array([v for _, v in res])
+
+
+LTT_ATTRS = ["slope", "intercept", "rvalue", "pvalue", "stderr"]
+
+
+def test_sliding_linear_trend_timewise():
+    def check(x, window_size, period_s, attrs=LTT_ATTRS):
+        x = np.asarray(x, dtype=np.float32)
+        ext = SlidingExtractor([f"linear_trend_timewise-{a}-{period_s}" for a in attrs], 1, window_size)
+        df = frame(ext, ext.update(x.reshape(1, -1)))
+        idx = [LTT_ATTRS.index(a) for a in attrs]
+        for w in range(len(df)):
+            window = x[w : w + window_size].astype(np.float64)
+            expected = _tsfresh_linear_trend_timewise(window, period_s)[idx]
+            np.testing.assert_allclose(df.iloc[w].to_numpy(), expected, rtol=1e-3, atol=1e-4)
+
+    rng = np.random.RandomState(8)
+    check(rng.randn(150).cumsum(), 50, 60)
+    check(np.arange(120.0) * 0.1 + rng.randn(120), 30, 0.5)
+    # Constant window.
+    check(np.full(60, -1.0), 20, 60, ["slope", "intercept"])

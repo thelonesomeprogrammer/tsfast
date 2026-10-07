@@ -124,7 +124,15 @@ pub fn eval_changes(feat: &Feature, context: &mut crate::context::FeatureContext
             let slope = if s_xx.abs() > 1e-9 { s_xy / s_xx } else { 0.0 };
             (mean - slope * mean_i) as f32
         }
-        Feature::LinearTrend(attr) => {
+        Feature::LinearTrend(attr) | Feature::LinearTrendTimewise(attr, _) => {
+            // Timewise regresses on t = i * period hours instead of i, which
+            // only rescales slope and stderr; the rest is unit-free.
+            let per_x = match feat {
+                Feature::LinearTrendTimewise(_, period_bits) => {
+                    3600.0 / f32::from_bits(*period_bits)
+                }
+                _ => 1.0,
+            };
             let mean_i = (n - 1.0) * 0.5;
             let s_xx = (n * (n * n - 1.0)) / 12.0;
             let s_xy = state.sum_ix - n * mean_i * mean;
@@ -132,7 +140,7 @@ pub fn eval_changes(feat: &Feature, context: &mut crate::context::FeatureContext
             let intercept = mean - slope * mean_i;
 
             match attr {
-                crate::types::AggAttr::Slope => slope as f32,
+                crate::types::AggAttr::Slope => (slope * per_x) as f32,
                 crate::types::AggAttr::Intercept => intercept as f32,
                 crate::types::AggAttr::Stderr
                 | crate::types::AggAttr::RValue
@@ -148,7 +156,7 @@ pub fn eval_changes(feat: &Feature, context: &mut crate::context::FeatureContext
                         let ss_res = if ss_res < 0.0 { 0.0 } else { ss_res };
 
                         if matches!(attr, crate::types::AggAttr::Stderr) {
-                            (ss_res / (n - 2.0) / s_xx).sqrt() as f32
+                            ((ss_res / (n - 2.0) / s_xx).sqrt() * per_x) as f32
                         } else if matches!(attr, crate::types::AggAttr::RValue) {
                             if ss_tot > 1e-9 {
                                 (1.0 - ss_res / ss_tot).sqrt() as f32 * slope.signum() as f32
