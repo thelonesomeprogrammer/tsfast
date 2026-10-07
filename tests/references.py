@@ -64,6 +64,13 @@ REFERENCES = {
     "pk_pk_distance": ("tsfel", F.pk_pk_distance),
     "variation_coefficient": ("tsfresh", fc.variation_coefficient),
     "length": ("tsfresh", fc.length),
+<<<<<<< HEAD
+    "lempel_ziv": ("tsfel", F.lempel_ziv),
+    "lempel_ziv_complexity-3": ("tsfresh", lambda x: fc.lempel_ziv_complexity(x, 3)),
+    "variance_larger_than_standard_deviation": ("tsfresh", fc.variance_larger_than_standard_deviation),
+    "large_standard_deviation-0.05": ("tsfresh", lambda x: fc.large_standard_deviation(x, 0.05)),
+    "symmetry_looking-0.05": ("tsfresh", lambda x: _one(fc.symmetry_looking(x, [{"r": 0.05}]))),
+=======
     "variance_larger_than_standard_deviation": (
         "tsfresh",
         fc.variance_larger_than_standard_deviation,
@@ -76,6 +83,7 @@ REFERENCES = {
         "tsfresh",
         lambda x: _one(fc.symmetry_looking(x, [{"r": 0.05}])),
     ),
+>>>>>>> master
     "ratio_beyond_r_sigma-1.5": ("tsfresh", lambda x: fc.ratio_beyond_r_sigma(x, 1.5)),
     "quantile-0.25": ("tsfresh", lambda x: fc.quantile(x, 0.25)),
     "quantile-0.9": ("tsfresh", lambda x: fc.quantile(x, 0.9)),

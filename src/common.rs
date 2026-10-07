@@ -148,6 +148,10 @@ pub struct ColumnState {
     pub adf_test_stat: f32,
     pub adf_p_value: f32,
     pub adf_used_lag: f32,
+    pub lz_trie_nodes: Vec<Vec<(u16, usize)>>,
+    pub lz_symbol_buffer: Vec<u8>,
+    pub lz_binary_trie: Vec<[usize; 2]>,
+    pub lz_bit_buffer: Vec<u64>,
 }
 
 pub fn next_good_fft_size(n: usize) -> usize {
@@ -188,6 +192,10 @@ impl ColumnState {
         self.adf_test_stat = f32::NAN;
         self.adf_p_value = f32::NAN;
         self.adf_used_lag = f32::NAN;
+        self.lz_trie_nodes.clear();
+        self.lz_symbol_buffer.clear();
+        self.lz_binary_trie.clear();
+        self.lz_bit_buffer.clear();
         self.higuchi_lk.clear();
         self.higuchi_k_values.clear();
     }
@@ -296,6 +304,10 @@ impl ColumnState {
             adf_test_stat: std::f32::NAN,
             adf_p_value: std::f32::NAN,
             adf_used_lag: std::f32::NAN,
+            lz_trie_nodes: Vec::new(),
+            lz_symbol_buffer: Vec::new(),
+            lz_binary_trie: Vec::new(),
+            lz_bit_buffer: Vec::new(),
         }
     }
 }

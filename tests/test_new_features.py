@@ -137,3 +137,42 @@ def test_incremental_time_reversal_asymmetry():
 
     assert np.allclose(results_static, results_sliding, atol=1e-5)
     assert np.allclose(results_static, results_exp, atol=1e-5)
+
+def test_lempel_ziv():
+    np.random.seed(42)
+    # Different test sequences: random, constant, strictly periodic, short
+    series = [
+        np.random.rand(100).astype(np.float32),
+        np.ones(100, dtype=np.float32),
+        np.tile([1.0, 0.0], 50).astype(np.float32),
+        np.array([1.0, 2.0, 3.0], dtype=np.float32),
+    ]
+    features = ["lempel_ziv", "lempel_ziv_complexity-3"]
+
+    for x in series:
+        batch = np.stack([x])
+
+        extractor = tsfast.Extractor(features)
+        res_static = extractor.process_2d_floats(batch)[0]
+
+        extractor_sliding = tsfast.SlidingExtractor(features, 1, len(x), 1)
+        res_sliding = None
+        for i in range(len(x)):
+            res = extractor_sliding.update(np.stack([[x[i]]]))
+            if i == len(x) - 1:
+                res_sliding = res[0, 0]
+
+        extractor_exp = tsfast.ExpandingExtractor(features, 1)
+        res_exp = None
+        for i in range(len(x)):
+            res = extractor_exp.update(np.stack([[x[i]]]))
+            if i == len(x) - 1:
+                res_exp = res[0]
+
+        import tsfel.feature_extraction.features as F
+        tsfel_lz = F.lempel_ziv(x)
+        tsfresh_lz = fc.lempel_ziv_complexity(x, 3)
+
+        for res in [res_static, res_sliding, res_exp]:
+            assert np.allclose(res[0], tsfel_lz, atol=1e-5), f"LempelZiv mismatch: {res[0]} != {tsfel_lz}"
+            assert np.allclose(res[1], tsfresh_lz, atol=1e-5), f"LempelZivComplexity mismatch: {res[1]} != {tsfresh_lz}"

@@ -55,6 +55,7 @@ unit_features! {
     Energy => "energy", ["torque_Absolute energy"];
     Rms => "rms";
     RootMeanSquare => "root_mean_square";
+    LempelZiv => "lempel_ziv";
     ZeroCrossingRate => "zero_crossing_rate";
     PeakCount => "peak_count";
     NegativeTurning => "negative_turning";
@@ -219,6 +220,14 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
             return None;
         }
         return Some(Feature::HumanRangeEnergy(fs.to_bits()));
+    }
+    if let Some(arg) = s.strip_prefix("lempel_ziv_complexity-") {
+        let bins: u16 = arg.trim().parse().ok()?;
+        if bins >= 2 {
+            return Some(Feature::LempelZivComplexity(bins));
+        } else {
+            return None;
+        }
     }
     if let Some(arg) = s.strip_prefix("ecdf_slope-") {
         let (p1, p2) = arg.split_once('-')?;
@@ -686,6 +695,7 @@ impl Feature {
             }
             Feature::PartialAutocorr(lag) => format!("partial_autocorr-{}", lag),
             Feature::TimeReversalAsymmetry(lag) => format!("time_reversal_asymmetry-{}", lag),
+            Feature::LempelZivComplexity(bins) => format!("lempel_ziv_complexity-{}", bins),
             Feature::FftCoefficient(coeff, attr) => {
                 let attr_str = match attr {
                     FftAttr::Real => "real",

@@ -139,6 +139,8 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::WaveletFeatures(..) => transform::eval_transform(feat, ctx),
         F::ApproxEntropy(..)
         | F::HiguchiFd
+        | F::LempelZiv
+        | F::LempelZivComplexity(..)
         | F::PermutationEntropy(..)
         | F::SampleEntropy
         | F::Mse(..) => complexity::eval_complexity(feat, ctx),
