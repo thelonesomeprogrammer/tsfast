@@ -47,6 +47,9 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
     let lpcc = context.lpcc;
     let cwt_energy = context.cwt_energy;
     let cwt_entropy = context.cwt_entropy;
+    let cwt_abs_mean = context.cwt_abs_mean;
+    let cwt_std = context.cwt_std;
+    let cwt_var = context.cwt_var;
     let fft_complex = context.fft_complex;
     let spectrum = context.spectrum;
     let unique_c3_lags = context.unique_c3_lags;
@@ -232,6 +235,27 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             }
         }
         Feature::WaveletEntropy => cwt_entropy,
+        Feature::WaveletAbsMean(idx) => {
+            if !cwt_abs_mean.is_empty() && (*idx as usize) < cwt_abs_mean.len() {
+                cwt_abs_mean[*idx as usize]
+            } else {
+                0.0
+            }
+        }
+        Feature::WaveletStd(idx) => {
+            if !cwt_std.is_empty() && (*idx as usize) < cwt_std.len() {
+                cwt_std[*idx as usize]
+            } else {
+                0.0
+            }
+        }
+        Feature::WaveletVar(idx) => {
+            if !cwt_var.is_empty() && (*idx as usize) < cwt_var.len() {
+                cwt_var[*idx as usize]
+            } else {
+                0.0
+            }
+        }
         _ => return None,
     };
     Some(res)

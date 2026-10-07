@@ -136,6 +136,9 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::SpktWelchDensity(..)
         | F::WaveletEnergy(..)
         | F::WaveletEntropy
+        | F::WaveletAbsMean(..)
+        | F::WaveletStd(..)
+        | F::WaveletVar(..)
         | F::MaxFrequency
         | F::MedianFrequency
         | F::FundamentalFrequency

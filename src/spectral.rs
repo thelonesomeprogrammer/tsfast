@@ -520,6 +520,9 @@ pub fn finalize(
     let mut lpcc = Vec::new();
     let mut cwt_energy = Vec::new();
     let mut cwt_entropy = 0.0;
+    let mut cwt_abs_mean = Vec::new();
+    let mut cwt_std = Vec::new();
+    let mut cwt_var = Vec::new();
 
     if compute.intersects(Compute::LPCC) {
         lpcc = crate::features::lpc::compute_lpcc(values);
@@ -530,8 +533,12 @@ pub fn finalize(
     }
 
     if compute.intersects(Compute::CWT_MEXH) {
-        // TSFEL wavelet_energy / wavelet_entropy: pywt.cwt(x, 1..10, "mexh").
+        // TSFEL wavelet_energy / wavelet_entropy / wavelet_abs_mean / wavelet_std /
+        // wavelet_var: pywt.cwt(x, 1..10, "mexh").
         cwt_energy = vec![0.0; 9];
+        cwt_abs_mean = vec![0.0; 9];
+        cwt_std = vec![0.0; 9];
+        cwt_var = vec![0.0; 9];
         if !values.is_empty() {
             let n_vals = values.len() as f64;
             let mut abs_sums = Vec::with_capacity(9);
@@ -539,6 +546,11 @@ pub fn finalize(
                 let row = crate::features::cwt::mexh_cwt(values, scale as f64);
                 cwt_energy[i] = (row.iter().map(|c| c * c).sum::<f64>() / n_vals).sqrt() as f32;
                 abs_sums.push(row.iter().map(|c| c.abs()).sum::<f64>());
+                let row_mean = row.iter().sum::<f64>() / n_vals;
+                cwt_abs_mean[i] = row_mean.abs() as f32;
+                let row_var = row.iter().map(|c| (c - row_mean).powi(2)).sum::<f64>() / n_vals;
+                cwt_var[i] = row_var as f32;
+                cwt_std[i] = row_var.sqrt() as f32;
             }
             let total: f64 = abs_sums.iter().sum();
             // TSFEL returns 0 when sum(signal) == 0.
@@ -592,6 +604,9 @@ pub fn finalize(
         lpcc,
         cwt_energy,
         cwt_entropy,
+        cwt_abs_mean,
+        cwt_std,
+        cwt_var,
     })
 }
 

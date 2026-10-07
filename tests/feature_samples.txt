@@ -175,3 +175,6 @@ hurst_exponent
 count_above-0.5
 count_below-0.5
 range_count-0-5
+wavelet_abs_mean-3
+wavelet_std-3
+wavelet_var-3
