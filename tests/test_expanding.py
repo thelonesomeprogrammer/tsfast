@@ -524,3 +524,45 @@ def test_expanding_count_above_below_and_range_count():
     check([[2.0, 2.0, 2.0], [2.0, 2.0]])
     # First window of length 1.
     check([[3.0], [1.0, 4.0]])
+
+
+def test_expanding_power_bandwidth_positive_turning_variation():
+    import tsfel.feature_extraction.features as F
+
+    fs = 100.0
+    features = ["power_bandwidth", "spectral_positive_turning", "spectral_variation"]
+
+    def check(chunks):
+        ext = ExpandingExtractor(features, 1)
+        seen = np.array([], dtype=np.float32)
+        for chunk in chunks:
+            chunk = np.asarray(chunk, dtype=np.float32)
+            res = ext.update(chunk.reshape(1, -1))
+            seen = np.concatenate([seen, chunk])
+            assert np.allclose(res[0][0], F.power_bandwidth(seen, fs), atol=1e-3)
+            assert np.allclose(res[0][1], F.spectral_positive_turning(seen, fs))
+            assert np.allclose(res[0][2], F.spectral_variation(seen, fs), atol=1e-5)
+
+    rng = np.random.RandomState(13)
+    t = np.arange(200)
+    sine = np.sin(2 * np.pi * 5.37 * t / fs)
+    chirp = np.sin(2 * np.pi * (1 + 0.05 * t) * t / fs)
+    noise = rng.randn(200)
+    constant = np.full(200, 4.0)
+
+    check([sine[:100], sine[100:]])
+    check([chirp[:100], chirp[100:]])
+    check([noise[:100], noise[100:]])
+    # Short first window.
+    check([rng.randn(8), noise[:50]])
+
+    # Constant series: AC spectral content is zero mathematically, but
+    # TSFEL's own reference value for it is float-noise-dependent (see
+    # test_tsfast.py's analogous case), so assert the mathematically correct
+    # values directly instead of against TSFEL.
+    ext = ExpandingExtractor(features, 1)
+    for chunk in (constant[:100], constant[100:]):
+        res = ext.update(chunk.astype(np.float32).reshape(1, -1))
+        assert np.allclose(res[0][0], 0.0)
+        assert np.allclose(res[0][1], 0.0)
+        assert np.allclose(res[0][2], 1.0)

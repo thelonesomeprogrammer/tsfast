@@ -135,6 +135,9 @@ compute_flags! {
     MEDIAN_FREQ,
     FUNDAMENTAL_FREQ,
     HIGUCHI,
+    POWER_BANDWIDTH,
+    SPEC_POS_TURN,
+    SPEC_VARIATION,
 }
 
 // ── Composite masks (zero bit-cost) ────────────────────────────────────────
@@ -159,7 +162,9 @@ impl Compute {
             | Self::SPEC_KURTOSIS.bits()
             | Self::MAX_FREQ.bits()
             | Self::MEDIAN_FREQ.bits()
-            | Self::FUNDAMENTAL_FREQ.bits(),
+            | Self::FUNDAMENTAL_FREQ.bits()
+            | Self::SPEC_POS_TURN.bits()
+            | Self::SPEC_VARIATION.bits(),
     );
 
     pub const ANY_DIFF: Self = Self::from_bits_retain(

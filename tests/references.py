@@ -338,6 +338,12 @@ REFERENCES = {
         ]
     },
     "max_power_spectrum": ("tsfel", lambda x: F.max_power_spectrum(x, FS)),
+    "spectral_positive_turning": (
+        "tsfel",
+        lambda x: F.spectral_positive_turning(x, FS),
+    ),
+    "spectral_variation": ("tsfel", lambda x: F.spectral_variation(x, FS)),
+    "power_bandwidth": ("tsfel", lambda x: F.power_bandwidth(x, FS)),
     "human_range_energy-100": ("tsfel", lambda x: F.human_range_energy(x, 100.0)),
     "calc_centroid-100": ("tsfel", lambda x: F.calc_centroid(x, 100.0)),
     "calc_centroid-50": ("tsfel", lambda x: F.calc_centroid(x, 50.0)),

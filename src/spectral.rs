@@ -51,6 +51,14 @@ pub fn finalize(
         0.0
     };
 
+    // A perfectly flat window has zero AC spectral content mathematically,
+    // but a real FFT/Welch at f32 precision doesn't exactly cancel the non-DC
+    // bins the way numpy's double-precision one does (and how cleanly it
+    // does is itself data-dependent, not just a question of scale), so
+    // `power_bandwidth` / `spectral_positive_turning` / `spectral_variation`
+    // special-case this rather than read the leftover rounding noise.
+    let is_constant_window = !values.is_empty() && values.iter().all(|&v| v == values[0]);
+
     let mut spectrum = std::mem::take(&mut state.spectrum_buffer);
     spectrum.clear();
     spectrum.extend(fft_complex.iter().map(|c| c.norm()));
@@ -67,6 +75,8 @@ pub fn finalize(
     let mut max_frequency = 0.0;
     let mut median_frequency = 0.0;
     let mut fundamental_frequency = 0.0;
+    let mut spectral_positive_turning = 0.0;
+    let mut spectral_variation = 0.0;
 
     let mut fft_autocorr = Vec::new();
 
@@ -395,6 +405,115 @@ pub fn finalize(
                 }
             }
         }
+
+        // TSFEL spectral_positive_turning: count of strict local maxima in the
+        // FFT magnitude (prev < cur > next), vectorised 3-way neighbour compare.
+        if compute.intersects(Compute::SPEC_POS_TURN) && spectrum.len() > 2 && !is_constant_window {
+            let len = spectrum.len();
+            let mut count: u32 = 0;
+            let mut i = 0;
+            while i + 6 <= len {
+                let prev = f32x4::from_slice(&spectrum[i..i + 4]);
+                let cur = f32x4::from_slice(&spectrum[i + 1..i + 5]);
+                let next = f32x4::from_slice(&spectrum[i + 2..i + 6]);
+                let mask = cur.simd_gt(prev) & cur.simd_gt(next);
+                count += mask.to_bitmask().count_ones();
+                i += 4;
+            }
+            while i + 2 < len {
+                if spectrum[i + 1] > spectrum[i] && spectrum[i + 1] > spectrum[i + 2] {
+                    count += 1;
+                }
+                i += 1;
+            }
+            spectral_positive_turning = count as f32;
+        }
+
+        // TSFEL spectral_variation: normalised cross-correlation of adjacent
+        // magnitude bins, in one fused pass over Σa[i]a[i+1], Σa[i+1]², Σa[i]².
+        if compute.intersects(Compute::SPEC_VARIATION) {
+            let len = spectrum.len();
+            spectral_variation = 1.0;
+            if len > 1 && !is_constant_window {
+                let mut sum1_vec = f32x4::splat(0.0);
+                let mut sum2_vec = f32x4::splat(0.0);
+                let mut sum3_vec = f32x4::splat(0.0);
+                let mut i = 0;
+                while i + 5 <= len {
+                    let a = f32x4::from_slice(&spectrum[i..i + 4]);
+                    let b = f32x4::from_slice(&spectrum[i + 1..i + 5]);
+                    sum1_vec += a * b;
+                    sum2_vec += b * b;
+                    sum3_vec += a * a;
+                    i += 4;
+                }
+                let mut sum1 = sum1_vec.reduce_sum();
+                let mut sum2 = sum2_vec.reduce_sum();
+                let mut sum3 = sum3_vec.reduce_sum();
+                while i + 1 < len {
+                    let a = spectrum[i];
+                    let b = spectrum[i + 1];
+                    sum1 += a * b;
+                    sum2 += b * b;
+                    sum3 += a * a;
+                    i += 1;
+                }
+                if sum2 > 0.0 && sum3 > 0.0 {
+                    spectral_variation = 1.0 - sum1 / (sum2.sqrt() * sum3.sqrt());
+                }
+            }
+        }
+    }
+
+    // TSFEL power_bandwidth: scipy.signal.welch(signal / std(signal), fs,
+    // nperseg=len(signal)) — a distinct Welch config from the tsfresh WELCH
+    // path above (full-length segment, fs rather than 1, std-normalised), so
+    // it needs its own call, reusing `welch_psd` rather than a new algorithm.
+    let mut power_bandwidth = 0.0;
+    if compute.intersects(Compute::POWER_BANDWIDTH) && !values.is_empty() && !is_constant_window {
+        let pop_var = if n > 0.0 { m2 / n } else { 0.0 };
+        let std = pop_var.sqrt();
+        let mut norm_buf = std::mem::take(&mut state.fft_in_buffer);
+        norm_buf.clear();
+        if std > 0.0 {
+            norm_buf.extend(values.iter().map(|&v| v / std));
+        } else {
+            norm_buf.extend_from_slice(values);
+        }
+        let nperseg = norm_buf.len();
+        let power = welch_psd(&norm_buf, nperseg, FS)?;
+        state.fft_in_buffer = norm_buf;
+
+        let total: f32 = power.iter().sum();
+        if total > 0.0 && nperseg > 0 {
+            let freq_step_pb = FS / nperseg as f32;
+            let thresh = 0.95 * total;
+
+            let mut running = 0.0;
+            let mut lower_idx = None;
+            for (i, &p) in power.iter().enumerate() {
+                running += p;
+                if running >= thresh {
+                    lower_idx = Some(i);
+                    break;
+                }
+            }
+
+            let mut running_inv = 0.0;
+            let mut upper_from_end = None;
+            for (i, &p) in power.iter().rev().enumerate() {
+                running_inv += p;
+                if running_inv >= thresh {
+                    upper_from_end = Some(i);
+                    break;
+                }
+            }
+
+            if let (Some(li), Some(ui)) = (lower_idx, upper_from_end) {
+                let upper_idx = power.len() - 1 - ui;
+                power_bandwidth = ((upper_idx as f32 - li as f32) * freq_step_pb).abs();
+            }
+        }
     }
 
     let mut mfcc = Vec::new();
@@ -465,6 +584,9 @@ pub fn finalize(
         max_frequency,
         median_frequency,
         fundamental_frequency,
+        power_bandwidth,
+        spectral_positive_turning,
+        spectral_variation,
         fft_autocorr,
         mfcc,
         lpcc,

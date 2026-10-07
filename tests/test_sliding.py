@@ -575,3 +575,46 @@ def test_sliding_count_above_below_and_range_count():
     check([2.0, 2.0, 2.0, 2.0, 2.0], window_size=3)
     # Window of length 1.
     check([1.0, 2.0, 3.0, 4.0, 5.0], window_size=1)
+
+
+def test_sliding_power_bandwidth_positive_turning_variation():
+    import tsfel.feature_extraction.features as F
+
+    fs = 100.0
+    features = ["power_bandwidth", "spectral_positive_turning", "spectral_variation"]
+
+    def check(x, window_size, stride=1, chunk=7):
+        x = np.asarray(x, dtype=np.float32)
+        ext = SlidingExtractor(features, 1, window_size, stride)
+        # Feed the series in small chunks to exercise many incremental sliding
+        # DFT updates rather than one fresh FFT per window.
+        res = frame(ext, np.concatenate(
+            [ext.update(x[i : i + chunk].reshape(1, -1)) for i in range(0, len(x), chunk)],
+            axis=1,
+        ))
+        for w in range(len(res)):
+            start = w * stride
+            window = x[start : start + window_size]
+            assert np.allclose(res.iloc[w]["power_bandwidth"], F.power_bandwidth(window, fs), atol=1e-3)
+            assert np.allclose(res.iloc[w]["spectral_positive_turning"], F.spectral_positive_turning(window, fs))
+            assert np.allclose(res.iloc[w]["spectral_variation"], F.spectral_variation(window, fs), atol=1e-5)
+
+    t = np.arange(400)
+    rng = np.random.RandomState(11)
+    check(np.sin(2 * np.pi * 5.37 * t / fs), window_size=64)  # sine, long run of updates
+    check(np.sin(2 * np.pi * (1 + 0.05 * t) * t / fs), window_size=64)  # chirp
+    check(rng.randn(400), window_size=64)  # noise
+
+    # Short window.
+    check(rng.randn(40), window_size=8)
+
+    # Constant series: every window is flat, so AC spectral content is zero
+    # mathematically, but TSFEL's own reference value for it is
+    # float-noise-dependent (see test_tsfast.py's analogous case), so assert
+    # the mathematically correct values directly instead of against TSFEL.
+    x = np.full(400, -2.0, dtype=np.float32)
+    ext = SlidingExtractor(features, 1, 64, 1)
+    res = frame(ext, ext.update(x.reshape(1, -1)))
+    assert np.allclose(res["power_bandwidth"].values, 0.0)
+    assert np.allclose(res["spectral_positive_turning"].values, 0.0)
+    assert np.allclose(res["spectral_variation"].values, 1.0)

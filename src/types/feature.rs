@@ -136,6 +136,9 @@ pub enum Feature {
     MaxFrequency,
     MedianFrequency,
     FundamentalFrequency,
+    PowerBandwidth,
+    SpectralPositiveTurning,
+    SpectralVariation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -340,6 +343,9 @@ impl Feature {
             Self::MaxFrequency => C::MAX_FREQ,
             Self::MedianFrequency => C::MEDIAN_FREQ,
             Self::FundamentalFrequency => C::FUNDAMENTAL_FREQ,
+            Self::PowerBandwidth => C::POWER_BANDWIDTH,
+            Self::SpectralPositiveTurning => C::SPEC_POS_TURN,
+            Self::SpectralVariation => C::SPEC_VARIATION,
             Self::Dfa | Self::HurstExponent => C::empty(),
             Self::HiguchiFd => C::HIGUCHI,
             Self::MaximumFractalLength => C::HIGUCHI,
