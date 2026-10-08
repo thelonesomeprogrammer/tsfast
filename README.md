@@ -1,10 +1,5 @@
 # tsrocket
 
-[![PyPI](https://img.shields.io/pypi/v/tsrocket)](https://pypi.org/project/tsrocket/)
-[![Python](https://img.shields.io/pypi/pyversions/tsrocket)](https://pypi.org/project/tsrocket/)
-[![CI](https://github.com/thelonesomeprogrammer/tsrocket/actions/workflows/ci.yml/badge.svg)](https://github.com/thelonesomeprogrammer/tsrocket/actions/workflows/ci.yml)
-[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
-
 **Every [tsfresh](https://github.com/blue-yonder/tsfresh) and
 [TSFEL](https://github.com/fraunhoferportugal/tsfel) time-series feature,
 computed in Rust: the same values, ~90× faster on one core, and incremental
