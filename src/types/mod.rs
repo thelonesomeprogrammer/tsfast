@@ -1,3 +1,4 @@
+mod compat;
 mod compute;
 mod feature;
 mod parse;

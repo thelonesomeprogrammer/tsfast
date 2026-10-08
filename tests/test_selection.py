@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from tsfast.selection import select_features
+from tsrocket.selection import select_features
 
 
 def test_select_features_nan_p_value_regression():
@@ -91,7 +91,7 @@ def test_select_features_classification_small_groups():
     assert np.all(constant_mask)
 
 
-from tsfast.selection import select_features
+from tsrocket.selection import select_features
 
 
 def test_select_features_unsupervised():

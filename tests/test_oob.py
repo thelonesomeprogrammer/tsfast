@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import tsfast
+import tsrocket
 
 
 def test_paa_oob():
@@ -8,7 +8,7 @@ def test_paa_oob():
     # total=2, index=2 -> boundaries has 3 elements [0, 1, 2], so b[index+1] -> b[3] is OOB!
     features = ["paa-2-2"]
     with pytest.raises(ValueError, match="Unknown feature"):
-        extractor = tsfast.Extractor(features)
+        extractor = tsrocket.Extractor(features)
 
 @pytest.mark.parametrize("invalid_feature", [
     # ECDF Slope invalid parameters
@@ -41,4 +41,4 @@ def test_invalid_ffi_boundaries(invalid_feature):
     # Verify that these malformed string arguments fail gracefully at the
     # Rust parsing layer and return ValueError to Python instead of panicking
     with pytest.raises(ValueError, match="Unknown feature"):
-        extractor = tsfast.Extractor([invalid_feature])
+        extractor = tsrocket.Extractor([invalid_feature])

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 import references
-import tsfast
+import tsrocket
 from references import MIN_LENGTH, REFERENCES
 
 RTOL = 0.01
@@ -24,10 +24,10 @@ def _series(n):
 def _engines(feature, fs, x):
     n = len(x)
     batch = np.stack([x])
-    yield "static", tsfast.Extractor([feature], fs=fs).process_2d_floats(batch)[0, 0]
-    sliding = tsfast.SlidingExtractor([feature], 1, n, fs=fs)
+    yield "static", tsrocket.Extractor([feature], fs=fs).process_2d_floats(batch)[0, 0]
+    sliding = tsrocket.SlidingExtractor([feature], 1, n, fs=fs)
     yield "sliding", sliding.update(batch)[0, -1, 0]
-    expanding = tsfast.ExpandingExtractor([feature], 1, fs=fs)
+    expanding = tsrocket.ExpandingExtractor([feature], 1, fs=fs)
     yield "expanding", expanding.update(batch)[0, 0]
 
 
@@ -50,8 +50,8 @@ def test_tsfel_features_follow_fs(feature, fs, monkeypatch):
 def test_fs_default_is_100():
     x = np.stack([_series(300)])
     names = ["spectral_centroid", "max_frequency", "mfcc-3", "power_bandwidth"]
-    default = tsfast.Extractor(names).process_2d_floats(x)
-    explicit = tsfast.Extractor(names, fs=100.0).process_2d_floats(x)
+    default = tsrocket.Extractor(names).process_2d_floats(x)
+    explicit = tsrocket.Extractor(names, fs=100.0).process_2d_floats(x)
     np.testing.assert_array_equal(default, explicit)
 
 
@@ -60,25 +60,25 @@ def test_fs_scales_frequency_features():
     fs = 50.0
     t = np.arange(500) / fs
     x = np.stack([np.sin(2 * np.pi * 5.0 * t)]).astype(np.float32)
-    got = tsfast.Extractor(["spectral_centroid"], fs=fs).process_2d_floats(x)[0, 0]
+    got = tsrocket.Extractor(["spectral_centroid"], fs=fs).process_2d_floats(x)[0, 0]
     assert got == pytest.approx(5.0, rel=0.02)
 
 
 @pytest.mark.parametrize("fs", [0.0, -1.0, float("nan"), float("inf")])
 def test_invalid_fs_is_rejected(fs):
     with pytest.raises(ValueError, match="fs"):
-        tsfast.Extractor(["mean"], fs=fs)
+        tsrocket.Extractor(["mean"], fs=fs)
     with pytest.raises(ValueError, match="fs"):
-        tsfast.SlidingExtractor(["mean"], 1, 10, fs=fs)
+        tsrocket.SlidingExtractor(["mean"], 1, 10, fs=fs)
     with pytest.raises(ValueError, match="fs"):
-        tsfast.ExpandingExtractor(["mean"], 1, fs=fs)
+        tsrocket.ExpandingExtractor(["mean"], 1, fs=fs)
 
 
 @pytest.mark.parametrize("base", ["human_range_energy", "average_power", "calc_centroid"])
 def test_fs_in_name_overrides_extractor_fs(base):
     x = np.stack([_series(300)])
-    bare = tsfast.Extractor([base], fs=50.0)
-    pinned = tsfast.Extractor([f"{base}-50"], fs=250.0)
+    bare = tsrocket.Extractor([base], fs=50.0)
+    pinned = tsrocket.Extractor([f"{base}-50"], fs=250.0)
     assert bare.feature_names == [base]
     assert pinned.feature_names == [f"{base}-50"]
     np.testing.assert_array_equal(bare.process_2d_floats(x), pinned.process_2d_floats(x))

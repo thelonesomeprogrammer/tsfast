@@ -75,7 +75,7 @@ pub fn eval_autocorrelation(
                 if max_l == 0 {
                     0.0
                 } else {
-                    let adjusted: Vec<f32> =
+                    let mut adjusted: Vec<f32> =
                         (1..=max_l).map(|l| adjusted_acf(fft_autocorr, l)).collect();
                     let slice = &adjusted[..];
                     match func {
@@ -94,6 +94,7 @@ pub fn eval_autocorrelation(
                         crate::types::AggFunc::Min => {
                             slice.iter().copied().fold(f32::INFINITY, f32::min)
                         }
+                        crate::types::AggFunc::Median => super::median_in_place(&mut adjusted),
                     }
                 }
             }
@@ -137,6 +138,12 @@ pub fn eval_autocorrelation(
                 sum / n_iters as f32
             }
         }
+        // tsfresh computes pacf up to max_lag = min(D, n / 2 - 1), where D is
+        // the largest lag requested together (9 in its default settings), and
+        // NaN beyond that or when max_lag < 1.
+        Feature::PartialAutocorr(lag) if !pacf_lag_is_computed(values.len(), *lag) => f32::NAN,
+        // pacf at lag 0 is 1 by definition, constant series included.
+        Feature::PartialAutocorr(0) => 1.0,
         Feature::PartialAutocorr(lag) if var > 1e-9 && values.len() > *lag as usize => {
             let l = *lag as usize;
             if fft_autocorr.is_empty() || fft_autocorr.len() <= l {
@@ -183,4 +190,14 @@ pub fn eval_autocorrelation(
 fn adjusted_acf(fft_autocorr: &[f32], lag: usize) -> f32 {
     let n = fft_autocorr.len() as f32;
     fft_autocorr[lag] * n / (n - lag as f32)
+}
+
+/// Whether tsfresh computes partial_autocorrelation at `lag` over `n`
+/// samples, requested alongside its default lags 0..=9: it runs pacf up to
+/// max_lag = D if n > 2 D else n / 2 - 1 (D the largest lag requested), and
+/// returns NaN for every lag when max_lag < 1, lag 0 included.
+fn pacf_lag_is_computed(n: usize, lag: u16) -> bool {
+    let demanded = (lag as usize).max(9);
+    let max_lag = if n > 2 * demanded { demanded } else { (n / 2).saturating_sub(1) };
+    max_lag >= 1 && lag as usize <= max_lag
 }

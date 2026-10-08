@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
-from tsfast._tsfast import SlidingExtractor
+from tsrocket._tsrocket import SlidingExtractor
 from helpers import frame
-import tsfast
+import tsrocket
 
 
 def test_sliding_multiple_columns():
@@ -170,7 +170,7 @@ def test_sliding_higher_moments():
 
 
 def test_sliding_duplicate_features():
-    from tsfast._tsfast import SlidingExtractor
+    from tsrocket._tsrocket import SlidingExtractor
     import pandas as pd
     from tsfresh.feature_extraction.feature_calculators import (
         has_duplicate,
@@ -225,7 +225,7 @@ def test_sliding_duplicate_features():
 
 
 def test_reoccurring_ratios_sliding():
-    import tsfast
+    import tsrocket
     import numpy as np
 
     x = np.array([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0], dtype=np.float32)
@@ -236,7 +236,7 @@ def test_reoccurring_ratios_sliding():
         "ratio_value_number_to_time_series_length",
     ]
 
-    extractor = tsfast.SlidingExtractor(features, 1, 5, 1)
+    extractor = tsrocket.SlidingExtractor(features, 1, 5, 1)
     batch = np.stack([x])
     out = extractor.update(batch)
     results = frame(extractor, out)
@@ -259,7 +259,7 @@ def test_reoccurring_ratios_sliding():
 
 def test_ecdf_pk_centroid_sliding():
     import tsfel
-    import tsfast
+    import tsrocket
 
     x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0, 5.0, -1.0, 3.0], dtype=np.float32)
     features = [
@@ -272,7 +272,7 @@ def test_ecdf_pk_centroid_sliding():
         "positive_turning",
     ]
     window_size = 7
-    extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=window_size)
+    extractor = tsrocket.SlidingExtractor(features, n_cols=1, window_size=window_size)
 
     batch = np.stack([x])
     df = frame(extractor, extractor.update(batch))
@@ -309,13 +309,13 @@ def test_sliding_invalid_type():
 
 
 def test_median_diff_sliding():
-    import tsfast
+    import tsrocket
 
     data = np.random.randn(200).astype(np.float32)
     batch = np.stack([data])
 
     features = ["median_diff", "median_abs_diff"]
-    extractor = tsfast.SlidingExtractor(features, 1, 100, 50)
+    extractor = tsrocket.SlidingExtractor(features, 1, 100, 50)
 
     import tsfel
 
@@ -341,7 +341,7 @@ def test_median_diff_sliding():
 
 
 def test_sliding_energy_ratio_by_chunks():
-    import tsfast
+    import tsrocket
     import numpy as np
 
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], dtype=np.float32)
@@ -351,7 +351,7 @@ def test_sliding_energy_ratio_by_chunks():
         "energy_ratio_by_chunks_num_segments_3__segment_focus_2",
     ]
     window_size = 6
-    extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=window_size)
+    extractor = tsrocket.SlidingExtractor(features, n_cols=1, window_size=window_size)
     batch = np.stack([x])
     df = frame(extractor, extractor.update(batch))
     res = df.iloc[-1].values
@@ -361,7 +361,7 @@ def test_sliding_energy_ratio_by_chunks():
 def test_sliding_permutation_entropy_and_value_count():
     import numpy as np
     import math
-    import tsfast
+    import tsrocket
 
     data = np.array(
         [4.0, 7.0, 9.0, 10.0, 6.0, 11.0, 3.0, 3.0, np.nan, 3.0, np.nan],
@@ -370,7 +370,7 @@ def test_sliding_permutation_entropy_and_value_count():
     features = ["permutation_entropy-1-3", "value_count-3.0"]
 
     batch = np.stack([data])
-    extractor = tsfast.SlidingExtractor(features, n_cols=1, window_size=5, stride=1)
+    extractor = tsrocket.SlidingExtractor(features, n_cols=1, window_size=5, stride=1)
     res = extractor.update(batch)
 
     from tsfresh.feature_extraction.feature_calculators import (
@@ -392,7 +392,7 @@ def test_sliding_permutation_entropy_and_value_count():
 
 def test_sliding_fractal_dimensions():
     import numpy as np
-    from tsfast._tsfast import SlidingExtractor
+    from tsrocket._tsrocket import SlidingExtractor
     from tsfel.feature_extraction.features import higuchi_fractal_dimension
     import warnings
 
@@ -440,7 +440,7 @@ def test_sliding_min_max_every_window(window_size, stride):
 
 @pytest.mark.parametrize("case", ["randn", "exponential", "constant"])
 def test_shape_features_sliding(case):
-    from test_tsfast import SHAPE_CASES, SHAPE_FEATURES, shape_features_reference
+    from test_static import SHAPE_CASES, SHAPE_FEATURES, shape_features_reference
 
     x = SHAPE_CASES[case].astype(np.float32)
     window_size, stride = 40, 3
@@ -470,13 +470,13 @@ def test_sliding_output_shape_and_names():
 
 def test_sliding_mse():
     import numpy as np
-    import tsfast
+    import tsrocket
     from tsfel.feature_extraction.features import mse
 
     np.random.seed(42)
     signal = np.random.rand(500).astype(np.float32)
 
-    e = tsfast.SlidingExtractor(["mse-3"], 1, 200, 100)
+    e = tsrocket.SlidingExtractor(["mse-3"], 1, 200, 100)
     res = e.update(np.array([signal]))
 
     # Check one window
@@ -491,7 +491,7 @@ def test_ecdf_features():
     features = ["ecdf_percentile-0.5", "ecdf_percentile_count-0.5", "ecdf_slope-0.2-0.5"]
 
     import tsfel
-    ext = tsfast.SlidingExtractor(features, 1, 5, 1)
+    ext = tsrocket.SlidingExtractor(features, 1, 5, 1)
     for i in range(len(x)):
         arr = x[:i+1]
         out = ext.update(np.stack([arr[-1:]]).T)
@@ -505,10 +505,8 @@ def test_ecdf_features():
             else:
                 ref_perc = float(ref_perc[0])
 
-            if np.max(window) == np.min(window):
-                ref_count = float(len(window))
-            else:
-                ref_count = float(np.sum(window <= ref_perc))
+            # TSFEL counts ECDF positions <= p, so ties don't change the count.
+            ref_count = float(tsfel.feature_extraction.features.ecdf_percentile_count(window, [0.5]))
 
             try:
                 ref_slope = tsfel.feature_extraction.features.ecdf_slope(window, 0.2, 0.5)
@@ -534,14 +532,14 @@ def test_ecdf_features():
 
 def test_sliding_maximum_fractal_length():
     import numpy as np
-    import tsfast
+    import tsrocket
     from tsfel.feature_extraction.features import maximum_fractal_length
 
     np.random.seed(42)
     x = np.cumsum(np.random.randn(300)).astype(np.float32)
 
     features = ["maximum_fractal_length"]
-    ext = tsfast.SlidingExtractor(features, n_cols=1, window_size=200, stride=100)
+    ext = tsrocket.SlidingExtractor(features, n_cols=1, window_size=200, stride=100)
 
     res1 = ext.update(x[0:200].reshape(1, -1))
     res2 = ext.update(x[200:300].reshape(1, -1))
@@ -610,7 +608,7 @@ def test_sliding_power_bandwidth_positive_turning_variation():
 
     # Constant series: every window is flat, so AC spectral content is zero
     # mathematically, but TSFEL's own reference value for it is
-    # float-noise-dependent (see test_tsfast.py's analogous case), so assert
+    # float-noise-dependent (see test_static.py's analogous case), so assert
     # the mathematically correct values directly instead of against TSFEL.
     x = np.full(400, -2.0, dtype=np.float32)
     ext = SlidingExtractor(features, 1, 64, 1)
@@ -827,7 +825,7 @@ def _sliding_vs_static(feature, x, window_size):
     x = np.asarray(x, dtype=np.float32)
     got = SlidingExtractor([feature], 1, window_size).update(x.reshape(1, -1)).reshape(-1)
     windows = np.stack([x[i : i + window_size] for i in range(len(got))])
-    return got, tsfast.Extractor([feature]).process_2d_floats(windows)[:, 0]
+    return got, tsrocket.Extractor([feature]).process_2d_floats(windows)[:, 0]
 
 
 def test_sliding_spectral_entropy_exact_zero_bins():
@@ -893,7 +891,7 @@ def test_sliding_fresh_fft_meta_feature():
     def static(window_size, stride):
         starts = range(0, len(x) - window_size + 1, stride)
         windows = np.stack([x[i : i + window_size] for i in starts])
-        return tsfast.Extractor(features).process_2d_floats(windows)
+        return tsrocket.Extractor(features).process_2d_floats(windows)
 
     def sliding(meta, window_size, stride=1):
         ext = SlidingExtractor(features + meta, 1, window_size, stride)
@@ -950,3 +948,17 @@ def test_sliding_linear_trend_timewise():
     check(np.arange(120.0) * 0.1 + rng.randn(120), 30, 0.5)
     # Constant window.
     check(np.full(60, -1.0), 20, 60, ["slope", "intercept"])
+
+
+def test_sliding_tsfresh_defaults_that_were_wrong_or_missing():
+    from helpers import tsfresh_default_references
+
+    refs = tsfresh_default_references()
+    x = np.random.default_rng(6).normal(size=90).astype(np.float32)
+    x[40:65] = 1.5  # some constant windows
+    window = 25
+    out = SlidingExtractor(list(refs), 1, window, 5).update(x[None])[0]
+    for w, got in enumerate(out):
+        seg = x[w * 5 : w * 5 + window].astype(np.float64)
+        want = [fn(seg) for fn in refs.values()]
+        np.testing.assert_allclose(got, want, rtol=1e-3, atol=1e-4, err_msg=f"window {w}")

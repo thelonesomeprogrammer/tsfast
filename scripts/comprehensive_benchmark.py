@@ -1,4 +1,4 @@
-import tsfast
+import tsrocket
 import numpy as np
 import pandas as pd
 import time
@@ -10,7 +10,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Feature mappings
-# format: (tsfast_name, tsfresh_params, tsfel_cfg_item)
+# format: (tsrocket_name, tsfresh_params, tsfel_cfg_item)
 # tsfel_cfg_item: (domain, feature_name)
 FEATURE_MAPPING = {
     "mean": {"tsfresh": {"mean": None}, "tsfel": ("statistical", "Mean")},
@@ -134,7 +134,7 @@ def get_tsfel_cfg(features):
 
 def benchmark_static(data, features):
     n_samples, n_points = data.shape
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
 
     # One series per row
     batch = np.ascontiguousarray(data, dtype=np.float32)
@@ -144,9 +144,9 @@ def benchmark_static(data, features):
 
     start = time.perf_counter()
     res = extractor.process_2d_floats(batch)
-    tsfast_time = time.perf_counter() - start
+    tsrocket_time = time.perf_counter() - start
 
-    tsfast_res = res  # (n_samples, n_features), columns in `features` order
+    tsrocket_res = res  # (n_samples, n_features), columns in `features` order
 
     tsfresh_features = [f for f in features if FEATURE_MAPPING[f]["tsfresh"]]
     tsfresh_params = get_tsfresh_params(tsfresh_features)
@@ -175,7 +175,7 @@ def benchmark_static(data, features):
     tsfel_res_df = pd.concat(tsfel_res_list, ignore_index=True)
 
     return {
-        "tsfast": (tsfast_res, tsfast_time),
+        "tsrocket": (tsrocket_res, tsrocket_time),
         "tsfresh": (tsfresh_df, tsfresh_time, tsfresh_features),
         "tsfel": (tsfel_res_df, tsfel_time, tsfel_features),
     }
@@ -185,13 +185,13 @@ def benchmark_expanding(data, features):
     n_samples, n_points = data.shape
     chunk_size = 50
     start = time.time()
-    extractor = tsfast.ExpandingExtractor(features, n_samples)
+    extractor = tsrocket.ExpandingExtractor(features, n_samples)
     for j in range(0, n_points, chunk_size):
         chunk = data[:, j : j + chunk_size]
         batch = np.ascontiguousarray(chunk, dtype=np.float32)
         res = extractor.update(batch)
-    tsfast_time = time.time() - start
-    tsfast_final = res
+    tsrocket_time = time.time() - start
+    tsrocket_final = res
 
     tsfresh_features = [f for f in features if FEATURE_MAPPING[f]["tsfresh"]]
     tsfresh_params = get_tsfresh_params(tsfresh_features)
@@ -228,7 +228,7 @@ def benchmark_expanding(data, features):
     tsfel_time = time.time() - start
 
     return {
-        "tsfast": (tsfast_final, tsfast_time),
+        "tsrocket": (tsrocket_final, tsrocket_time),
         "tsfresh": (tsfresh_df, tsfresh_time, tsfresh_features),
         "tsfel": (tsfel_res_df, tsfel_time, tsfel_features),
     }
@@ -238,7 +238,7 @@ def benchmark_sliding(data, features, window_size):
     n_samples, n_points = data.shape
     chunk_size = 50
     start = time.time()
-    extractor = tsfast.SlidingExtractor(
+    extractor = tsrocket.SlidingExtractor(
         features, n_samples, window_size, stride=chunk_size
     )
     res = None
@@ -246,7 +246,7 @@ def benchmark_sliding(data, features, window_size):
         chunk = data[:, j : j + chunk_size]
         batch = np.ascontiguousarray(chunk, dtype=np.float32)
         res = extractor.update(batch)
-    tsfast_time = time.time() - start
+    tsrocket_time = time.time() - start
 
     # Each update now returns exactly 1 result per column because stride == chunk_size
     # and we started from empty. Wait, the first window comes at window_size.
@@ -254,10 +254,10 @@ def benchmark_sliding(data, features, window_size):
 
     # If res is None or empty (e.g. n_points < window_size), handle it
     if res is None or res.shape[1] == 0:
-        tsfast_final = np.zeros((n_samples, len(features)))
+        tsrocket_final = np.zeros((n_samples, len(features)))
     else:
         # res is (n_samples, n_windows, n_features); keep each series' LAST window.
-        tsfast_final = res[:, -1, :]
+        tsrocket_final = res[:, -1, :]
 
     tsfresh_features = [f for f in features if FEATURE_MAPPING[f]["tsfresh"]]
     tsfresh_params = get_tsfresh_params(tsfresh_features)
@@ -294,14 +294,14 @@ def benchmark_sliding(data, features, window_size):
     tsfel_time = time.time() - start
 
     return {
-        "tsfast": (tsfast_final, tsfast_time),
+        "tsrocket": (tsrocket_final, tsrocket_time),
         "tsfresh": (tsfresh_df, tsfresh_time, tsfresh_features),
         "tsfel": (tsfel_res_df, tsfel_time, tsfel_features),
     }
 
 
 def compare_results(
-    features, tsfast_res, other_res, other_features, other_name, n_points
+    features, tsrocket_res, other_res, other_features, other_name, n_points
 ):
     diffs = {}
     mapping = {
@@ -369,9 +369,9 @@ def compare_results(
                             break
 
             if vals is not None:
-                mask = ~np.isnan(tsfast_res[:, i]) & ~np.isnan(vals)
+                mask = ~np.isnan(tsrocket_res[:, i]) & ~np.isnan(vals)
                 if np.any(mask):
-                    abs_diff = np.abs(tsfast_res[mask, i] - vals[mask])
+                    abs_diff = np.abs(tsrocket_res[mask, i] - vals[mask])
                     denom = np.abs(vals[mask])
                     perc_diff = np.where(
                         denom > 1e-6, (abs_diff / denom) * 100, abs_diff * 100
@@ -410,7 +410,7 @@ def main():
             results = benchmark_sliding(data, features, window_size)
             curr_n = window_size
 
-        tf_res, tf_time = results["tsfast"]
+        tf_res, tf_time = results["tsrocket"]
         fresh_df, fresh_time, fresh_feats = results["tsfresh"]
         fel_df, fel_time, fel_feats = results["tsfel"]
 
@@ -461,7 +461,7 @@ def main():
             perf_data,
             headers=[
                 "Mode",
-                "tsfast",
+                "tsrocket",
                 "tsfresh",
                 "tsfel",
                 "Speedup fresh",

@@ -1,4 +1,4 @@
-import tsfast
+import tsrocket
 import numpy as np
 import pytest
 from helpers import frame
@@ -27,7 +27,7 @@ def test_extract():
         "agg_autocorrelation-min-2",
     ]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -63,7 +63,7 @@ def test_spectral_roll_on_off():
     x = np.random.RandomState(42).randn(100).astype(np.float32)
     features = ["spectral_roll_on", "spectral_roll_off", "spectral_slope"]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -99,7 +99,7 @@ def test_new_features():
         "energy_ratio_by_chunks_num_segments_3__segment_focus_2",
     ]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -121,7 +121,7 @@ def test_paa():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], dtype=np.float32)
     features = ["paa-2-0", "paa-2-1"]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -145,7 +145,7 @@ def test_advanced_features():
     # result = 1.0 / 1.0 = 1.0
     features = ["fft_coeff-1-real", "fft_coeff-1-abs", "autocorr-2"]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -164,7 +164,7 @@ def test_2d_extraction():
     x = np.array([[1, 2, 3, 4, 5], [5, 4, 3, 2, 1]], dtype=np.float32)
     features = ["mean", "max_value"]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = x
 
     out = extractor.process_2d_floats(batch)
@@ -179,7 +179,7 @@ def test_location_features():
     x = np.array([2.0, 5.0, 1.0, 5.0, 1.0, 3.0], dtype=np.float32)
     features = ["first_loc_max", "last_loc_max", "first_loc_min", "last_loc_min"]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -217,7 +217,7 @@ def test_duplicate_features():
     x4 = np.array([3.0, 3.0, 3.0], dtype=np.float32)
 
     features = ["has_duplicate", "has_duplicate_max", "has_duplicate_min"]
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
 
     for x in [x1, x2, x3, x4]:
         batch = np.stack([x])
@@ -238,7 +238,7 @@ def test_extract_invalid_type():
     # Verify that passing non-float arrays safely raises a TypeError instead of crashing
     x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
     features = ["mean", "std"]
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     with pytest.raises(TypeError, match="expected a float32 or float64 numpy array"):
         extractor.process_2d_floats(batch)
@@ -247,7 +247,7 @@ def test_extract_invalid_type():
 def test_extract_empty_batch():
     # Verify the Rust engine handles zero-length batches without panicking
     features = ["mean", "std"]
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
 
     empty_data = np.stack([[]])
     result = extractor.process_2d_floats(empty_data)
@@ -260,11 +260,11 @@ def test_extract_invalid_feature():
     # Verify unsupported features immediately error during initialization
     features = ["invalid_feature"]
     with pytest.raises(ValueError, match="Unknown feature"):
-        extractor = tsfast.Extractor(features)
+        extractor = tsrocket.Extractor(features)
 
 
 def test_reoccurring_ratios():
-    import tsfast
+    import tsrocket
     import numpy as np
 
     x = np.array([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, 4.0], dtype=np.float32)
@@ -281,7 +281,7 @@ def test_reoccurring_ratios():
         "ratio_value_number_to_time_series_length",
     ]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -293,7 +293,7 @@ def test_reoccurring_ratios():
 
 def test_ecdf_pk_centroid():
     import tsfel
-    import tsfast
+    import tsrocket
 
     x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0], dtype=np.float32)
     features = [
@@ -305,7 +305,7 @@ def test_ecdf_pk_centroid():
         "negative_turning",
         "positive_turning",
     ]
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
 
     batch = np.stack([x])
     results = extractor.process_2d_floats(batch)[0]
@@ -339,7 +339,7 @@ def test_mfcc_wavelet():
         "wavelet_entropy",
     ]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -362,7 +362,7 @@ def test_spectral_shape():
     batch = np.stack([data])
 
     features = ["spectral_centroid", "spectral_spread", "spectral_entropy"]
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     result_rust = extractor.process_2d_floats(batch)
 
     from tsfel.feature_extraction.features import (
@@ -407,7 +407,7 @@ def test_dynamic_features():
         "max_langevin_fixed_point-3-30",
     ]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -488,7 +488,7 @@ def test_lpcc():
 
     import tsfel
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     results = extractor.process_2d_floats(batch)[0]
     expected = np.array(tsfel.feature_extraction.features.lpcc(x))
@@ -497,7 +497,7 @@ def test_lpcc():
 
 def test_augmented_dickey_fuller():
     import numpy as np
-    import tsfast
+    import tsrocket
     import tsfresh.feature_extraction.feature_calculators as fc
 
     np.random.seed(42)
@@ -522,7 +522,7 @@ def test_augmented_dickey_fuller():
         tsfresh_usedlag = fc.augmented_dickey_fuller(x, [{"attr": "usedlag"}])[0][1]
 
         batch = np.stack([x])
-        res = tsfast.Extractor(features).process_2d_floats(batch)
+        res = tsrocket.Extractor(features).process_2d_floats(batch)
 
         # Teststat
         assert np.isclose(res[0, 0], tsfresh_teststat, rtol=1e-2, atol=0.02)
@@ -538,7 +538,7 @@ def test_median_diff_features():
 
     import tsfel
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     results = extractor.process_2d_floats(batch)[0]
     assert np.allclose(results[0], tsfel.feature_extraction.features.median_diff(x))
@@ -554,9 +554,9 @@ def test_agg_autocorrelation():
         "agg_autocorrelation-max-10",
         "agg_autocorrelation-min-10",
     ]
-    import tsfast
+    import tsrocket
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     results = extractor.process_2d_floats(batch)[0]
 
@@ -622,7 +622,7 @@ def test_agg_autocorrelation():
 
 def test_change_quantiles():
     from tsfresh.feature_extraction.feature_calculators import change_quantiles
-    import tsfast
+    import tsrocket
     import numpy as np
 
     x = np.array(
@@ -636,7 +636,7 @@ def test_change_quantiles():
         "change_quantiles-0.1-0.9-False-min",
     ]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -685,7 +685,7 @@ def test_permutation_entropy_and_value_count():
         "value_count-nan",
     ]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     res = extractor.process_2d_floats(batch)
 
     assert res is not None
@@ -712,7 +712,7 @@ def test_permutation_entropy_and_value_count():
 
 def test_fractal_dimensions():
     import numpy as np
-    import tsfast
+    import tsrocket
     from tsfel.feature_extraction.features import higuchi_fractal_dimension
     import warnings
 
@@ -721,7 +721,7 @@ def test_fractal_dimensions():
     x = np.random.randn(200).astype(np.float32)
     features = ["higuchi_fd"]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     out = extractor.process_2d_floats(batch)
     results = out[0]
@@ -735,22 +735,22 @@ def test_fractal_dimensions():
 def test_invalid_type():
     import pytest
     import numpy as np
-    import tsfast
+    import tsrocket
 
     x = np.array([1, 2, 3, 4, 5], dtype=np.int32)
     features = ["mean"]
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x])
     with pytest.raises(TypeError, match="expected a float32 or float64 numpy array"):
         extractor.process_2d_floats(batch)
 
 
 def test_empty_batch():
-    import tsfast
+    import tsrocket
 
     empty_data = np.stack([[]])
     features = ["mean"]
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     result = extractor.process_2d_floats(empty_data)
     assert result.shape[0] == 0
 
@@ -796,7 +796,7 @@ SHAPE_CASES = {
 def test_shape_features_static(case):
     x = SHAPE_CASES[case].astype(np.float32)
     batch = np.stack([x])
-    results = tsfast.Extractor(SHAPE_FEATURES).process_2d_floats(batch)[0]
+    results = tsrocket.Extractor(SHAPE_FEATURES).process_2d_floats(batch)[0]
     assert np.allclose(results, shape_features_reference(x), atol=1e-5, equal_nan=True)
 
 
@@ -805,7 +805,7 @@ def test_undefined_moments_of_constant_series_are_zero():
     x = np.full(20, 2.0, dtype=np.float32)
     batch = np.stack([x])
     feats = ["skewness", "kurtosis", "biased_fisher_kurtosis", "autocorr_lag1"]
-    results = tsfast.Extractor(feats).process_2d_floats(batch)[0]
+    results = tsrocket.Extractor(feats).process_2d_floats(batch)[0]
     assert np.array_equal(results, np.zeros(len(feats)))
 
 
@@ -818,7 +818,7 @@ def _sample_features():
 
 def test_output_is_float32_array_with_feature_names():
     data = np.random.default_rng(0).normal(size=(5, 100)).astype(np.float32)
-    ext = tsfast.Extractor(["mean", "max_value", "c3-1"])
+    ext = tsrocket.Extractor(["mean", "max_value", "c3-1"])
     out = ext.process_2d_floats(data)
     assert ext.feature_names == ["mean", "max_value", "c3-1"]
     assert out.dtype == np.float32 and out.shape == (5, 3)
@@ -828,7 +828,7 @@ def test_output_is_float32_array_with_feature_names():
 
 def test_process_2d_floats_copies_other_layouts_and_dtypes():
     data = np.random.default_rng(1).normal(size=(4, 64)).astype(np.float32)
-    ext = tsfast.Extractor(
+    ext = tsrocket.Extractor(
         ["mean", "energy", "median", "autocorr-2", "fft_coeff-1-abs"]
     )
     expected = ext.process_2d_floats(data)
@@ -841,7 +841,7 @@ def test_process_2d_floats_copies_other_layouts_and_dtypes():
 def test_many_series_match_one_at_a_time():
     # Enough work to take the multi-threaded path; each series alone takes the serial one.
     data = np.random.default_rng(2).normal(size=(300, 128)).astype(np.float32)
-    ext = tsfast.Extractor(_sample_features())
+    ext = tsrocket.Extractor(_sample_features())
     together = ext.process_2d_floats(data)
     for i in [0, 1, 150, 299]:
         np.testing.assert_array_equal(
@@ -850,7 +850,7 @@ def test_many_series_match_one_at_a_time():
 
 
 def test_process_2d_floats_edge_shapes():
-    ext = tsfast.Extractor(["mean", "energy"])
+    ext = tsrocket.Extractor(["mean", "energy"])
     assert ext.process_2d_floats(np.zeros((3, 0), dtype=np.float32)).shape == (0, 2)
     assert ext.process_2d_floats(np.zeros((0, 10), dtype=np.float32)).shape == (0, 2)
     np.testing.assert_array_equal(
@@ -859,7 +859,7 @@ def test_process_2d_floats_edge_shapes():
 
 
 def test_process_2d_floats_rejects_bad_input():
-    ext = tsfast.Extractor(["mean"])
+    ext = tsrocket.Extractor(["mean"])
     with pytest.raises(ValueError, match="2-D"):
         ext.process_2d_floats(np.zeros(10, dtype=np.float32))
     with pytest.raises(ValueError, match="2-D"):
@@ -871,13 +871,13 @@ def test_process_2d_floats_rejects_bad_input():
 
 def test_mse():
     import numpy as np
-    import tsfast
+    import tsrocket
     from tsfel.feature_extraction.features import mse
 
     np.random.seed(42)
     signal = np.random.rand(500).astype(np.float32)
 
-    e = tsfast.Extractor(["mse-3", "mse-2-10"])
+    e = tsrocket.Extractor(["mse-3", "mse-2-10"])
     res = e.process_2d_floats(np.array([signal]))
 
     tol = 0.2 * np.std(signal)
@@ -911,7 +911,7 @@ def test_ecdf_features():
 
     import tsfel
     for arr in [x, x_const, x_short]:
-        ext = tsfast.Extractor(features)
+        ext = tsrocket.Extractor(features)
         batch = np.stack([arr])
         res = ext.process_2d_floats(batch)[0]
 
@@ -923,10 +923,8 @@ def test_ecdf_features():
             ref_perc = float(ref_perc[0])
 
         # ecdf_percentile_count-0.5
-        if np.max(arr) == np.min(arr):
-            ref_count = float(len(arr))
-        else:
-            ref_count = float(np.sum(arr <= ref_perc))
+        # TSFEL counts ECDF positions <= p, so ties don't change the count.
+        ref_count = float(tsfel.feature_extraction.features.ecdf_percentile_count(arr, [0.5]))
 
         # ecdf_slope-0.2-0.5
         try:
@@ -963,7 +961,7 @@ def test_maximum_fractal_length():
     x_short = np.random.randn(9)
 
     features = ["maximum_fractal_length"]
-    ext = tsfast.Extractor(features)
+    ext = tsrocket.Extractor(features)
 
     batch = np.vstack([x_sine, x_rw, x_flat])
     res = ext.process_2d_floats(batch)
@@ -983,7 +981,7 @@ def test_count_above_below_and_range_count():
     import tsfresh.feature_extraction.feature_calculators as fc
 
     features = ["count_above-3.0", "count_below-3.0", "range_count-2-4"]
-    ext = tsfast.Extractor(features)
+    ext = tsrocket.Extractor(features)
 
     def check(x):
         x = np.asarray(x, dtype=np.float32)
@@ -1006,7 +1004,7 @@ def test_power_bandwidth_positive_turning_variation():
     fs = 100.0
     rng = np.random.RandomState(7)
     features = ["power_bandwidth", "spectral_positive_turning", "spectral_variation"]
-    ext = tsfast.Extractor(features)
+    ext = tsrocket.Extractor(features)
 
     def check(x):
         x = np.asarray(x, dtype=np.float32)
@@ -1030,7 +1028,7 @@ def test_power_bandwidth_positive_turning_variation():
     # non-DC FFT bins don't reliably cancel to exactly zero at double
     # precision either, and how well they do varies with the exact value),
     # so comparing against it here would assert on TSFEL's rounding error
-    # rather than on tsfast's correctness. Assert the mathematically correct
+    # rather than on tsrocket's correctness. Assert the mathematically correct
     # values directly instead.
     for x in (np.full(300, 3.0), np.full(8, -1.5)):
         x = np.asarray(x, dtype=np.float32)
@@ -1045,7 +1043,7 @@ def test_wavelet_abs_mean_std_var():
 
     fs = 100.0
     features = ["wavelet_abs_mean-3", "wavelet_std-3", "wavelet_var-3"]
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
 
     np.random.seed(0)
     x = np.random.randn(100).astype(np.float32)
@@ -1078,7 +1076,7 @@ def test_fourier_entropy_and_fft_aggregated():
         "fft_aggregated-skew",
         "fft_aggregated-kurtosis",
     ]
-    ext = tsfast.Extractor(features)
+    ext = tsrocket.Extractor(features)
 
     def check(x):
         x = np.asarray(x, dtype=np.float32)
@@ -1108,7 +1106,7 @@ def test_petrosian_fractal_dimension_and_average_power():
     )
 
     features = ["petrosian_fractal_dimension", "average_power-100"]
-    ext = tsfast.Extractor(features)
+    ext = tsrocket.Extractor(features)
 
     def check(x):
         x = np.asarray(x, dtype=np.float32)
@@ -1137,7 +1135,7 @@ def test_hist_mode_and_neighbourhood_peaks():
     from tsfel.feature_extraction.features import hist_mode, neighbourhood_peaks
 
     features = ["hist_mode", "hist_mode-3", "neighbourhood_peaks", "neighbourhood_peaks-2"]
-    ext = tsfast.Extractor(features)
+    ext = tsrocket.Extractor(features)
     # Defaults resolve to explicit parameters; neighbourhood_peaks is
     # tsfresh's number_peaks.
     assert ext.feature_names == [
@@ -1179,7 +1177,7 @@ def test_spectrogram_mean_coeff():
     def check(x, bins):
         x = np.asarray(x, dtype=np.float32)
         names = [f"spectrogram_mean_coeff-{k}-{bins}" for k in range(bins)]
-        res = tsfast.Extractor(names).process_2d_floats(np.atleast_2d(x))[0]
+        res = tsrocket.Extractor(names).process_2d_floats(np.atleast_2d(x))[0]
         expected = np.zeros(bins)
         if len(x) >= 2:
             # TSFEL clamps bins to len // 2 + 1; the extra coefficients report 0.
@@ -1200,7 +1198,7 @@ def test_spectrogram_mean_coeff():
     # Constant series: every segment is zero after detrending.
     check(np.full(100, 2.5), 32)
     # Default bins=32 and the name it is reported under.
-    ext = tsfast.Extractor(["spectrogram_mean_coeff-4"])
+    ext = tsrocket.Extractor(["spectrogram_mean_coeff-4"])
     assert ext.feature_names == ["spectrogram_mean_coeff-4"]
 
 
@@ -1208,10 +1206,10 @@ def test_tsfresh_sample_entropy():
     import tsfresh.feature_extraction.feature_calculators as fc
     import tsfel.feature_extraction.features as F
 
-    ext = tsfast.Extractor(["tsfresh_sample_entropy", "sample_entropy"])
+    ext = tsrocket.Extractor(["tsfresh_sample_entropy", "sample_entropy"])
     assert ext.feature_names == ["tsfresh_sample_entropy", "sample_entropy"]
     # tsfresh column-name alias.
-    assert tsfast.Extractor(["value__sample_entropy"]).feature_names == [
+    assert tsrocket.Extractor(["value__sample_entropy"]).feature_names == [
         "tsfresh_sample_entropy"
     ]
 
@@ -1243,7 +1241,7 @@ def test_spectral_entropy_short_series_dc_bin():
     # log2(N) / log2(N - 1) - 1: 2.2% at n = 32, so this checks to 0.1%.
     from tsfel.feature_extraction.features import spectral_entropy
 
-    ext = tsfast.Extractor(["spectral_entropy"])
+    ext = tsrocket.Extractor(["spectral_entropy"])
 
     def check(x, dc_zero):
         x = np.asarray(x, dtype=np.float32)
@@ -1285,7 +1283,7 @@ def _spectral_entropy_known_misses():
 
 @pytest.mark.xfail(
     strict=True,
-    reason="TSFEL counts float residue as a non-zero bin; tsfast predicts only "
+    reason="TSFEL counts float residue as a non-zero bin; tsrocket predicts only "
     "the DC bin, from whether the f64 mean is exact. Missed: (1) an exactly-zero "
     "Nyquist bin (alternating sum 0) that numpy's inexact x - mean leaves "
     "residue in; (2) an inexact mean whose DC residue numpy's summation rounds "
@@ -1296,7 +1294,7 @@ def test_spectral_entropy_residue_bins_known_misses(x):
     from tsfel.feature_extraction.features import spectral_entropy
 
     x = np.asarray(x, dtype=np.float32)
-    got = tsfast.Extractor(["spectral_entropy"]).process_2d_floats(x[None])[0, 0]
+    got = tsrocket.Extractor(["spectral_entropy"]).process_2d_floats(x[None])[0, 0]
     assert got == pytest.approx(spectral_entropy(x.astype(np.float64), 100.0), rel=1e-3)
 
 
@@ -1305,13 +1303,13 @@ def test_fresh_fft_meta_feature_is_ignored():
     # runs a fresh FFT. Accepted so one feature list works with every engine.
     features = ["mean", "spectral_entropy"]
     x = np.random.RandomState(43).randn(2, 50).astype(np.float32)
-    ext = tsfast.Extractor(features + ["fresh-4"])
+    ext = tsrocket.Extractor(features + ["fresh-4"])
     assert ext.feature_names == features
     np.testing.assert_array_equal(
-        ext.process_2d_floats(x), tsfast.Extractor(features).process_2d_floats(x)
+        ext.process_2d_floats(x), tsrocket.Extractor(features).process_2d_floats(x)
     )
     with pytest.raises(ValueError, match="fresh-N"):
-        tsfast.Extractor(["mean", "fresh-0"])
+        tsrocket.Extractor(["mean", "fresh-0"])
 
 
 @pytest.mark.parametrize("n", [10, 50, 101, 256, 1000])
@@ -1323,7 +1321,7 @@ def test_augmented_dickey_fuller_lag_selection_matches_tsfresh(n):
 
     rng = np.random.default_rng(n)
     attrs = ["teststat", "pvalue", "usedlag"]
-    ext = tsfast.Extractor([f"augmented_dickey_fuller-{a}" for a in attrs])
+    ext = tsrocket.Extractor([f"augmented_dickey_fuller-{a}" for a in attrs])
     for i in range(30):
         x = [
             rng.normal(size=n),
@@ -1335,3 +1333,22 @@ def test_augmented_dickey_fuller_lag_selection_matches_tsfresh(n):
         assert got[2] == want[2], f"series {i}"
         assert got[0] == pytest.approx(want[0], rel=1e-4)
         assert got[1] == pytest.approx(want[1], rel=1e-3, abs=1e-6)
+
+
+def test_tsfresh_defaults_that_were_wrong_or_missing():
+    # cid_ce(normalize=True), f_agg="median", pacf lag 0, agg_linear_trend's
+    # var and TSFEL's ECDF rank: all in tsfresh/TSFEL default settings.
+    from helpers import tsfresh_default_references
+
+    refs = tsfresh_default_references()
+    ext = tsrocket.Extractor(list(refs))
+    rng = np.random.default_rng(5)
+    for x in [
+        rng.normal(size=137),
+        np.array([1, 2, 2, 2, 5, 5, 7, 8, 9, 1]),  # ties, x[0] == x[-1]
+        np.full(20, 2.0),  # constant
+    ]:
+        x = x.astype(np.float32)
+        got = ext.process_2d_floats(x[None])[0]
+        want = [fn(x.astype(np.float64)) for fn in refs.values()]
+        np.testing.assert_allclose(got, want, rtol=1e-3, atol=1e-5)

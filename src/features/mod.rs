@@ -18,6 +18,81 @@ pub mod transform;
 use crate::context::FeatureContext;
 use crate::types::Feature;
 
+/// Median of `v` (numpy's convention: mean of the two middle values for an
+/// even length), reordering `v` in place. NaN for an empty slice.
+pub(crate) fn median_in_place(v: &mut [f32]) -> f32 {
+    let n = v.len();
+    if n == 0 {
+        return f32::NAN;
+    }
+    let (lo, &mut hi, _) = v.select_nth_unstable_by(n / 2, f32::total_cmp);
+    if n % 2 == 1 {
+        hi
+    } else {
+        0.5 * (lo.iter().copied().fold(f32::NEG_INFINITY, f32::max) + hi)
+    }
+}
+
+/// How a value on a bin edge is binned.
+#[derive(Clone, Copy)]
+pub(crate) enum EdgeSide {
+    /// `np.histogram`: bins are [e_k, e_k+1), the last one closed; a value on
+    /// an inner edge goes up.
+    Histogram,
+    /// `np.searchsorted(edges[1..], v, "left")`: bins are (e_k, e_k+1]; a value
+    /// on an inner edge goes down (tsfresh's lempel_ziv_complexity).
+    SearchsortedLeft,
+}
+
+/// Bin thresholds for numpy's binning of f32 values over [lo, hi]. numpy's
+/// edges are `np.linspace(lo, hi, bins + 1)` in f64; each is stored as the f32
+/// that makes an f32 comparison exact (`v >= e` iff `v >= ceil32(e)`,
+/// `v > e` iff `v > floor32(e)`), so `numpy_bin` stays in f32. Returns the
+/// scale for the initial guess.
+pub(crate) fn numpy_bin_edges(lo: f32, hi: f32, bins: usize, side: EdgeSide, out: &mut Vec<f32>) -> f32 {
+    let (lo64, hi64) = (lo as f64, hi as f64);
+    let step = (hi64 - lo64) / bins as f64;
+    out.clear();
+    out.extend((0..=bins).map(|k| {
+        let e = if k == bins { hi64 } else { k as f64 * step + lo64 };
+        let f = e as f32;
+        match side {
+            EdgeSide::Histogram if (f as f64) < e => f.next_up(),
+            EdgeSide::SearchsortedLeft if (f as f64) > e => f.next_down(),
+            _ => f,
+        }
+    }));
+    (bins as f64 / (hi64 - lo64)) as f32
+}
+
+/// numpy's bin for `v` given `numpy_bin_edges(lo, .., side, edges)`: a scaled
+/// guess, at most one bin off, then one branchless correction each way (the
+/// data decides them, so branches would mispredict).
+#[inline(always)]
+pub(crate) fn numpy_bin(v: f32, lo: f32, norm: f32, edges: &[f32], side: EdgeSide) -> usize {
+    let last = edges.len() as i32 - 2;
+    let mut k = (((v - lo) * norm) as i32).clamp(0, last) as usize;
+    let (below, above) = match side {
+        EdgeSide::Histogram => (v < edges[k], v >= edges[k + 1]),
+        EdgeSide::SearchsortedLeft => (v <= edges[k], v > edges[k + 1]),
+    };
+    k -= ((k > 0) & below) as usize;
+    k += ((k < last as usize) & above & !below) as usize;
+    k
+}
+
+/// The decimal a user wrote for an f32 parameter (0.1 is stored as
+/// 0.1000000015): `p` rounded to the 7 significant digits an f32 holds, so
+/// comparisons against it match the reference libraries' f64 parameter.
+pub(crate) fn decimal_param(p: f32) -> f64 {
+    let p = p as f64;
+    if p == 0.0 || !p.is_finite() {
+        return p;
+    }
+    let scale = 10f64.powi(6 - p.abs().log10().floor() as i32);
+    (p * scale).round() / scale
+}
+
 /// Evaluates one feature. Every engine calls this.
 ///
 /// The match is exhaustive on purpose: adding a `Feature` variant without
@@ -96,6 +171,7 @@ pub fn eval(feat: &Feature, ctx: &mut FeatureContext) -> f32 {
         | F::AggLinearTrend(..)
         | F::Auc
         | F::CidCe
+        | F::CidCeNormalized
         | F::Intercept
         | F::LinearTrend(..)
         | F::LinearTrendTimewise(..)

@@ -120,6 +120,8 @@ pub struct ColumnState {
     pub max_q_len: usize,
     pub approx_entropy_buffer: Vec<usize>,
     pub binned_entropy_buffer: Vec<f32>,
+    /// numpy bin edges as exact f32 thresholds (binned_entropy, LZ complexity).
+    pub bin_edges: Vec<f32>,
     pub agg_linear_trend_buffer: Vec<f32>,
     pub mse_buffer: Vec<f32>,
     /// Per-template match counts for `approx_entropy`.
@@ -170,7 +172,7 @@ pub struct ColumnState {
     pub adf_test_stat: f32,
     pub adf_p_value: f32,
     pub adf_used_lag: f32,
-    pub lz_trie_nodes: Vec<Vec<(u16, usize)>>,
+    pub lz_trie_nodes: Vec<LzNode>,
     pub lz_symbol_buffer: Vec<u8>,
     pub lz_binary_trie: Vec<[usize; 2]>,
     pub lz_bit_buffer: Vec<u64>,
@@ -304,6 +306,7 @@ impl ColumnState {
             max_q_len: 0,
             approx_entropy_buffer: Vec::new(),
             binned_entropy_buffer: Vec::new(),
+            bin_edges: Vec::new(),
             agg_linear_trend_buffer: Vec::new(),
             mse_buffer: Vec::new(),
             approx_entropy_counts: Vec::new(),
@@ -634,4 +637,20 @@ pub fn permutation_entropy(data: &[f32], tau: u32, dimension: u32) -> f32 {
     }
 
     entropy
+}
+
+/// Hash key for counting distinct values: -0.0 and 0.0 are the same value, as
+/// in numpy's `np.unique` that tsfresh uses.
+#[inline(always)]
+pub fn value_key(v: f32) -> u32 {
+    (v + 0.0).to_bits()
+}
+
+/// A node of the flat LZ phrase trie (`lz_complexity`): children form a
+/// sibling chain, and 0 means "none" (node 0 is a placeholder).
+#[derive(Clone, Copy, Default)]
+pub struct LzNode {
+    pub first_child: u32,
+    pub next_sibling: u32,
+    pub symbol: u8,
 }

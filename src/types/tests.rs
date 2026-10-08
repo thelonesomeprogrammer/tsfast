@@ -170,6 +170,8 @@ fn invalid_parameters_are_rejected() {
         "fourier_entropy-0",
         "fft_aggregated-mode",
         "not_a_feature",
+        "lempel_ziv_complexity-1",
+        "lempel_ziv_complexity-257",
     ] {
         assert!(s.parse::<Feature>().is_err(), "{s:?} should be rejected");
     }
@@ -230,4 +232,88 @@ fn meta_features_are_split_off() {
     }
     // A meta feature is not a feature: it never parses as one.
     assert!("fresh-1".parse::<Feature>().is_err());
+}
+
+#[test]
+fn tsfresh_and_tsfel_column_names_translate() {
+    // A model trained on tsfresh/TSFEL output is deployed with its column names.
+    for (external, canonical) in [
+        ("value__mean", "mean"),
+        ("value__abs_energy", "energy"),
+        ("value__cid_ce__normalize_True", "cid_ce_normalized"),
+        (r#"value__fft_coefficient__attr_"abs"__coeff_3"#, "fft_coeff-3-abs"),
+        (r#"fft_coefficient__attr_"abs"__coeff_3"#, "fft_coeff-3-abs"),
+        (r#"a__b__fft_coefficient__attr_"abs"__coeff_3"#, "fft_coeff-3-abs"),
+        (
+            r#"value__agg_linear_trend__attr_"slope"__chunk_len_5__f_agg_"median""#,
+            "agg_linear_trend-slope-5-median",
+        ),
+        (
+            r#"value__change_quantiles__f_agg_"var"__isabs_True__qh_0.8__ql_0.2"#,
+            "change_quantiles-0.2-0.8-True-var",
+        ),
+        ("value__range_count__max_1__min_-1", "range_count--1-1"),
+        ("value__binned_entropy__max_bins_10", "binned_entropy__max_bins_10"),
+        (
+            r#"value__augmented_dickey_fuller__attr_"pvalue"__autolag_"AIC""#,
+            "augmented_dickey_fuller-pvalue",
+        ),
+        ("0_Spectral centroid", "spectral_centroid"),
+        ("Kurtosis", "biased_fisher_kurtosis"),
+        ("acc_x_ECDF Percentile_1", "ecdf_percentile-0.8"),
+        ("0_ECDF_0", "ecdf-1"),
+        ("0_MFCC_11", "mfcc-11"),
+        (
+            "value__query_similarity_count__query_None__threshold_0.0",
+            "query_similarity_count-0-0",
+        ),
+    ] {
+        let f: Feature = external
+            .parse()
+            .unwrap_or_else(|e| panic!("{external:?} should parse: {e}"));
+        assert_eq!(f.name(), canonical, "{external:?}");
+    }
+}
+
+#[test]
+fn tsfel_frequency_names_need_fs() {
+    let name = "0_Wavelet energy_12.5Hz";
+    assert!(name.parse::<Feature>().is_err(), "no fs, no frequency mapping");
+    assert_eq!(Feature::parse_with_fs(name, 100.0).unwrap().name(), "wavelet_energy-1");
+    assert_eq!(Feature::parse_with_fs(name, 50.0).unwrap().name(), "wavelet_energy-0");
+    let spec = "0_Spectrogram mean coefficient_1.61Hz";
+    assert_eq!(
+        Feature::parse_with_fs(spec, 100.0).unwrap().name(),
+        "spectrogram_mean_coeff-1"
+    );
+    assert!(Feature::parse_with_fs("0_Wavelet energy_13Hz", 100.0).is_err());
+}
+
+#[test]
+fn bad_tsfresh_names_are_rejected() {
+    for s in [
+        // Unknown parameter, bad values, unsupported options.
+        r#"value__fft_coefficient__attr_"abs"__coeff_3__bogus_1"#,
+        r#"value__fft_coefficient__attr_"phase"__coeff_3"#,
+        r#"value__agg_linear_trend__attr_"slope"__chunk_len_0__f_agg_"mean""#,
+        r#"value__agg_linear_trend__attr_"slope"__chunk_len_5__f_agg_"mode""#,
+        r#"value__change_quantiles__f_agg_"mean"__isabs_Maybe__qh_0.2__ql_0.0"#,
+        r#"value__augmented_dickey_fuller__attr_"teststat"__autolag_"BIC""#,
+        "value__cid_ce__normalize_maybe",
+        "value__number_peaks__n_0",
+        "value__linear_trend_timewise__attr_\"slope\"",
+        "0_ECDF Percentile_2",
+    ] {
+        assert!(s.parse::<Feature>().is_err(), "{s:?} should be rejected");
+    }
+}
+
+#[test]
+fn unknown_names_suggest_the_closest_feature() {
+    let err = "spectral_centriod".parse::<Feature>().unwrap_err();
+    assert!(err.contains("did you mean `spectral_centroid`"), "{err}");
+    let err = "fft_coef-3-abs".parse::<Feature>().unwrap_err();
+    assert!(err.contains("did you mean `fft_coeff-...`"), "{err}");
+    let err = "zzzzzzzzzzzzzzzz".parse::<Feature>().unwrap_err();
+    assert!(!err.contains("did you mean"), "{err}");
 }

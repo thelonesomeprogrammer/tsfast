@@ -5,7 +5,11 @@ pub fn eval_subsequence(feat: &Feature, context: &mut FeatureContext) -> Option<
     match feat {
         Feature::QuerySimilarityCount(l, threshold_bits) => {
             let l = *l as usize;
-            if l == 0 || context.values.len() < l {
+            if l == 0 {
+                // No query: tsfresh's default (query=None) is always NaN.
+                return Some(f32::NAN);
+            }
+            if context.values.len() < l {
                 return None;
             }
             let threshold = f32::from_bits(*threshold_bits);
@@ -51,6 +55,7 @@ pub fn eval_subsequence(feat: &Feature, context: &mut FeatureContext) -> Option<
                         / (profile.len() - 1).max(1) as f32;
                     Some(var)
                 }
+                AggFunc::Median => Some(super::median_in_place(&mut profile.clone())),
             }
         }
         _ => None,

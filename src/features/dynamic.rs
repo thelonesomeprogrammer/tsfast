@@ -21,19 +21,23 @@ pub fn eval_dynamic(feat: &Feature, context: &mut crate::context::FeatureContext
             let k_val = *k as usize;
             let p_val = *p as usize;
 
-            if p_val > k_val || n <= k_val {
+            if p_val > k_val {
                 res = Some(f32::NAN);
             } else {
                 let coeffs = state.ar_coeffs.entry(*k).or_insert_with(|| {
+                    if n <= k_val {
+                        return Vec::new();
+                    }
                     let (xtx, xty) = compute_ar_matrices_full(values, k_val);
-                    solve_ols_f64(&xtx, &xty).unwrap_or_else(|| vec![f32::NAN; k_val + 1])
+                    solve_ols_f64(&xtx, &xty).unwrap_or_default()
                 });
-
-                if p_val < coeffs.len() {
-                    res = Some(coeffs[p_val]);
-                } else {
-                    res = Some(0.0);
-                }
+                // When the fit fails tsfresh falls back to k NaNs, so asking
+                // for the last coefficient (p == k) hits its IndexError -> 0.
+                res = Some(match coeffs.get(p_val) {
+                    Some(&c) => c,
+                    None if p_val == k_val => 0.0,
+                    None => f32::NAN,
+                });
             }
         }
         Feature::FriedrichCoefficients(m, r_bits, coeff) => {
@@ -387,72 +391,56 @@ fn compute_friedrich_coeffs(values: &[f32], m: usize, r: f32) -> Vec<f32> {
     }
 }
 
+/// tsfresh: `np.max(np.real(np.roots(coeffs)))`, the largest real part over
+/// *all* roots of the Friedrich polynomial (complex ones included). Roots by
+/// Durand-Kerner in f64, started on a circle of the Cauchy bound radius at
+/// the non-symmetric powers of 0.4 + 0.9i (a symmetric start can stall).
 fn compute_max_langevin(coeffs: &[f32]) -> f32 {
-    if coeffs.iter().any(|c| c.is_nan()) {
+    if coeffs.iter().any(|c| !c.is_finite()) {
         return f32::NAN;
     }
-
-    let m = coeffs.len() - 1;
-    if m == 0 {
+    // np.roots strips leading zeros; no roots left means tsfresh's NaN.
+    let lead = coeffs.iter().position(|&c| c != 0.0).unwrap_or(coeffs.len());
+    let c: Vec<f64> = coeffs[lead..].iter().map(|&c| c as f64).collect();
+    if c.len() < 2 {
         return f32::NAN;
     }
+    let m = c.len() - 1;
+    let monic: Vec<f64> = c.iter().map(|&v| v / c[0]).collect();
+    let bound = 1.0 + monic[1..].iter().fold(0.0f64, |a, &v| a.max(v.abs()));
 
-    let c0 = coeffs[0];
-    if c0.abs() < 1e-7 {
-        return f32::NAN;
+    let seed = Complex::new(0.4f64, 0.9);
+    let mut roots: Vec<Complex<f64>> = Vec::with_capacity(m);
+    let mut z = Complex::new(1.0f64, 0.0);
+    for _ in 0..m {
+        z = z * seed;
+        roots.push(z * (bound / z.norm()));
     }
 
-    let mut norm_coeffs = Vec::with_capacity(m + 1);
-    for c in coeffs {
-        norm_coeffs.push(c / c0);
-    }
-
-    let mut roots = vec![Complex::new(0.0, 0.0); m];
-    let radius = 1.0;
-    let angle_step = std::f32::consts::TAU / (m as f32);
-    for i in 0..m {
-        let angle = angle_step * (i as f32);
-        roots[i] = Complex::new(radius * angle.cos(), radius * angle.sin());
-    }
-
-    for _iter in 0..100 {
-        let mut max_diff = 0.0f32;
+    for _ in 0..500 {
+        let mut max_change = 0.0f64;
         for i in 0..m {
-            let mut p = Complex::new(norm_coeffs[0], 0.0);
-            for j in 1..=m {
-                p = p * roots[i] + Complex::new(norm_coeffs[j], 0.0);
+            let mut p = Complex::new(monic[0], 0.0);
+            for &a in &monic[1..] {
+                p = p * roots[i] + a;
             }
-
-            let mut prod = Complex::new(1.0, 0.0);
+            let mut prod = Complex::new(1.0f64, 0.0);
             for j in 0..m {
                 if i != j {
                     prod = prod * (roots[i] - roots[j]);
                 }
             }
-
-            let change = p / prod;
-            roots[i] = roots[i] - change;
-
-            if change.norm() > max_diff {
-                max_diff = change.norm();
+            if prod.norm() == 0.0 {
+                continue;
             }
+            let change = p / prod;
+            roots[i] -= change;
+            max_change = max_change.max(change.norm() / roots[i].norm().max(1.0));
         }
-
-        if max_diff < 1e-5 {
+        if max_change < 1e-14 {
             break;
         }
     }
 
-    let mut max_real = f32::NEG_INFINITY;
-    let mut found = false;
-    for r in roots {
-        if r.im.abs() < 1e-4 {
-            if r.re > max_real {
-                max_real = r.re;
-            }
-            found = true;
-        }
-    }
-
-    if found { max_real } else { f32::NAN }
+    roots.iter().map(|r| r.re).fold(f64::NEG_INFINITY, f64::max) as f32
 }

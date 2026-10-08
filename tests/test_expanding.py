@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
-from tsfast._tsfast import ExpandingExtractor
+from tsrocket._tsrocket import ExpandingExtractor
 from helpers import frame
-import tsfast
+import tsrocket
 
 
 def test_expanding_multiple_columns():
@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
 
 def test_expanding_duplicate_features():
-    from tsfast._tsfast import ExpandingExtractor
+    from tsrocket._tsrocket import ExpandingExtractor
     import pandas as pd
     from tsfresh.feature_extraction.feature_calculators import (
         has_duplicate,
@@ -197,7 +197,7 @@ def test_expanding_duplicate_features():
 
 
 def test_reoccurring_ratios_expanding():
-    import tsfast
+    import tsrocket
     import numpy as np
 
     x = np.array([1.0, 2.0, 2.0, 3.0, 3.0], dtype=np.float32)
@@ -208,7 +208,7 @@ def test_reoccurring_ratios_expanding():
         "ratio_value_number_to_time_series_length",
     ]
 
-    extractor = tsfast.ExpandingExtractor(features, 1)
+    extractor = tsrocket.ExpandingExtractor(features, 1)
     batch = np.stack([x])
     out = extractor.update(batch)
     results = frame(extractor, out)
@@ -221,7 +221,7 @@ def test_reoccurring_ratios_expanding():
 
 def test_ecdf_pk_centroid_expanding():
     import tsfel
-    import tsfast
+    import tsrocket
 
     x = np.array([1.0, -2.0, 3.0, 4.0, 5.0, 1.0, 0.0], dtype=np.float32)
     features = [
@@ -233,7 +233,7 @@ def test_ecdf_pk_centroid_expanding():
         "negative_turning",
         "positive_turning",
     ]
-    extractor = tsfast.ExpandingExtractor(features, n_cols=1)
+    extractor = tsrocket.ExpandingExtractor(features, n_cols=1)
 
     batch = np.stack([x])
     results = frame(extractor, extractor.update(batch)).iloc[-1].values
@@ -274,9 +274,9 @@ def test_median_diff_expanding():
     batch2 = np.stack([chunk2])
 
     features = ["median_diff", "median_abs_diff"]
-    import tsfast
+    import tsrocket
 
-    extractor = tsfast.ExpandingExtractor(features, 1)
+    extractor = tsrocket.ExpandingExtractor(features, 1)
 
     import tsfel
 
@@ -292,7 +292,7 @@ def test_median_diff_expanding():
 
 
 def test_expanding_energy_ratio_by_chunks():
-    import tsfast
+    import tsrocket
     import numpy as np
 
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], dtype=np.float32)
@@ -301,7 +301,7 @@ def test_expanding_energy_ratio_by_chunks():
         "energy_ratio_by_chunks_num_segments_3__segment_focus_1",
         "energy_ratio_by_chunks_num_segments_3__segment_focus_2",
     ]
-    extractor = tsfast.ExpandingExtractor(features, n_cols=1)
+    extractor = tsrocket.ExpandingExtractor(features, n_cols=1)
     batch = np.stack([x])
     df = frame(extractor, extractor.update(batch))
     res = df.iloc[-1].values
@@ -311,7 +311,7 @@ def test_expanding_energy_ratio_by_chunks():
 def test_expanding_permutation_entropy_and_value_count():
     import numpy as np
     import math
-    import tsfast
+    import tsrocket
 
     data = np.array(
         [4.0, 7.0, 9.0, 10.0, 6.0, 11.0, 3.0, 3.0, np.nan, 3.0, np.nan],
@@ -319,7 +319,7 @@ def test_expanding_permutation_entropy_and_value_count():
     )
     features = ["permutation_entropy-1-3", "value_count-3.0"]
 
-    extractor = tsfast.ExpandingExtractor(features, n_cols=1)
+    extractor = tsrocket.ExpandingExtractor(features, n_cols=1)
     from tsfresh.feature_extraction.feature_calculators import (
         permutation_entropy,
         value_count,
@@ -342,7 +342,7 @@ def test_expanding_permutation_entropy_and_value_count():
 
 def test_expanding_fractal_dimensions():
     import numpy as np
-    from tsfast._tsfast import ExpandingExtractor
+    from tsrocket._tsrocket import ExpandingExtractor
     from tsfel.feature_extraction.features import higuchi_fractal_dimension
     import warnings
 
@@ -382,7 +382,7 @@ def test_expanding_fractal_dimensions():
 
 @pytest.mark.parametrize("case", ["randn", "exponential", "constant", "plateaus"])
 def test_shape_features_expanding(case):
-    from test_tsfast import SHAPE_CASES, SHAPE_FEATURES, shape_features_reference
+    from test_static import SHAPE_CASES, SHAPE_FEATURES, shape_features_reference
 
     x = SHAPE_CASES[case].astype(np.float32)
     extractor = ExpandingExtractor(SHAPE_FEATURES, 1)
@@ -408,13 +408,13 @@ def test_expanding_output_shape_and_names():
 
 def test_expanding_mse():
     import numpy as np
-    import tsfast
+    import tsrocket
     from tsfel.feature_extraction.features import mse
 
     np.random.seed(42)
     signal = np.random.rand(500).astype(np.float32)
 
-    e = tsfast.ExpandingExtractor(["mse-3"], 1)
+    e = tsrocket.ExpandingExtractor(["mse-3"], 1)
     res1 = e.update(np.array([signal[:200]]))
     res2 = e.update(np.array([signal[200:]]))
 
@@ -435,7 +435,7 @@ def test_ecdf_features():
     features = ["ecdf_percentile-0.5", "ecdf_percentile_count-0.5", "ecdf_slope-0.2-0.5"]
 
     import tsfel
-    ext = tsfast.ExpandingExtractor(features, 1)
+    ext = tsrocket.ExpandingExtractor(features, 1)
     for i in range(len(x)):
         arr = x[:i+1]
         out = ext.update(np.stack([arr[-1:]]).T)
@@ -447,10 +447,8 @@ def test_ecdf_features():
         else:
             ref_perc = float(ref_perc[0])
 
-        if np.max(arr) == np.min(arr):
-            ref_count = float(len(arr))
-        else:
-            ref_count = float(np.sum(arr <= ref_perc))
+        # TSFEL counts ECDF positions <= p, so ties don't change the count.
+        ref_count = float(tsfel.feature_extraction.features.ecdf_percentile_count(arr, [0.5]))
 
         try:
             ref_slope = tsfel.feature_extraction.features.ecdf_slope(arr, 0.2, 0.5)
@@ -476,7 +474,7 @@ def test_ecdf_features():
 
 def test_expanding_maximum_fractal_length():
     import numpy as np
-    import tsfast
+    import tsrocket
     from tsfel.feature_extraction.features import maximum_fractal_length
 
     np.random.seed(42)
@@ -485,7 +483,7 @@ def test_expanding_maximum_fractal_length():
     full_x = np.concatenate([x1, x2])
 
     features = ["maximum_fractal_length"]
-    ext = tsfast.ExpandingExtractor(features, n_cols=1)
+    ext = tsrocket.ExpandingExtractor(features, n_cols=1)
 
     res1 = ext.update(x1.reshape(1, -1))
     res2 = ext.update(x2.reshape(1, -1))
@@ -558,7 +556,7 @@ def test_expanding_power_bandwidth_positive_turning_variation():
 
     # Constant series: AC spectral content is zero mathematically, but
     # TSFEL's own reference value for it is float-noise-dependent (see
-    # test_tsfast.py's analogous case), so assert the mathematically correct
+    # test_static.py's analogous case), so assert the mathematically correct
     # values directly instead of against TSFEL.
     ext = ExpandingExtractor(features, 1)
     for chunk in (constant[:100], constant[100:]):
@@ -791,3 +789,16 @@ def test_expanding_fresh_fft_meta_feature_is_ignored():
         np.testing.assert_array_equal(with_meta.update(chunk), plain.update(chunk))
     with pytest.raises(ValueError, match="fresh-N"):
         ExpandingExtractor(["fresh-x"], 1)
+
+
+def test_expanding_tsfresh_defaults_that_were_wrong_or_missing():
+    from helpers import tsfresh_default_references
+
+    refs = tsfresh_default_references()
+    x = np.random.default_rng(7).normal(size=60).astype(np.float32)
+    x[:12] = 0.25  # starts constant
+    ext = ExpandingExtractor(list(refs), 1)
+    for end, chunk in zip([12, 13, 30, 60], np.split(x, [12, 13, 30])):
+        got = ext.update(chunk[None])[0]
+        want = [fn(x[:end].astype(np.float64)) for fn in refs.values()]
+        np.testing.assert_allclose(got, want, rtol=1e-3, atol=1e-4, err_msg=f"n={end}")

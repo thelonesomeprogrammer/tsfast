@@ -3,27 +3,62 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "tsfast"
-requires-python = ">=3.8"
-dependencies = [
+name = "tsrocket"
+description = "Every tsfresh and TSFEL time-series feature, computed in Rust: same values, much faster, with streaming sliding and expanding windows."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "The Lonesome Programmer" }]
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.21"]
+keywords = [
+    "time-series", "feature-extraction", "tsfresh", "tsfel", "streaming",
+    "sliding-window", "machine-learning", "rust", "simd",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+# tsrocket.selection (FRESH filter) needs scipy; tsrocket.pandas needs pandas.
+selection = ["scipy>=1.10"]
+pandas = ["pandas>=2.0"]
+
+[project.urls]
+Homepage = "https://github.com/thelonesomeprogrammer/tsrocket"
+Repository = "https://github.com/thelonesomeprogrammer/tsrocket"
+Issues = "https://github.com/thelonesomeprogrammer/tsrocket/issues"
+
+[dependency-groups]
+# Development only: reference libraries, test and build tooling.
+dev = [
     "maturin[zig]>=1.13.1",
-    "numpy>=1.20",
+    "matplotlib>=3.7",
     "pandas>=2.0.3",
     "pytest>=8.3.5",
     "pytest-benchmark>=4.0.0",
     "scipy>=1.10.0",
+    "tabulate>=0.9",
     "tsfel>=0.2.0",
     "tsfresh>=0.20.3",
     "ziglang>=0.15.2",
 ]
-dynamic = ["version"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-module-name = "tsfast._tsfast"
+module-name = "tsrocket._tsrocket"
 
 [tool.uv]
-# uv builds the Rust extension itself (editable install into ./tsfast/).
+# uv builds the Rust extension itself (editable install into ./tsrocket/).
 # Rebuild whenever Rust sources change, and always in release mode, so
 # `uv run ...` never tests a stale or debug build. Don't use `maturin develop`.
 cache-keys = [
@@ -35,7 +70,7 @@ cache-keys = [
 ]
 
 [tool.uv.config-settings-package]
-tsfast = { "maturin.build-args" = "--profile=release" }
+tsrocket = { "maturin.build-args" = "--profile=release" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

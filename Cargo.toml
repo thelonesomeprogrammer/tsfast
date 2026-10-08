@@ -1,14 +1,20 @@
 [package]
-name = "tsfast"
+name = "tsrocket"
 version = "0.1.0"
 edition = "2024"
+description = "tsfresh/TSFEL-compatible time-series feature extraction with static, sliding and expanding engines"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/thelonesomeprogrammer/tsrocket"
+readme = "README.md"
+keywords = ["time-series", "feature-extraction", "tsfresh", "tsfel", "streaming"]
+categories = ["science", "algorithms"]
 
 [lib]
-name = "tsfast"
+name = "tsrocket"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.28.3" }
+pyo3 = { version = "0.28.3", features = ["abi3-py310"] }
 ndarray = { version = "0.16", features = ["rayon"] }
 num-traits = "0.2"
 rayon = "1.10"

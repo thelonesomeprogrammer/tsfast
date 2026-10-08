@@ -54,7 +54,7 @@ impl<'a> StaticEngine<'a> {
             .intersects(crate::types::Compute::REOCCUR_RATIOS)
         {
             for &val in values {
-                let bits = val.to_bits();
+                let bits = crate::common::value_key(val);
                 let count = state.value_counts.entry(bits).or_insert(0);
                 *count += 1;
                 if *count == 2 {

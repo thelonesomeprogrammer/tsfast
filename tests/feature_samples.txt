@@ -34,6 +34,7 @@ mean_change
 median_diff
 median_abs_diff
 cid_ce
+cid_ce_normalized
 slope
 intercept
 abs_sum_change
@@ -199,3 +200,11 @@ linear_trend_timewise-intercept-3600
 linear_trend_timewise-rvalue-1
 linear_trend_timewise-pvalue-60
 linear_trend_timewise-stderr-0.5
+agg_autocorrelation-median-10
+agg_linear_trend-slope-5-median
+agg_linear_trend-intercept-5-var
+change_quantiles-0.2-0.8-False-median
+matrix_profile-10-median
+partial_autocorr-0
+ecdf_percentile-0.7
+ecdf_percentile_count-0.7

@@ -1,4 +1,4 @@
-"""Coach benchmark: tsfast vs the tsfresh/TSFEL reference, per feature and engine.
+"""Coach benchmark: tsrocket vs the tsfresh/TSFEL reference, per feature and engine.
 
 Every feature in tests/feature_samples.txt is timed on the same windows in the
 static, sliding and expanding engines and, when it has one, against its
@@ -9,7 +9,7 @@ Outputs:
   .jules/feature_benchmarks.csv / .md  per-feature microseconds per window
   .jules/benchmarks.csv                appended aggregate history (all features
                                        in one extractor), plotted by the chart
-  README.md "## Latest Results"        unless --skip-readme
+  benchmarks/README.md                 latest aggregate results, unless --skip-readme
 
     uv run python scripts/coach_benchmark.py [--quick] [--skip-readme]
 """
@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import tsfast
+import tsrocket
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
@@ -106,9 +106,9 @@ def generate_chart():
     csv_path = ROOT / ".jules" / "benchmarks.csv"
     df = pd.read_csv(csv_path)
     series = {
-        "tsfast static": "tsfast_static_all_features",
-        "tsfast sliding": "tsfast_sliding_all_features",
-        "tsfast expanding": "tsfast_expanding_all_features",
+        "tsrocket static": "tsrocket_static_all_features",
+        "tsrocket sliding": "tsrocket_sliding_all_features",
+        "tsrocket expanding": "tsrocket_expanding_all_features",
         "references (sum)": "reference_all_features",
     }
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 9), sharex=True)
@@ -123,7 +123,7 @@ def generate_chart():
 
     ax2.set_title("Feature count", fontweight="bold")
     for label, name in [
-        ("tsfast", "tsfast_features"),
+        ("tsrocket", "tsrocket_features"),
         ("with reference", "referenced_features"),
     ]:
         values = df[df["Benchmark_Name"] == name]["Metric_Value"].values
@@ -175,22 +175,17 @@ def update_readme():
         ]
     ].to_markdown(index=False)
 
-    try:
-        with open("README.md", "r") as f:
-            readme_content = f.read()
-    except FileNotFoundError:
-        readme_content = "## Latest Results\n"
-
-    start_index = readme_content.find("## Latest Results")
-    if start_index != -1:
-        new_content = (
-            readme_content[:start_index] + "## Latest Results\n" + md_table + "\n"
-        )
-        with open("README.md", "w") as f:
-            f.write(new_content)
-        print("README.md updated.")
-    else:
-        print("Could not find '## Latest Results' in README.md")
+    out = ROOT / "benchmarks" / "README.md"
+    out.write_text(
+        "# Benchmark history\n\n"
+        "Written by `scripts/coach_benchmark.py`: all features in one extractor,\n"
+        "per engine, against tsfresh and TSFEL, tracked across commits. For the\n"
+        "headline comparison in the main README, see `scripts/readme_benchmark.py`;\n"
+        "per-feature timings are in `.jules/feature_benchmarks.md`.\n\n"
+        "![Benchmark trends](../.jules/benchmark_trends.png)\n\n"
+        "## Latest Results\n\n" + md_table + "\n"
+    )
+    print(f"{out} updated.")
 
 
 def make_batch(series):
@@ -217,18 +212,18 @@ def bench_feature(feature, data, window, step, min_time):
     prime = make_batch(data[:, :window])
     more = make_batch(data[:, window : window + step])
 
-    static = tsfast.Extractor([feature])
+    static = tsrocket.Extractor([feature])
     t_static = per_call(lambda: static.process_2d_floats(windows), min_time) / n_cols
 
     def sliding_step():
-        ext = tsfast.SlidingExtractor([feature], n_cols, window)
+        ext = tsrocket.SlidingExtractor([feature], n_cols, window)
         ext.update(prime)
         start = time.perf_counter()
         ext.update(more)  # `step` new windows per column
         return time.perf_counter() - start
 
     def expanding_step():
-        ext = tsfast.ExpandingExtractor([feature], n_cols)
+        ext = tsrocket.ExpandingExtractor([feature], n_cols)
         ext.update(prime)
         start = time.perf_counter()
         ext.update(more)  # one update per column, series grows by `step`
@@ -277,7 +272,7 @@ def write_feature_table(rows, window, step, n_cols):
         f"{step} new values per sliding/expanding update. Commit {get_git_hash()}, "
         f"{datetime.datetime.now():%Y-%m-%d %H:%M}.",
         "Sliding = per new window; expanding = per update. Reference = the tsfresh/TSFEL",
-        "function tsfast is tested against, called on one window; speed-up = reference / static.",
+        "function tsrocket is tested against, called on one window; speed-up = reference / static.",
         "",
         "| feature | static | sliding | expanding | reference | ref µs | speed-up |",
         "|:--|--:|--:|--:|:--|--:|--:|",
@@ -301,7 +296,7 @@ def bench_all_in_one(data, window, step, min_time):
         make_batch(data[:, :window]),
         make_batch(data[:, window : window + step]),
     )
-    static = tsfast.Extractor(FEATURES)
+    static = tsrocket.Extractor(FEATURES)
     t_static = per_call(lambda: static.process_2d_floats(prime), min_time) / n_cols
 
     def timed(make):
@@ -311,10 +306,10 @@ def bench_all_in_one(data, window, step, min_time):
         ext.update(more)
         return time.perf_counter() - start
 
-    t_sliding = timed(lambda: tsfast.SlidingExtractor(FEATURES, n_cols, window)) / (
+    t_sliding = timed(lambda: tsrocket.SlidingExtractor(FEATURES, n_cols, window)) / (
         n_cols * step
     )
-    t_expanding = timed(lambda: tsfast.ExpandingExtractor(FEATURES, n_cols)) / n_cols
+    t_expanding = timed(lambda: tsrocket.ExpandingExtractor(FEATURES, n_cols)) / n_cols
     return t_static, t_sliding, t_expanding
 
 
@@ -326,7 +321,7 @@ def main():
         "--quick", action="store_true", help="shorter timings, for a smoke run"
     )
     parser.add_argument(
-        "--skip-readme", action="store_true", help="don't rewrite README.md"
+        "--skip-readme", action="store_true", help="don't rewrite benchmarks/README.md"
     )
     parser.add_argument(
         "--skip-history", action="store_true", help="don't append .jules/benchmarks.csv"
@@ -359,11 +354,11 @@ def main():
         append_to_csv(
             str(ROOT / ".jules" / "benchmarks.csv"),
             [
-                ("tsfast_static_all_features", t_static * 1e3, "ms"),
-                ("tsfast_sliding_all_features", t_sliding * 1e3, "ms"),
-                ("tsfast_expanding_all_features", t_expanding * 1e3, "ms"),
+                ("tsrocket_static_all_features", t_static * 1e3, "ms"),
+                ("tsrocket_sliding_all_features", t_sliding * 1e3, "ms"),
+                ("tsrocket_expanding_all_features", t_expanding * 1e3, "ms"),
                 ("reference_all_features", ref_total, "ms"),
-                ("tsfast_features", len(FEATURES), "count"),
+                ("tsrocket_features", len(FEATURES), "count"),
                 (
                     "referenced_features",
                     int(df["reference"].astype(bool).sum()),

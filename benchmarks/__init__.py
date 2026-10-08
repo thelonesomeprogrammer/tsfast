@@ -1,1 +1,1 @@
-# tsfast benchmark suite
+# tsrocket benchmark suite

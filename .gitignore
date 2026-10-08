@@ -9,7 +9,7 @@ __pycache__/
 
 prev-data
 *.so
-tsfast/*.so
+tsrocket/*.so
 
 # Agent scratch files — keep plans/patch scripts out of the repo
 /plan.md

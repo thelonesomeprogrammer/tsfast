@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import tsfast
+import tsrocket
 
 FEATURES = [
     line.strip()
@@ -68,7 +68,7 @@ def _column(out, feature_idx=0):
 
 def _static(feature, segments):
     """Static result for each segment (all segments must have equal length)."""
-    out = tsfast.Extractor([feature]).process_2d_floats(_batch(*segments))
+    out = tsrocket.Extractor([feature]).process_2d_floats(_batch(*segments))
     return _column(out)
 
 
@@ -89,7 +89,7 @@ def _chunks(x, sizes):
 @pytest.mark.parametrize("feature", _params("sliding"))
 def test_sliding_matches_static(feature, window):
     x = _series()
-    extractor = tsfast.SlidingExtractor([feature], 1, window)
+    extractor = tsrocket.SlidingExtractor([feature], 1, window)
     got = np.concatenate(
         [_column(extractor.update(_batch(c))) for c in _chunks(x, SLIDING_CHUNKS)]
     )
@@ -102,7 +102,7 @@ def test_sliding_matches_static(feature, window):
 @pytest.mark.parametrize("feature", _params("expanding"))
 def test_expanding_matches_static(feature):
     x = _series()[: sum(EXPANDING_CHUNKS)]
-    extractor = tsfast.ExpandingExtractor([feature], 1)
+    extractor = tsrocket.ExpandingExtractor([feature], 1)
     got = np.concatenate(
         [_column(extractor.update(_batch(c))) for c in _chunks(x, EXPANDING_CHUNKS)]
     )
@@ -115,8 +115,8 @@ def test_expanding_matches_static(feature):
 @pytest.mark.parametrize("feature", _params("constant"))
 def test_constant_series_matches_static(feature):
     x = np.full(WINDOW + 10, 2.5, dtype=np.float32)
-    sliding = _column(tsfast.SlidingExtractor([feature], 1, WINDOW).update(_batch(x)))
-    expanding = _column(tsfast.ExpandingExtractor([feature], 1).update(_batch(x)))
+    sliding = _column(tsrocket.SlidingExtractor([feature], 1, WINDOW).update(_batch(x)))
+    expanding = _column(tsrocket.ExpandingExtractor([feature], 1).update(_batch(x)))
     want_window = _static(feature, [x[:WINDOW]])[0]
     np.testing.assert_allclose(
         sliding, want_window, rtol=RTOL, atol=ATOL, equal_nan=True
@@ -131,8 +131,8 @@ def _all_at_once(engine):
     """Every feature in one extractor, so shared state/buffers interact."""
     x = _series()
     if engine == "static":
-        return tsfast.Extractor(FEATURES).process_2d_floats(_batch(x))
-    return tsfast.SlidingExtractor(FEATURES, 1, WINDOW).update(_batch(x))
+        return tsrocket.Extractor(FEATURES).process_2d_floats(_batch(x))
+    return tsrocket.SlidingExtractor(FEATURES, 1, WINDOW).update(_batch(x))
 
 
 @pytest.mark.parametrize("engine", ["static", "sliding"])
@@ -140,9 +140,9 @@ def _all_at_once(engine):
 def test_feature_independent_of_other_features(feature, engine):
     x = _series()
     if engine == "static":
-        alone = tsfast.Extractor([feature]).process_2d_floats(_batch(x))
+        alone = tsrocket.Extractor([feature]).process_2d_floats(_batch(x))
     else:
-        alone = tsfast.SlidingExtractor([feature], 1, WINDOW).update(_batch(x))
+        alone = tsrocket.SlidingExtractor([feature], 1, WINDOW).update(_batch(x))
     together = _column(_all_at_once(engine), FEATURES.index(feature))
     np.testing.assert_allclose(
         together, _column(alone), rtol=RTOL, atol=ATOL, equal_nan=True

@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from tsfast.selection import select_features
+from tsrocket.selection import select_features
 
 
 @pytest.fixture(scope="module")

@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import tsfast
+import tsrocket
 
 
 @pytest.fixture
@@ -16,7 +16,7 @@ def sliding_stream():
 @pytest.mark.benchmark(group="sliding_extraction")
 def test_bench_sliding_window200_stride50(benchmark, sliding_stream, basic_features):
     def run_sliding():
-        ext = tsfast.SlidingExtractor(basic_features, 4, window_size=200, stride=50)
+        ext = tsrocket.SlidingExtractor(basic_features, 4, window_size=200, stride=50)
         for chunk in sliding_stream:
             ext.update(chunk)
 
@@ -25,7 +25,7 @@ def test_bench_sliding_window200_stride50(benchmark, sliding_stream, basic_featu
 
 @pytest.mark.benchmark(group="sliding_extraction")
 def test_bench_sliding_single_chunk_stride50(benchmark, sliding_stream, basic_features):
-    ext = tsfast.SlidingExtractor(basic_features, 4, window_size=200, stride=50)
+    ext = tsrocket.SlidingExtractor(basic_features, 4, window_size=200, stride=50)
     # Prime with initial 4 chunks (200 points)
     for i in range(4):
         ext.update(sliding_stream[i])
