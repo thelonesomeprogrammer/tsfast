@@ -3,7 +3,7 @@ import argparse
 import time
 import numpy as np
 import pandas as pd
-import tsfast
+import tsrocket
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -79,8 +79,8 @@ def run_batched_benchmark(X, initial_size=500, expansion_size=100):
     static_times = []
     expanding_times = []
 
-    static_ext = tsfast.Extractor(FEATURES)
-    exp_ext = tsfast.ExpandingExtractor(FEATURES, n_total_cols)
+    static_ext = tsrocket.Extractor(FEATURES)
+    exp_ext = tsrocket.ExpandingExtractor(FEATURES, n_total_cols)
 
     # Initial 500 points
     # Static
@@ -162,12 +162,12 @@ def run_per_series_benchmark(X, initial_size=500, expansion_size=100):
     print(f"\n--- Running Per-Series Individual Benchmark ({total_samples} series) ---")
     static_step_timings = {}
     expanding_step_timings = {}
-    static_ext = tsfast.Extractor(FEATURES)
+    static_ext = tsrocket.Extractor(FEATURES)
 
     for s_idx, x in enumerate(X):
         if x.shape[1] < initial_size:
             continue
-        exp_ext = tsfast.ExpandingExtractor(FEATURES, len(SIGNAL_COL))
+        exp_ext = tsrocket.ExpandingExtractor(FEATURES, len(SIGNAL_COL))
 
         # Initial
         batch_static = np.ascontiguousarray(x[:, :initial_size], dtype=np.float32)
@@ -216,7 +216,7 @@ def run_per_series_benchmark(X, initial_size=500, expansion_size=100):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="TSFast Expanding Window Real/Synthetic Benchmark"
+        description="TSRocket Expanding Window Real/Synthetic Benchmark"
     )
     parser.add_argument(
         "--data_dir",

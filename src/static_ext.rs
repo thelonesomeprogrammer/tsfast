@@ -57,7 +57,7 @@ impl Extractor {
         let (feature_str, _meta) = crate::types::split_meta(feature_str)
             .map_err(pyo3::exceptions::PyValueError::new_err)?;
         for i in feature_str {
-            let feat = std::str::FromStr::from_str(&i)
+            let feat = Feature::parse_with_fs(&i, fs)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             if let Feature::Paa(total, index) = feat {
                 paa_args.push((total, index));

@@ -1,4 +1,4 @@
-import tsfast
+import tsrocket
 import numpy as np
 
 
@@ -30,7 +30,7 @@ def test_subsequence_features():
         "query_similarity_count-10-1.0",
     ]
 
-    extractor = tsfast.Extractor(features)
+    extractor = tsrocket.Extractor(features)
     batch = np.stack([x.astype(np.float32)])
     out = extractor.process_2d_floats(batch)
     results = out[0]

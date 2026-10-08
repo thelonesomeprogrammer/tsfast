@@ -1,4 +1,4 @@
-//! Ports of the wavelet routines the reference libraries call, so tsfast
+//! Ports of the wavelet routines the reference libraries call, so tsrocket
 //! matches them: `pywt.cwt(x, scales, "mexh")` (TSFEL wavelet features,
 //! tsfresh cwt_coefficients) and `scipy.signal.find_peaks_cwt` with tsfresh's
 //! ricker wavelet (tsfresh number_cwt_peaks). Kernels are built in f64; the mexh convolution runs in f32, the ricker one

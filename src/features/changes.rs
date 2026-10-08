@@ -107,6 +107,13 @@ pub fn eval_changes(feat: &Feature, context: &mut crate::context::FeatureContext
         }
 
         Feature::CidCe => state.sum_sq_diff.sqrt() as f32,
+        // tsfresh cid_ce(normalize=True): cid_ce of the z-normalised series,
+        // 0 for a constant one. min == max is exact in every engine; the
+        // sliding engine's running variance is not.
+        Feature::CidCeNormalized if state.min_value < state.max_value && context.var > 0.0 => {
+            state.sum_sq_diff.max(0.0).sqrt() / context.var.sqrt()
+        }
+        Feature::CidCeNormalized => 0.0,
         Feature::Slope => {
             let mean_i = (n - 1.0) * 0.5;
             let s_xx = (n * (n * n - 1.0)) / 12.0;
@@ -179,12 +186,13 @@ pub fn eval_changes(feat: &Feature, context: &mut crate::context::FeatureContext
             let area: f32 = values.windows(2).map(|w| (w[0] + w[1]).abs()).sum();
             0.5 * area / state.fs
         }
-        Feature::AggLinearTrend(attr, chunk_len, func) if values.len() >= *chunk_len as usize => {
+        Feature::AggLinearTrend(attr, chunk_len, func) => {
             let cl = *chunk_len as usize;
             let mut agg_series = std::mem::take(&mut state.agg_linear_trend_buffer);
             agg_series.clear();
-            // tsfresh aggregates with pandas over ceil(n / chunk_len) chunks,
-            // so the last chunk may be partial and var is ddof=1.
+            let mut chunk_buf = Vec::new(); // only used by AggFunc::Median
+            // tsfresh aggregates numpy chunks over ceil(n / chunk_len) chunks,
+            // so the last chunk may be partial and var is ddof=0.
             for chunk in values.chunks(cl) {
                 let len = chunk.len() as f32;
                 let mean = chunk.iter().sum::<f32>() / len;
@@ -196,16 +204,20 @@ pub fn eval_changes(feat: &Feature, context: &mut crate::context::FeatureContext
                         chunk.iter().copied().fold(f32::INFINITY, f32::min)
                     }
                     crate::types::AggFunc::Mean => mean,
-                    crate::types::AggFunc::Var if chunk.len() > 1 => {
-                        chunk.iter().map(|&v| (v - mean).powi(2)).sum::<f32>() / (len - 1.0)
+                    crate::types::AggFunc::Var => {
+                        chunk.iter().map(|&v| (v - mean).powi(2)).sum::<f32>() / len
                     }
-                    crate::types::AggFunc::Var => f32::NAN,
+                    crate::types::AggFunc::Median => {
+                        chunk_buf.clear();
+                        chunk_buf.extend_from_slice(chunk);
+                        super::median_in_place(&mut chunk_buf)
+                    }
                 };
                 agg_series.push(val);
             }
             let m_n = agg_series.len() as f32;
             if m_n < 2.0 {
-                0.0
+                f32::NAN // tsfresh: linregress on fewer than 2 chunks
             } else {
                 let m_sum_x: f32 = (0..agg_series.len()).map(|i| i as f32).sum();
                 let m_sum_y: f32 = agg_series.iter().sum();

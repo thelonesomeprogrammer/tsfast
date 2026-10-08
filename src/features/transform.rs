@@ -91,7 +91,7 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
             if k < context.welch_density.len() {
                 context.welch_density[k]
             } else {
-                0.0
+                f32::NAN // tsfresh: NaN past the last Welch frequency
             }
         }
         // tsfresh: pywt.cwt(x, widths, "mexh")[widths.index(w), coeff].
@@ -124,6 +124,8 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
                 .unwrap_or_default();
             psd.into_iter().fold(0.0, f32::max)
         }
+        // tsfresh: NaN past the last rfft coefficient (n / 2).
+        Feature::FftCoefficient(coeff, _) if *coeff as usize > context.values.len() / 2 => f32::NAN,
         Feature::FftCoefficient(coeff, attr) => {
             let k = *coeff as usize;
             let (re, im) = if !fft_complex.is_empty() && k < fft_complex.len() {
@@ -135,7 +137,12 @@ pub fn eval_transform(feat: &Feature, context: &mut crate::context::FeatureConte
                 crate::types::FftAttr::Real => re,
                 crate::types::FftAttr::Imag => im,
                 crate::types::FftAttr::Abs => (re * re + im * im).sqrt(),
-                crate::types::FftAttr::Angle => im.atan2(re).to_degrees(),
+                // A real negative coefficient is 180 in numpy; f32 rounding can
+                // leave im = -0.0, which atan2 turns into -180.
+                crate::types::FftAttr::Angle => match im.atan2(re).to_degrees() {
+                    a if a == -180.0 => 180.0,
+                    a => a,
+                },
             }
         }
         Feature::SpectralCentroid => freq_centroid,

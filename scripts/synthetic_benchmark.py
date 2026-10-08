@@ -1,7 +1,7 @@
 import argparse
 import time
 import numpy as np
-import tsfast
+import tsrocket
 
 DEFAULT_FEATURES = [
     "total_sum",
@@ -45,7 +45,7 @@ def run_synthetic_benchmark(
     warmup: bool = True,
 ):
     print("=" * 70)
-    print(f"TSFast ExpandingExtractor Streaming Benchmark")
+    print(f"TSRocket ExpandingExtractor Streaming Benchmark")
     print(f"Columns (Series): {n_cols} | Total Points: {total_len}")
     print(f"Initial Window: {initial_size} | Increment Size: {increment_size}")
     print(f"Features Computed: {len(DEFAULT_FEATURES)}")
@@ -55,14 +55,14 @@ def run_synthetic_benchmark(
     np.random.seed(42)
     data = np.random.randn(n_cols, total_len).astype(np.float32)
 
-    exp_ext = tsfast.ExpandingExtractor(DEFAULT_FEATURES, n_cols)
+    exp_ext = tsrocket.ExpandingExtractor(DEFAULT_FEATURES, n_cols)
 
     # Warmup
     if warmup:
         warmup_batch = np.ascontiguousarray(data[:, :50])
         _ = exp_ext.update(warmup_batch)
         # Re-initialize after warmup
-        exp_ext = tsfast.ExpandingExtractor(DEFAULT_FEATURES, n_cols)
+        exp_ext = tsrocket.ExpandingExtractor(DEFAULT_FEATURES, n_cols)
 
     # Initial batch
     batch_initial = np.ascontiguousarray(data[:, :initial_size])
@@ -109,7 +109,7 @@ def run_synthetic_benchmark(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="TSFast ExpandingExtractor Benchmark")
+    parser = argparse.ArgumentParser(description="TSRocket ExpandingExtractor Benchmark")
     parser.add_argument(
         "--n_cols", type=int, default=10, help="Number of concurrent series"
     )

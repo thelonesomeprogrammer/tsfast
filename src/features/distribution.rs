@@ -138,9 +138,8 @@ pub fn eval_distribution(
         }
 
         Feature::EcdfPercentile(p_bits) => {
-            let p = f32::from_bits(*p_bits);
-            let k = (p * n).floor() as usize;
-            if min_val == max_val && !values.is_empty() {
+            let k = tsfel_ecdf_rank(f32::from_bits(*p_bits), values.len());
+            if tsfel_looks_constant(values) {
                 return Some(values[0]);
             }
             if k == 0 || values.is_empty() {
@@ -164,57 +163,28 @@ pub fn eval_distribution(
             state.hist_counts = counts;
             res
         }
+        // TSFEL counts ECDF *positions* at or below p (x[y <= p].size), not
+        // values at or below the percentile, so ties don't change the count.
         Feature::EcdfPercentileCount(p_bits) => {
-            let p = f32::from_bits(*p_bits);
-            let k = (p * n).floor() as usize;
-            if min_val == max_val && !values.is_empty() {
-                return Some(n); // If constant, the count is the total length
-            }
-            if k == 0 || values.is_empty() {
+            if values.is_empty() {
                 return Some(f32::NAN);
             }
-            let v = if let Some(sorted) = context.running_sorted.filter(|s| !s.is_empty()) {
-                sorted[k - 1]
-            } else {
-                let mut copy: Vec<f32> = std::mem::take(&mut state.sort_buffer);
-                copy.clear();
-                copy.extend_from_slice(values);
-                let (_, val, _) = copy.select_nth_unstable_by(k - 1, f32::total_cmp);
-                let res = *val;
-                state.sort_buffer = copy;
-                res
-            };
-
-            use std::simd::{cmp::SimdPartialOrd, f32x4};
-            let mut count = 0;
-            let chunks = values.chunks_exact(4);
-            let rem = chunks.remainder();
-            let v_simd = f32x4::splat(v);
-
-            for chunk in chunks {
-                let chunk_simd = f32x4::from_slice(chunk);
-                let mask = chunk_simd.simd_le(v_simd);
-                count += mask.to_bitmask().count_ones();
+            if tsfel_looks_constant(values) {
+                return Some(values[0]);
             }
-
-            for &val in rem {
-                if val <= v {
-                    count += 1;
-                }
-            }
-            count as f32
+            tsfel_ecdf_rank(f32::from_bits(*p_bits), values.len()) as f32
         }
         Feature::EcdfSlope(p_init_bits, p_end_bits) => {
             if values.is_empty() {
                 return Some(f32::NAN);
             }
-            if min_val == max_val {
+            if tsfel_looks_constant(values) {
                 return Some(f32::INFINITY);
             }
             let p_init = f32::from_bits(*p_init_bits);
             let p_end = f32::from_bits(*p_end_bits);
-            let k_init = (p_init * n).floor() as usize;
-            let k_end = (p_end * n).floor() as usize;
+            let k_init = tsfel_ecdf_rank(p_init, values.len());
+            let k_end = tsfel_ecdf_rank(p_end, values.len());
             if k_init == 0 || k_end == 0 {
                 return Some(f32::NAN);
             }
@@ -259,15 +229,13 @@ pub fn eval_distribution(
             hist.clear();
             hist.resize(max_bins, 0.0);
 
-            let bin_width = (max_val - min_val) / (max_bins as f32);
-
+            use super::EdgeSide::Histogram;
+            let mut edges = std::mem::take(&mut state.bin_edges);
+            let norm = super::numpy_bin_edges(min_val, max_val, max_bins, Histogram, &mut edges);
             for &val in values {
-                let mut bin = ((val - min_val) / bin_width).floor() as usize;
-                if bin >= max_bins {
-                    bin = max_bins - 1;
-                }
-                hist[bin] += 1.0;
+                hist[super::numpy_bin(val, min_val, norm, &edges, Histogram)] += 1.0;
             }
+            state.bin_edges = edges;
 
             let mut entropy = 0.0_f32;
             for &count in &hist {
@@ -312,11 +280,11 @@ pub fn eval_distribution(
             }
         }
         Feature::IndexMassQuantile(q_bits) => {
-            // tsfresh: first index where the cumulative |x| mass reaches q.
-            let q = f32::from_bits(*q_bits) as f64;
+            // tsfresh: first index where the cumulative |x| mass, cumsum / sum
+            // in f64, reaches q (as the decimal q, so exact ties count).
+            let q = super::decimal_param(f32::from_bits(*q_bits));
             let total: f64 = values.iter().map(|v| v.abs() as f64).sum();
-            let target_mass = q * total;
-            if target_mass <= 0.0 || values.is_empty() {
+            if q * total <= 0.0 || values.is_empty() {
                 0.0
             } else {
                 let mut cum_sum = 0.0;
@@ -324,7 +292,7 @@ pub fn eval_distribution(
                     .iter()
                     .position(|v| {
                         cum_sum += v.abs() as f64;
-                        cum_sum >= target_mass
+                        cum_sum / total >= q
                     })
                     .unwrap_or(values.len() - 1);
                 (idx + 1) as f32 / values.len() as f32
@@ -388,6 +356,7 @@ pub fn eval_distribution(
                     diffs.iter().cloned().fold(f32::NEG_INFINITY, f32::max)
                 }
                 crate::types::AggFunc::Min => diffs.iter().cloned().fold(f32::INFINITY, f32::min),
+                crate::types::AggFunc::Median => super::median_in_place(&mut diffs),
             };
             res
         }
@@ -410,13 +379,8 @@ pub fn eval_distribution(
         Feature::BenfordCorrelation => {
             let mut counts = [0.0; 9];
             for &v in values {
-                let mut abs_v = v.abs();
-                if abs_v > 0.0 {
-                    let first_digit =
-                        (abs_v / 10.0_f32.powf(abs_v.log10().floor())).floor() as usize;
-                    if (1..=9).contains(&first_digit) {
-                        counts[first_digit - 1] += 1.0;
-                    }
+                if let Some(d) = first_significant_digit(v) {
+                    counts[d - 1] += 1.0;
                 }
             }
             let total: f32 = counts.iter().sum();
@@ -445,7 +409,7 @@ pub fn eval_distribution(
         Feature::SumOfReoccurringValues => {
             let mut counts = rustc_hash::FxHashMap::default();
             for &v in values {
-                let bits = v.to_bits();
+                let bits = crate::common::value_key(v);
                 *counts.entry(bits).or_insert(0) += 1;
             }
             counts
@@ -457,7 +421,7 @@ pub fn eval_distribution(
         Feature::SumOfReoccurringDataPoints => {
             let mut counts = rustc_hash::FxHashMap::default();
             for &v in values {
-                let bits = v.to_bits();
+                let bits = crate::common::value_key(v);
                 *counts.entry(bits).or_insert(0) += 1;
             }
             counts
@@ -469,4 +433,54 @@ pub fn eval_distribution(
         _ => return None,
     };
     Some(res)
+}
+
+/// TSFEL's ECDF rank for percentile `p` over `n` samples: the number of
+/// positions j in 1..=n with j / n <= p. `p` arrives as f32 (0.7 is stored as
+/// 0.69999...), so a product within f32 precision of an integer counts as
+/// that integer, as it does for the decimal p TSFEL sees.
+fn tsfel_ecdf_rank(p: f32, n: usize) -> usize {
+    let x = p as f64 * n as f64;
+    let r = x.round();
+    let k = if (x - r).abs() <= x.abs() * f32::EPSILON as f64 { r } else { x.floor() };
+    (k.max(0.0) as usize).min(n)
+}
+
+/// TSFEL's "constant signal" test, `np.sum(np.diff(signal)) == 0`, which is
+/// really `x[0] == x[-1]` (the diffs telescope, exactly for f32 inputs).
+fn tsfel_looks_constant(values: &[f32]) -> bool {
+    values.first().is_some_and(|first| Some(first) == values.last())
+}
+
+/// 10^k for k in 0..=46, enough to scale any f32 to [1, 10).
+const POW10: [f64; 47] = {
+    let mut t = [1.0f64; 47];
+    let mut k = 1;
+    while k < 47 {
+        t[k] = t[k - 1] * 10.0;
+        k += 1;
+    }
+    t
+};
+
+/// First significant decimal digit of `v` (None for 0 and non-finite). tsfresh
+/// reads it off the decimal string, so `v` is taken at the 7 significant
+/// digits an f32 holds: 0.7 is stored as 0.69999999 but its digit is 7.
+#[inline(always)]
+fn first_significant_digit(v: f32) -> Option<usize> {
+    let a = (v as f64).abs();
+    if a == 0.0 || !a.is_finite() {
+        return None;
+    }
+    // floor(log10 a) is floor(e2 * log10 2) or one more; 1233 / 4096 ~ log10 2.
+    let e2 = ((a.to_bits() >> 52) & 0x7ff) as i32 - 1023;
+    let e10 = (e2 * 1233) >> 12;
+    let mut m = if e10 >= 0 { a / POW10[e10 as usize] } else { a * POW10[(-e10) as usize] };
+    if m >= 10.0 {
+        m /= 10.0;
+    }
+    // Within half a unit of the 7th significant digit below the next integer
+    // counts as that integer (0.69999999 -> 7).
+    let d = (m + 5e-7) as usize;
+    Some(if d >= 10 { 1 } else { d })
 }

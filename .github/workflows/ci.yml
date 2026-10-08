@@ -37,7 +37,7 @@ jobs:
           # Every tracked top-level entry must be listed here. A new one is
           # usually an agent's scratch file (plan.md, patch_*.py, result dumps):
           # delete it. If it really belongs at the root, add it to this list.
-          allowed=" .claude .github .gitignore .jules AGENTS.md CLAUDE.md Cargo.lock Cargo.toml README.md benches benchmarks docs missing.md pyproject.toml rust-toolchain.toml scripts src tests tsfast uv.lock "
+          allowed=" .claude .github .gitignore .jules AGENTS.md CLAUDE.md Cargo.lock Cargo.toml README.md benches benchmarks LICENSE docs pyproject.toml rust-toolchain.toml scripts src tests tsrocket uv.lock "
           bad=$(git ls-files | cut -d/ -f1 | sort -u | while read -r f; do
             case "$allowed" in *" $f "*) ;; *) echo "$f" ;; esac
           done)
@@ -50,3 +50,49 @@ jobs:
 
       - name: Build and test
         run: uv run pytest -q
+
+      - name: docs/features.md is up to date
+        run: |
+          uv run python scripts/gen_feature_docs.py
+          git diff --exit-code docs/features.md || {
+            echo "Run: uv run python scripts/gen_feature_docs.py"; exit 1; }
+
+  # Build the abi3 wheel the way users get it and import it with only numpy
+  # installed, on every OS and on the oldest and newest supported Python.
+  wheel-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.10", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist
+      - name: Install wheel with runtime dependencies only
+        shell: bash
+        run: |
+          python -m pip install dist/*.whl
+          python -m pip list
+      - name: Smoke test
+        working-directory: ${{ runner.temp }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import numpy as np, tsrocket
+          x = np.random.default_rng(0).random((3, 256))
+          names = ["mean", "fft_coefficient__attr_\"abs\"__coeff_3", "spectral_centroid"]
+          out = tsrocket.Extractor(names).process_2d_floats(x)
+          assert out.shape == (3, 3) and np.isfinite(out).all(), out
+          s = tsrocket.SlidingExtractor(names, 3, 64, 16).update(x)
+          assert s.shape[0] == 3 and s.shape[2] == 3, s.shape
+          print("ok", out[0])
+          PY

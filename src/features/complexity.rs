@@ -726,6 +726,7 @@ fn lz_complexity_bits(state: &mut crate::common::ColumnState, n: usize) -> f32 {
                 state.lz_binary_trie[curr_node][bit] = new_node;
                 num_substrings += 1;
                 ind += inc;
+                inc = 1; // the next phrase starts fresh, as in tsfresh/TSFEL
                 break;
             }
         }
@@ -738,54 +739,57 @@ fn lz_complexity_bits(state: &mut crate::common::ColumnState, n: usize) -> f32 {
     num_substrings as f32 / n as f32
 }
 
+/// tsfresh's LZ phrase count over `lz_symbol_buffer`, divided by its length:
+/// grow the current phrase until it is new, then start the next one after it.
+/// Phrases live in a flat trie (no allocation per node); the root's children,
+/// visited once per phrase, are a direct table.
 #[inline(always)]
 fn lz_complexity(state: &mut crate::common::ColumnState) -> f32 {
+    use crate::common::LzNode;
     let sequence = &state.lz_symbol_buffer;
+    let nodes = &mut state.lz_trie_nodes;
     let n = sequence.len();
     if n == 0 {
         return 0.0;
     }
-
-    state.lz_trie_nodes.clear();
-    state.lz_trie_nodes.push(Vec::new()); // root node
+    nodes.clear();
+    nodes.push(LzNode::default());
+    let mut root = [0u32; 256];
     let mut num_substrings = 0;
-
     let mut ind = 0;
 
-    // ⚡ Bolt optimization: Maintain tree state (`curr_node`) while walking down the string
-    // instead of restarting from the root node on every single character.
-    // This reduces the complexity from O(N^2) worst-case to O(N).
-    while ind < n {
-        let mut curr_node = 0;
-        let mut inc = 1;
-
-        while ind + inc <= n {
-            let symbol = sequence[ind + inc - 1] as u16;
-
-            // Search children
-            let mut next_node = None;
-            for &(s, child_idx) in &state.lz_trie_nodes[curr_node] {
-                if s == symbol {
-                    next_node = Some(child_idx);
-                    break;
-                }
+    'phrases: while ind < n {
+        let first = sequence[ind];
+        let mut node = root[first as usize];
+        if node == 0 {
+            root[first as usize] = nodes.len() as u32;
+            nodes.push(LzNode { symbol: first, ..LzNode::default() });
+            num_substrings += 1;
+            ind += 1;
+            continue;
+        }
+        let mut inc = 2;
+        loop {
+            if ind + inc > n {
+                break 'phrases; // the rest is a known phrase
             }
-
-            if let Some(child_idx) = next_node {
-                curr_node = child_idx;
+            let symbol = sequence[ind + inc - 1];
+            let mut child = nodes[node as usize].first_child;
+            while child != 0 && nodes[child as usize].symbol != symbol {
+                child = nodes[child as usize].next_sibling;
+            }
+            if child != 0 {
+                node = child;
                 inc += 1;
             } else {
-                let new_node = state.lz_trie_nodes.len();
-                state.lz_trie_nodes.push(Vec::new());
-                state.lz_trie_nodes[curr_node].push((symbol, new_node));
+                let new = nodes.len() as u32;
+                let next_sibling = nodes[node as usize].first_child;
+                nodes.push(LzNode { first_child: 0, next_sibling, symbol });
+                nodes[node as usize].first_child = new;
                 num_substrings += 1;
                 ind += inc;
                 break;
             }
-        }
-
-        if ind + inc > n {
-            break;
         }
     }
 
@@ -849,22 +853,16 @@ fn eval_lempel_ziv_complexity(context: &mut crate::context::FeatureContext, bins
         return lz_complexity(state);
     }
 
-    let bin_width = (max_val - min_val) / bins as f32;
-
+    // tsfresh: searchsorted(np.linspace(min, max, bins + 1)[1:], v, "left"),
+    // in f64 like numpy, so values on an edge land in the same bin.
+    use super::EdgeSide::SearchsortedLeft;
+    let mut edges = std::mem::take(&mut state.bin_edges);
+    let norm = super::numpy_bin_edges(min_val, max_val, bins as usize, SearchsortedLeft, &mut edges);
     for &v in values {
-        // Compute searchsorted equivalent
-        if v <= min_val {
-            state.lz_symbol_buffer.push(0);
-        } else if v >= max_val {
-            state.lz_symbol_buffer.push((bins - 1) as u8);
-        } else {
-            let mut bin_idx = ((v - min_val) / bin_width) as u8;
-            if bin_idx >= bins as u8 {
-                bin_idx = bins as u8 - 1;
-            }
-            state.lz_symbol_buffer.push(bin_idx);
-        }
+        let k = super::numpy_bin(v, min_val, norm, &edges, SearchsortedLeft);
+        state.lz_symbol_buffer.push(k as u8);
     }
+    state.bin_edges = edges;
 
     lz_complexity(state)
 }

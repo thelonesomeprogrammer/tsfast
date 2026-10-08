@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import tsfast
+import tsrocket
 from references import MIN_LENGTH, NO_REFERENCE, REFERENCES
 
 FEATURES = [
@@ -41,7 +41,7 @@ def test_matches_reference(feature, n):
         pytest.skip(f"reference is NaN below {MIN_LENGTH[feature]} samples")
     x = _series(n)
     batch = np.stack([x])
-    got = tsfast.Extractor([feature]).process_2d_floats(batch)[0, 0]
+    got = tsrocket.Extractor([feature]).process_2d_floats(batch)[0, 0]
     _, ref = REFERENCES[feature]
     want = float(ref(x.astype(np.float64)))
     np.testing.assert_allclose(got, want, rtol=RTOL, atol=ATOL, equal_nan=True)

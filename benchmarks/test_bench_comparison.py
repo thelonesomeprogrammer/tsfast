@@ -1,12 +1,12 @@
 import pytest
 import numpy as np
 import pandas as pd
-import tsfast
+import tsrocket
 import tsfresh
 from tsfresh.feature_extraction import extract_features
 import tsfel
 
-COMMON_FEATURES_TSFAST = [
+COMMON_FEATURES_TSROCKET = [
     "mean",
     "variance",
     "std_dev",
@@ -42,7 +42,7 @@ def benchmark_data_50():
 
 
 @pytest.fixture(scope="module")
-def tsfast_input(benchmark_data_50):
+def tsrocket_input(benchmark_data_50):
     return benchmark_data_50  # (n_samples, n_points): one series per row
 
 
@@ -84,11 +84,11 @@ def tsfel_cfg():
 
 
 @pytest.mark.benchmark(group="cross_library_comparison")
-def test_bench_compare_tsfast(benchmark, tsfast_input):
-    extractor = tsfast.Extractor(COMMON_FEATURES_TSFAST)
+def test_bench_compare_tsrocket(benchmark, tsrocket_input):
+    extractor = tsrocket.Extractor(COMMON_FEATURES_TSROCKET)
     # Warmup
-    _ = extractor.process_2d_floats(tsfast_input)
-    benchmark(extractor.process_2d_floats, tsfast_input)
+    _ = extractor.process_2d_floats(tsrocket_input)
+    benchmark(extractor.process_2d_floats, tsrocket_input)
 
 
 @pytest.mark.benchmark(group="cross_library_comparison")

@@ -45,6 +45,7 @@ pub enum Feature {
     MedianDiff,
     MedianAbsDiff,
     CidCe,
+    CidCeNormalized,
     Slope,
     Intercept,
     Paa(u16, u16),
@@ -182,6 +183,7 @@ pub enum AggFunc {
     Min,
     Mean,
     Var,
+    Median,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
@@ -244,6 +246,9 @@ impl Feature {
             Self::MedianDiff => C::empty(),
             Self::MedianAbsDiff => C::empty(),
             Self::CidCe => C::SUM | C::MEAN | C::CID_CE,
+            Self::CidCeNormalized => {
+                C::SUM | C::MEAN | C::VARIANCE | C::STD | C::ENERGY | C::CID_CE | C::MIN | C::MAX
+            }
             Self::Slope => C::SUM | C::MEAN | C::SLOPE,
             Self::Intercept => C::SUM | C::MEAN | C::SLOPE | C::INTERCEPT,
             Self::Paa(_, _) => C::empty(),

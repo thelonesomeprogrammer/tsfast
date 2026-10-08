@@ -1,9 +1,11 @@
 """Type stubs for the Rust extension (src/static_ext.rs, src/sliding.rs, src/expanding.rs).
 
-Feature names are tsfresh/TSFEL names, e.g. ``"mean"``,
-``"energy_ratio_by_chunks_num_segments_3__segment_focus_1"`` or
-``"human_range_energy-100"``. ``tests/feature_samples.txt`` lists one valid
-name per feature. An unknown or invalid name raises ``ValueError``.
+Feature names are tsrocket names (``"mean"``, ``"fft_coeff-3-abs"``,
+``"human_range_energy-100"``), tsfresh column names
+(``'value__fft_coefficient__attr_"abs"__coeff_3'``) or TSFEL column names
+(``"0_Spectral centroid"``, ``"0_Wavelet energy_12.5Hz"``); ``feature_names``
+returns the tsrocket names. docs/features.md lists every feature. An unknown
+or invalid name raises ``ValueError``, suggesting the closest valid name.
 
 ``fs`` (default 100 Hz, TSFEL's default) is the sampling frequency the TSFEL
 frequency-domain features (spectral centroid, roll-off, MFCC, spectrogram,

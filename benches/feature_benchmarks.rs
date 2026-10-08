@@ -1,6 +1,6 @@
 use criterion::{BatchSize, BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use std::time::Duration;
-use tsfast::{ExpandingExtractor, Extractor, SlidingExtractor};
+use tsrocket::{ExpandingExtractor, Extractor, SlidingExtractor};
 
 const FEATURES: &[&str] = &[
     "total_sum",

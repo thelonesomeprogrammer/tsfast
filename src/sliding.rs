@@ -63,7 +63,7 @@ impl SlidingExtractor {
         let (feature_str, meta) = crate::types::split_meta(feature_str)
             .map_err(pyo3::exceptions::PyValueError::new_err)?;
         for i in feature_str {
-            let feat = std::str::FromStr::from_str(&i)
+            let feat = Feature::parse_with_fs(&i, fs)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
             match feat {
                 Feature::Paa(total, _) => {

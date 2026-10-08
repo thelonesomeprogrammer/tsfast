@@ -87,7 +87,7 @@ pub fn eval_min_max(feat: &Feature, context: &mut crate::context::FeatureContext
             let mut unique = rustc_hash::FxHashSet::default();
             let mut has_dup = false;
             for &v in values {
-                if !unique.insert(v.to_bits()) {
+                if !unique.insert(crate::common::value_key(v)) {
                     has_dup = true;
                     break;
                 }

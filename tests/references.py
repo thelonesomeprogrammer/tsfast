@@ -1,14 +1,14 @@
 """Reference implementation for every feature in feature_samples.txt.
 
-REFERENCES maps a tsfast feature name to (library, fn) where fn(x: float64
-array) -> float. tsfast must be within 1% of it (tests/test_references.py).
-When tsfresh and TSFEL define the same quantity differently, tsfast has one
+REFERENCES maps a tsrocket feature name to (library, fn) where fn(x: float64
+array) -> float. tsrocket must be within 1% of it (tests/test_references.py).
+When tsfresh and TSFEL define the same quantity differently, tsrocket has one
 feature per definition, each mapped to its own library.
 
-NO_REFERENCE lists tsfast-specific features, with the reason. Every name in
+NO_REFERENCE lists tsrocket-specific features, with the reason. Every name in
 feature_samples.txt must be in exactly one of the two.
 
-Also used by scripts/coach_benchmark.py to time tsfast against the reference
+Also used by scripts/coach_benchmark.py to time tsrocket against the reference
 libraries per feature.
 """
 
@@ -17,8 +17,9 @@ import pandas as pd
 import stumpy
 import tsfel.feature_extraction.features as F
 import tsfresh.feature_extraction.feature_calculators as fc
+from helpers import tsfresh_default_references
 
-FS = 100.0  # tsfast's default `fs`; test_sampling_frequency monkeypatches it
+FS = 100.0  # tsrocket's default `fs`; test_sampling_frequency monkeypatches it
 
 
 def _matrix_profile(x, window):
@@ -38,7 +39,7 @@ def _permutation_entropy(x, tau, dimension):
 
 def _linear_trend_timewise(x, attr, period_s):
     """tsfresh.linear_trend_timewise on a regular DatetimeIndex with period_s
-    seconds between samples, which is what tsfast assumes."""
+    seconds between samples, which is what tsrocket assumes."""
     ix = pd.date_range("2000-01-01", periods=len(x), freq=pd.Timedelta(seconds=period_s))
     return _one(fc.linear_trend_timewise(pd.Series(x, index=ix), [{"attr": attr}]))
 
@@ -132,7 +133,7 @@ REFERENCES = {
     "ecdf-10": ("tsfel", lambda x: F.ecdf(x, 10)[-1]),
     "ecdf-3": ("tsfel", lambda x: F.ecdf(x, 3)[-1]),
     "ecdf_percentile-0.5": ("tsfel", lambda x: float(F.ecdf_percentile(x, [0.5])[0]) if not np.isscalar(F.ecdf_percentile(x, [0.5])) else float(F.ecdf_percentile(x, [0.5]))),
-    "ecdf_percentile_count-0.5": ("tsfel", lambda x: float(len(x)) if np.max(x) == np.min(x) else float(np.sum(x <= (F.ecdf_percentile(x, [0.5])[0] if not np.isscalar(F.ecdf_percentile(x, [0.5])) else F.ecdf_percentile(x, [0.5]))))),
+    "ecdf_percentile_count-0.5": ("tsfel", lambda x: F.ecdf_percentile_count(x, [0.5])),
     "ecdf_slope-0.2-0.5": ("tsfel", lambda x: F.ecdf_slope(x, 0.2, 0.5)),
     "binned_entropy__max_bins_5": ("tsfresh", lambda x: fc.binned_entropy(x, 5)),
     # ── changes / temporal ──
@@ -142,6 +143,7 @@ REFERENCES = {
     "median_abs_diff": ("tsfel", F.median_abs_diff),
     "abs_sum_change": ("tsfresh", fc.absolute_sum_of_changes),
     "cid_ce": ("tsfresh", lambda x: fc.cid_ce(x, normalize=False)),
+    "cid_ce_normalized": ("tsfresh", lambda x: fc.cid_ce(x, normalize=True)),
     "mean_second_derivative_central": ("tsfresh", fc.mean_second_derivative_central),
     "auc": ("tsfel", lambda x: F.auc(x, FS)),
     "max_frequency": ("tsfel", lambda x: F.max_frequency(x, FS)),
@@ -298,7 +300,7 @@ REFERENCES = {
     "hurst_exponent": ("tsfel", lambda x: getattr(__import__("tsfel.feature_extraction.features", fromlist=["hurst_exponent"]), "hurst_exponent")(x)),
     # tsfresh's matrix_profile needs the unmaintained `matrixprofile` package and
     # picks its own window; stumpy (tsfresh's backend for query_similarity_count)
-    # computes the same z-normalised profile for tsfast's fixed window.
+    # computes the same z-normalised profile for tsrocket's fixed window.
     "matrix_profile-10-min": ("stumpy", lambda x: _matrix_profile(x, 10).min()),
     "matrix_profile-10-max": ("stumpy", lambda x: _matrix_profile(x, 10).max()),
     "matrix_profile-10-mean": ("stumpy", lambda x: _matrix_profile(x, 10).mean()),
@@ -416,10 +418,17 @@ REFERENCES = {
     "human_range_energy": ("tsfel", lambda x: F.human_range_energy(x, FS)),
     "average_power": ("tsfel", lambda x: F.average_power(x, FS)),
     "calc_centroid": ("tsfel", lambda x: F.calc_centroid(x, FS)),
+    # tsfresh/TSFEL defaults tsrocket used to get wrong or lack (see helpers).
+    **{
+        name: ("tsfel" if name.startswith("ecdf") else "tsfresh", fn)
+        for name, fn in tsfresh_default_references().items()
+        if name != "cid_ce_normalized"
+    },
+    "matrix_profile-10-median": ("stumpy", lambda x: np.median(_matrix_profile(x, 10))),
 }
 
 # Lengths below which the reference returns NaN by policy rather than because
-# the feature is undefined; tsfast still returns a value there.
+# the feature is undefined; tsrocket still returns a value there.
 MIN_LENGTH = {
     "higuchi_fd": 160,  # TSFEL FEATURES_MIN_SIZE
     "dfa": 160,
@@ -429,8 +438,8 @@ MIN_LENGTH = {
 
 NO_REFERENCE = {
     "zero_crossing_rate": "zero_cross / n; TSFEL dropped its zero-crossing-rate feature",
-    "zero_crossing_mean": "tsfast-specific: mean spacing between zero crossings",
-    "zero_crossing_std": "tsfast-specific: std of spacing between zero crossings",
+    "zero_crossing_mean": "tsrocket-specific: mean spacing between zero crossings",
+    "zero_crossing_std": "tsrocket-specific: std of spacing between zero crossings",
     "slope_sign_change": "EMG feature (threshold 0); in neither library",
     "turning_points": "local maxima + minima; in neither library",
     "paa-4-1": "piecewise aggregate approximation; in neither library",

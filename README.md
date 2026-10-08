@@ -1,91 +1,166 @@
-# TSFast: Ultra-Fast Time Series Feature Extraction
+# tsrocket
 
-TSFast is a high-performance time-series feature extraction library written in Rust with Python bindings. It is designed for extreme speed, efficient memory usage, and interoperability with Apache Arrow.
+[![PyPI](https://img.shields.io/pypi/v/tsrocket)](https://pypi.org/project/tsrocket/)
+[![Python](https://img.shields.io/pypi/pyversions/tsrocket)](https://pypi.org/project/tsrocket/)
+[![CI](https://github.com/thelonesomeprogrammer/tsrocket/actions/workflows/ci.yml/badge.svg)](https://github.com/thelonesomeprogrammer/tsrocket/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-## Purpose: Deploying TSFresh and TSFEL Features
+**Every [tsfresh](https://github.com/blue-yonder/tsfresh) and
+[TSFEL](https://github.com/fraunhoferportugal/tsfel) time-series feature,
+computed in Rust: the same values, ~90× faster on one core, and incremental
+for streaming data.**
 
-TSFast is meant for **deploying** features, not for finding them. Use
-[tsfresh](https://github.com/blue-yonder/tsfresh) or
-[TSFEL](https://github.com/fraunhoferportugal/tsfel) during research to explore
-and select features. Then pass the selected feature names to TSFast to compute
-the same values in production.
+Explore and select features with tsfresh or TSFEL as usual. To serve the
+model, hand tsrocket the training frame's column names and get the same
+features, in the same order, without tsfresh or TSFEL installed.
 
-- **Same names, same values**: features use the tsfresh/TSFEL names and are
-  tested against both libraries, so a model trained on their output gets the
-  same inputs at inference time.
-- **Built for production**: the Rust engines are orders of magnitude faster
-  (see the benchmarks below). The sliding and expanding engines update
-  incrementally as new data arrives, which suits streaming and low-latency
-  serving.
-- **Small footprint**: the runtime doesn't need tsfresh, TSFEL or their
-  dependency trees.
+```python
+import tsrocket
 
-TSFast implements every tsfresh and TSFEL feature calculator.
+# X_train came from tsfresh.extract_features (or TSFEL); the model was fit on it.
+X = tsrocket.extract_features(live_df, X_train.columns, column_id="id", column_sort="time")
+model.predict(X)
+```
 
-**Sampling assumption**: every series is assumed to be regularly sampled.
-TSFast takes no timestamps, so sample `i` is at time `i / fs`:
+## Install
 
-- TSFEL spectral and time-domain features use `fs = 100` Hz unless the feature
-  takes the sampling frequency as a parameter (e.g. `human_range_energy-100`).
-- tsfresh's `linear_trend_timewise` takes the sampling period in seconds:
-  `linear_trend_timewise-slope-60` matches tsfresh on a regular
-  `DatetimeIndex` with one sample per minute. Irregularly sampled series are
-  not supported; resample them to a regular grid first.
+```sh
+pip install tsrocket
+```
 
-## Key Features
+Prebuilt wheels for Linux, macOS and Windows (x86-64 and ARM), Python 3.10+.
+The only runtime dependency is numpy; pandas is needed only for
+`tsrocket.extract_features`.
 
-- **Blazing Fast**: Core engine implemented in Rust with SIMD (Portable SIMD) for maximum performance.
-- **O(n) Expanding Windows**: Highly optimized algorithms for expanding window feature extraction (prefix statistics).
-- **NumPy In, NumPy Out**: Takes a 2-D array with one series per row (float32 is read in place, no copy) and returns a float32 feature array; `feature_names` labels its columns.
-- **Selective Execution**: Only computes the features you request, using a bitmask-based engine to skip unnecessary calculations.
-- **Python-Friendly**: Simple API based on `Extractor` and `ExpandingExtractor` classes.
+## Speed
 
-## Sliding Windows on Quantized Data
+100 series × 1000 samples on an Intel i7-8750H; the same features and data
+for every library ([`scripts/readme_benchmark.py`](scripts/readme_benchmark.py)):
 
-`SlidingExtractor` updates each window's spectrum incrementally instead of
-running a new FFT, so its frequency bins drift slightly (~1e-6 to 1e-4) from a
-fresh FFT. This only matters when **all** of these hold:
+| Workload | Reference | tsrocket, 1 thread | tsrocket, 12 threads |
+| :--- | ---: | ---: | ---: |
+| tsfresh `ComprehensiveFCParameters`, 783 features | tsfresh: 124 s | 1.39 s (**89×**) | 0.23 s (**548×**) |
+| TSFEL, all domains, 163 features | TSFEL: 29 s | 0.34 s (**84×**) | 0.061 s (**484×**) |
+| Streaming: all 783 features of the latest 256-sample window, per new sample | tsfresh: 220 ms | 0.62 ms (**356×**) | |
 
-- you use `SlidingExtractor`,
-- with `spectral_entropy`, `spectral_positive_turning`,
-  `fundamental_frequency` or `fft_coeff-*-angle` (they compare bins exactly),
-- on quantized data: integer-valued (ADC counts) or especially binary/event
-  signals,
-- with short windows (about 32 samples or less).
+tsfresh ran with `n_jobs=0` and TSFEL in a single process, so the 1-thread
+column is the like-for-like comparison. tsrocket uses every core by default;
+set `RAYON_NUM_THREADS` to limit it.
 
-Then some windows can be badly off (e.g. 8–33% in `spectral_entropy`, or a
-flipped angle). Add the meta feature `"fresh-1"` to the feature list to give
-every window a fresh FFT. This makes the result identical to `Extractor`, at
-1.1× (W=16) to 1.7× (W=1024) the spectrum cost. `"fresh-N"` rebuilds every N
-samples instead: that reduces drift, but only `fresh-1` is exact. It adds no
-output column, and the other engines ignore it.
+## Same values
 
-See [docs/sliding-dft-drift.md](docs/sliding-dft-drift.md) for the
-measurements and a guide to choosing N.
+The test suite (~2,400 tests) runs tsfresh's `ComprehensiveFCParameters`
+and every TSFEL domain, then checks that **every column they produce** parses
+in tsrocket and matches it to within 1%. It also checks that the static,
+sliding and expanding engines agree with each other. See
+[Known differences](#known-differences) for the edge cases float32 can't
+reproduce exactly.
 
-## Benchmarks
+## Usage
 
-![Benchmark Trends](.jules/benchmark_trends.png)
+### Feature names
 
-## Latest Results
-| Date                | CommitHash   | Benchmark_Name                       |   Metric_Value | Unit   |   Delta_From_Last | Direction   |
-|:--------------------|:-------------|:-------------------------------------|---------------:|:-------|------------------:|:------------|
-| 2026-10-05 12:11:10 | f405f4f      | tsfast_sliding_first_window          |        2.72274 | ms     |            -14.01 | 🟢          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfast_sliding_avg_next_50           |        1.16132 | ms     |              2.05 | ⚪          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfast_expanding_first_window        |        1.10626 | ms     |              4.74 | ⚪          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfast_expanding_avg_next_50         |        3.87877 | ms     |              2.01 | ⚪          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfast_static_sliding_first_window   |        1.25408 | ms     |              6.67 | 🔴          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfast_static_sliding_avg_next_50    |        1.3604  | ms     |             10.98 | 🔴          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfast_static_expanding_first_window |        1.17159 | ms     |             -2.31 | ⚪          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfast_static_expanding_avg_next_50  |        5.09623 | ms     |              7.41 | 🔴          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfresh_sliding_first_window         |      137.904   | ms     |              5.7  | 🔴          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfresh_sliding_avg_next_50          |      130.325   | ms     |            -16.18 | 🟢          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfresh_expanding_first_window       |      125.321   | ms     |             -1.56 | ⚪          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfresh_expanding_avg_next_50        |      505.666   | ms     |              2    | ⚪          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfel_sliding_first_window           |      245.412   | ms     |              1.33 | ⚪          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfel_sliding_avg_next_50            |      263.305   | ms     |             10.62 | 🔴          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfel_expanding_first_window         |      424.004   | ms     |             79.11 | 🔴          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfel_expanding_avg_next_50          |      284.2     | ms     |              5.83 | 🔴          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfast_compatible_features           |       46       | count  |              0    | ⚪          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfresh_compatible_features          |       40       | count  |              0    | ⚪          |
-| 2026-10-05 12:11:10 | f405f4f      | tsfel_compatible_features            |       17       | count  |              0    | ⚪          |
+Use whichever spelling you have; [docs/features.md](docs/features.md) lists
+every feature in all three:
+
+| Spelling | Example |
+| :--- | :--- |
+| tsfresh column name | `value__fft_coefficient__attr_"abs"__coeff_3` (the `value__` kind prefix is optional) |
+| TSFEL column name | `0_Spectral centroid`, `0_LPCC_3`, `0_Wavelet energy_12.5Hz` |
+| tsrocket name | `fft_coeff-3-abs`, `spectral_centroid`, `lpcc-3` |
+
+Parameters outside tsfresh's and TSFEL's defaults work too: `fft_coeff-7-angle`,
+`quantile-0.33`, `agg_autocorrelation-median-20`. A misspelled name raises
+`ValueError` and suggests the closest valid one.
+
+### pandas
+
+`tsrocket.extract_features` takes the same inputs as
+`tsfresh.extract_features`: a wide frame with an id column, an optional sort
+column and one column per signal, or a long frame with `column_kind` and
+`column_value`. Each feature name's tsfresh kind (`temp__mean`) or TSFEL
+channel (`temp_Mean`) picks the signal it is computed on.
+
+```python
+X = tsrocket.extract_features(df, ["temp__mean", "pressure__maximum"], column_id="id", column_sort="time")
+```
+
+The result has one row per id and the columns in the order you gave them.
+
+### NumPy
+
+```python
+import numpy as np
+import tsrocket
+
+ext = tsrocket.Extractor(["mean", 'value__fft_coefficient__attr_"abs"__coeff_3', "0_Spectral centroid"], fs=100)
+ext.feature_names                                  # ['mean', 'fft_coeff-3-abs', 'spectral_centroid']
+X = ext.process_2d_floats(np.random.rand(8, 500))  # one series per row -> float32 array of shape (8, 3)
+```
+
+`fs` is the sampling frequency in Hz that the frequency-domain features assume
+(TSFEL's default is 100).
+
+### Streaming
+
+tsfresh and TSFEL recompute every window from scratch. tsrocket's sliding and
+expanding engines update their state as samples arrive, so each new window
+costs a fraction of a full extraction.
+
+```python
+features = ["mean", "std_dev", "spectral_entropy", "0_MFCC_2"]
+
+# Fixed-size windows over 3 sensors: one output row per completed window.
+sliding = tsrocket.SlidingExtractor(features, n_cols=3, window_size=256, stride=16)
+out = sliding.update(np.random.rand(3, 512))  # shape (3, completed windows, 4)
+
+# Everything seen so far, updated in place.
+expanding = tsrocket.ExpandingExtractor(features, n_cols=3)
+out = expanding.update(np.random.rand(3, 100))  # shape (3, 4)
+```
+
+The sliding engine updates its spectrum with a sliding DFT and refreshes it
+periodically; [docs/sliding-dft-drift.md](docs/sliding-dft-drift.md) explains
+the accuracy trade-off and the `fresh-N` option.
+
+### Feature selection
+
+`tsrocket.selection.select_features(X, y)` is tsfresh's FRESH filter: it
+drops constant and highly correlated features, then keeps the significant ones
+under false-discovery-rate control. It needs scipy: `pip install tsrocket[selection]`.
+
+## Known differences
+
+tsrocket computes in float32. A few cases can't match a float64 reference
+exactly:
+
+- **Exact equality.** Two distinct float64 values can round to the same
+  float32, which changes `has_duplicate`, the `*_reoccurring_*` features and
+  `value_count`. With random float64 data this affected about 1 series in 60
+  of length 150.
+- **Bin edges.** A value that lies exactly on a bin edge in float64 can
+  land in the neighbouring bin after rounding (`lempel_ziv_complexity`,
+  `binned_entropy`).
+- **Ties in `permutation_entropy`.** tsfresh ranks tied values with numpy's
+  unstable sort, so its own result depends on the CPU. tsrocket breaks ties
+  by position.
+- **Ill-conditioned fits.** `max_langevin_fixed_point`, and an
+  `agg_linear_trend` rvalue near zero, can differ by more than 1% when the
+  underlying polynomial or regression is badly conditioned.
+
+## Development
+
+```sh
+uv sync          # needs nightly Rust; rust-toolchain.toml pins it
+uv run pytest    # rebuilds the extension when src/ changes
+cargo test
+```
+
+[AGENTS.md](AGENTS.md) describes the layout and the checklist for adding a
+feature. Benchmark history is in [benchmarks/README.md](benchmarks/README.md).
+
+tsrocket was called tsfast until version 0.1; the name was taken on PyPI.
+
+## License
+
+[GPL-3.0-or-later](LICENSE).

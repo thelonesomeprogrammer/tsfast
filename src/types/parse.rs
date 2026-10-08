@@ -16,6 +16,9 @@ macro_rules! unit_features {
             }
         }
 
+        /// Canonical name of every unit variant, for "did you mean" hints.
+        const UNIT_NAMES: &[&str] = &[$($name),*];
+
         /// Every unit variant, for the coverage/round-trip tests.
         #[cfg(test)]
         pub(crate) const UNIT_FEATURES: &[Feature] = &[$(Feature::$variant),*];
@@ -69,6 +72,7 @@ unit_features! {
     MedianDiff => "median_diff";
     MedianAbsDiff => "median_abs_diff";
     CidCe => "cid_ce";
+    CidCeNormalized => "cid_ce_normalized";
     Slope => "slope";
     Intercept => "intercept";
     AbsSumChange => "abs_sum_change";
@@ -160,10 +164,34 @@ pub fn split_meta(names: Vec<String>) -> Result<(Vec<String>, MetaFeatures), Str
 
 impl std::str::FromStr for Feature {
     type Err = String;
+    /// A tsrocket, tsfresh or TSFEL feature name. TSFEL names with a
+    /// frequency suffix need the sampling frequency: see `parse_with_fs`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s, None)
+    }
+}
+
+impl Feature {
+    /// Like `FromStr`, and also accepts TSFEL names whose suffix is a
+    /// frequency (`0_Wavelet energy_12.5Hz`), which depend on `fs`.
+    pub fn parse_with_fs(s: &str, fs: f32) -> Result<Self, String> {
+        Self::parse(s, Some(fs))
+    }
+
+    fn parse(s: &str, fs: Option<f32>) -> Result<Self, String> {
+        parse_native(s)
+            .or_else(|| super::compat::translate(s, fs).and_then(|name| parse_native(&name)))
+            .ok_or_else(|| unknown_feature(s))
+    }
+}
+
+/// A tsrocket feature name (canonical or alias), without tsfresh/TSFEL
+/// translation.
+fn parse_native(s: &str) -> Option<Feature> {
+    {
         // 1. Unit features (table below)
         if let Some(f) = parse_unit(s) {
-            return Ok(f);
+            return Some(f);
         }
 
         // 2. Exact matches with fixed parameters
@@ -177,55 +205,55 @@ impl std::str::FromStr for Feature {
                         if let (Ok(num), Ok(focus)) = (num_s.parse::<u16>(), focus_s.parse::<u16>())
                         {
                             if focus < num {
-                                return Ok(Feature::EnergyRatioByChunks(num, focus));
+                                return Some(Feature::EnergyRatioByChunks(num, focus));
                             }
                         }
                     }
                 }
             }
             "augmented_dickey_fuller-teststat" => {
-                return Ok(Feature::AugmentedDickeyFuller(AdfAttr::TestStat));
+                return Some(Feature::AugmentedDickeyFuller(AdfAttr::TestStat));
             }
             "augmented_dickey_fuller-pvalue" => {
-                return Ok(Feature::AugmentedDickeyFuller(AdfAttr::PValue));
+                return Some(Feature::AugmentedDickeyFuller(AdfAttr::PValue));
             }
             "augmented_dickey_fuller-usedlag" => {
-                return Ok(Feature::AugmentedDickeyFuller(AdfAttr::UsedLag));
+                return Some(Feature::AugmentedDickeyFuller(AdfAttr::UsedLag));
             }
             "human_range_energy" => {
-                return Ok(Feature::HumanRangeEnergy(None));
+                return Some(Feature::HumanRangeEnergy(None));
             }
             "hist_mode" => {
-                return Ok(Feature::HistMode(10)); // TSFEL default nbins=10
+                return Some(Feature::HistMode(10)); // TSFEL default nbins=10
             }
             // TSFEL's neighbourhood_peaks is tsfresh's number_peaks under another name.
             "neighbourhood_peaks" => {
-                return Ok(Feature::NumberPeaks(10)); // TSFEL default n=10
+                return Some(Feature::NumberPeaks(10)); // TSFEL default n=10
             }
             "average_power" => {
-                return Ok(Feature::AveragePower(None));
+                return Some(Feature::AveragePower(None));
             }
             "calc_centroid" => {
-                return Ok(Feature::CalcCentroid(None));
+                return Some(Feature::CalcCentroid(None));
             }
             _ => {}
         }
 
         // 3. Parameterized features (prefix-based)
         if let Some(f) = parse_parameterized(s) {
-            return Ok(f);
+            return Some(f);
         }
 
         // 4. Legacy tsfresh format
         if let Some(f) = parse_legacy_format(s) {
-            return Ok(f);
+            return Some(f);
         }
 
         if s.starts_with("query_similarity_count-") {
             let parts: Vec<&str> = s.split("-").collect();
             if parts.len() == 3 {
                 if let (Ok(l), Ok(t)) = (parts[1].parse::<u16>(), parts[2].parse::<f32>()) {
-                    return Ok(Feature::QuerySimilarityCount(l, t.to_bits()));
+                    return Some(Feature::QuerySimilarityCount(l, t.to_bits()));
                 }
             }
         }
@@ -234,13 +262,69 @@ impl std::str::FromStr for Feature {
             if parts.len() == 3 {
                 if let Ok(l) = parts[1].parse::<u16>() {
                     if let Some(agg) = parse_agg_func(parts[2]) {
-                        return Ok(Feature::MatrixProfile(l, agg));
+                        return Some(Feature::MatrixProfile(l, agg));
                     }
                 }
             }
         }
-        Err(format!("Unknown feature: {}", s))
+        None
     }
+}
+
+// ─── Errors ─────────────────────────────────────────────────────────────────
+
+/// Prefixes of the `name-param...` features, for "did you mean" hints.
+const PARAMETERIZED_NAMES: &[&str] = &[
+    "agg_autocorrelation", "agg_linear_trend", "approx_entropy", "ar_coefficient",
+    "augmented_dickey_fuller", "autocorr", "average_power", "c3", "calc_centroid",
+    "change_quantiles", "count_above", "count_below", "ecdf", "ecdf_percentile",
+    "ecdf_percentile_count", "ecdf_slope", "fft_aggregated", "fft_coeff", "fourier_entropy",
+    "friedrich_coefficients", "hist_mode", "human_range_energy", "index_mass_quantile",
+    "large_standard_deviation", "lempel_ziv_complexity", "linear_trend",
+    "linear_trend_timewise", "lpcc", "matrix_profile", "max_langevin_fixed_point",
+    "mean_n_absolute_max", "mfcc", "mse", "neighbourhood_peaks", "paa", "partial_autocorr",
+    "permutation_entropy", "quantile", "query_similarity_count", "range_count",
+    "ratio_beyond_r_sigma", "spectrogram", "spectrogram_mean_coeff", "symmetry_looking",
+    "time_reversal_asymmetry", "value_count", "wavelet", "wavelet_abs_mean",
+    "wavelet_energy", "wavelet_std", "wavelet_var",
+];
+
+const FEATURE_LIST_URL: &str =
+    "https://github.com/thelonesomeprogrammer/tsrocket/blob/master/docs/features.md";
+
+fn unknown_feature(s: &str) -> String {
+    let head = s.split('-').next().unwrap_or(s);
+    let best = UNIT_NAMES
+        .iter()
+        .map(|&n| (edit_distance(s, n), n.to_string()))
+        .chain(
+            PARAMETERIZED_NAMES
+                .iter()
+                .map(|&n| (edit_distance(head, n), format!("{n}-..."))),
+        )
+        .min();
+    match best {
+        Some((d, name)) if d > 0 && d <= (s.len() / 4).max(2) => {
+            format!("Unknown feature: {s} (did you mean `{name}`?). Valid names: {FEATURE_LIST_URL}")
+        }
+        _ => format!("Unknown feature: {s}. Valid names: {FEATURE_LIST_URL}"),
+    }
+}
+
+/// Levenshtein distance between two short ASCII-ish names.
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut diag = row[0];
+        row[0] = i + 1;
+        for (j, &cb) in b.iter().enumerate() {
+            let next = (diag + usize::from(ca != cb)).min(row[j] + 1).min(row[j + 1] + 1);
+            diag = row[j + 1];
+            row[j + 1] = next;
+        }
+    }
+    row[b.len()]
 }
 
 // ─── Parameterized parsers ──────────────────────────────────────────────────
@@ -274,7 +358,8 @@ fn parse_parameterized(s: &str) -> Option<Feature> {
     }
     if let Some(arg) = s.strip_prefix("lempel_ziv_complexity-") {
         let bins: u16 = arg.trim().parse().ok()?;
-        if bins >= 2 {
+        // Symbols are stored as u8.
+        if (2..=256).contains(&bins) {
             return Some(Feature::LempelZivComplexity(bins));
         } else {
             return None;
@@ -568,110 +653,20 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
         }
         return Some(Feature::NumberPeaks(n));
     }
-    if s.contains("c3__lag_") {
-        let pos = s.find("lag_")?;
-        let n: u16 = s[pos + 4..].parse().ok()?;
-        return Some(Feature::C3(n));
-    }
-    if s.contains("time_reversal_asymmetry_statistic__lag_") {
-        let pos = s.find("lag_")?;
-        let n: u16 = s[pos + 4..].parse().ok()?;
-        return Some(Feature::TimeReversalAsymmetry(n));
-    }
-    if s.contains("linear_trend__attr_") && !s.contains("agg_linear_trend__attr_") {
-        let attr = if s.contains("attr_\"slope\"") {
-            AggAttr::Slope
-        } else if s.contains("attr_\"intercept\"") {
-            AggAttr::Intercept
-        } else if s.contains("attr_\"stderr\"") {
-            AggAttr::Stderr
-        } else if s.contains("attr_\"rvalue\"") {
-            AggAttr::RValue
-        } else if s.contains("attr_\"pvalue\"") {
-            AggAttr::PValue
-        } else {
-            AggAttr::Slope
-        };
-        return Some(Feature::LinearTrend(attr));
-    }
-    if s.contains("agg_linear_trend__attr_") {
-        let attr = if s.contains("attr_\"slope\"") {
-            AggAttr::Slope
-        } else if s.contains("attr_\"intercept\"") {
-            AggAttr::Intercept
-        } else if s.contains("attr_\"stderr\"") {
-            AggAttr::Stderr
-        } else if s.contains("attr_\"rvalue\"") {
-            AggAttr::RValue
-        } else if s.contains("attr_\"pvalue\"") {
-            AggAttr::PValue
-        } else {
-            AggAttr::Slope
-        };
-        let chunk_len = if let Some(pos) = s.find("chunk_len_") {
-            let sub = &s[pos + 10..];
-            let end = sub.find("__").unwrap_or(sub.len());
-            sub[..end].parse::<u16>().unwrap_or(5)
-        } else {
-            5
-        };
-        if chunk_len == 0 {
-            return None;
-        }
-        let func = if s.contains("f_agg_\"mean\"") {
-            AggFunc::Mean
-        } else if s.contains("f_agg_\"var\"") {
-            AggFunc::Var
-        } else if s.contains("f_agg_\"max\"") {
-            AggFunc::Max
-        } else if s.contains("f_agg_\"min\"") {
-            AggFunc::Min
-        } else {
-            AggFunc::Mean
-        };
-        return Some(Feature::AggLinearTrend(attr, chunk_len, func));
-    }
     if s.starts_with("change_quantiles-") {
         let parts: Vec<&str> = s.split('-').collect();
-        if parts.len() == 5 {
-            let ql = parts[1].parse::<f32>().unwrap_or(0.0).to_bits();
-            let qh = parts[2].parse::<f32>().unwrap_or(1.0).to_bits();
-            let isabs = parts[3].to_lowercase() == "true";
-            let func = parse_agg_func(parts[4]).unwrap_or(AggFunc::Mean);
-            return Some(Feature::ChangeQuantiles(ql, qh, isabs, func));
+        if parts.len() != 5 {
+            return None;
         }
-    }
-    if s.contains("value__quantile__q_") {
-        let pos = s.find("q_")?;
-        let q: f32 = s[pos + 2..].parse().ok()?;
-        return Some(Feature::Quantile(q.to_bits()));
-    }
-    if s.contains("value__index_mass_quantile__q_") {
-        let pos = s.find("q_")?;
-        let q: f32 = s[pos + 2..].parse().ok()?;
-        return Some(Feature::IndexMassQuantile(q.to_bits()));
-    }
-    if s.contains("value__max_langevin_fixed_point__m_") {
-        let m = if let Some(pos) = s.find("m_") {
-            let sub = &s[pos + 2..];
-            let end = sub.find("__").unwrap_or(sub.len());
-            sub[..end].parse::<u8>().unwrap_or(3)
-        } else {
-            3
+        let ql = parts[1].parse::<f32>().ok()?.to_bits();
+        let qh = parts[2].parse::<f32>().ok()?.to_bits();
+        let isabs = match parts[3] {
+            "True" | "true" => true,
+            "False" | "false" => false,
+            _ => return None,
         };
-        let r = if let Some(pos) = s.find("r_") {
-            let sub = &s[pos + 2..];
-            let end = sub.find("__").unwrap_or(sub.len());
-            sub[..end].parse::<f32>().unwrap_or(30.0)
-        } else {
-            30.0
-        };
-        return Some(Feature::MaxLangevinFixedPoint(m, r.to_bits()));
-    }
-    if s.contains("value__mean_n_absolute_max__number_of_maxima_") {
-        let pos = s.find("number_of_maxima_")?;
-        let n: u16 = s[pos + 17..].parse().ok()?;
-        return Some(Feature::MeanNAbsoluteMax(n));
+        let func = parse_agg_func(parts[4])?;
+        return Some(Feature::ChangeQuantiles(ql, qh, isabs, func));
     }
     if let Some(arg) = s.strip_prefix("spkt_welch_density__coeff_") {
         let coeff: u16 = arg.parse().ok()?;
@@ -749,11 +744,6 @@ fn parse_legacy_format(s: &str) -> Option<Feature> {
             return None;
         }
     }
-    if s.contains("value__ratio_beyond_r_sigma__r_") {
-        let pos = s.find("r_")?;
-        let r: f32 = s[pos + 2..].parse().ok()?;
-        return Some(Feature::RatioBeyondRSigma(r.to_bits()));
-    }
     None
 }
 
@@ -776,6 +766,7 @@ fn parse_agg_func(s: &str) -> Option<AggFunc> {
         "min" => Some(AggFunc::Min),
         "mean" => Some(AggFunc::Mean),
         "var" => Some(AggFunc::Var),
+        "median" => Some(AggFunc::Median),
         _ => None,
     }
 }
@@ -819,6 +810,7 @@ impl Feature {
                     AggFunc::Min => "min",
                     AggFunc::Mean => "mean",
                     AggFunc::Var => "var",
+                    AggFunc::Median => "median",
                 };
                 format!("agg_autocorrelation-{}-{}", func_str, maxlag)
             }
@@ -891,6 +883,7 @@ impl Feature {
                     AggFunc::Min => "min",
                     AggFunc::Mean => "mean",
                     AggFunc::Var => "var",
+                    AggFunc::Median => "median",
                 };
                 format!("agg_linear_trend-{}-{}-{}", attr_str, chunk_len, func_str)
             }
@@ -900,6 +893,7 @@ impl Feature {
                     AggFunc::Min => "min",
                     AggFunc::Mean => "mean",
                     AggFunc::Var => "var",
+                    AggFunc::Median => "median",
                 };
                 format!(
                     "change_quantiles-{}-{}-{}-{}",
@@ -925,6 +919,7 @@ impl Feature {
                     AggFunc::Max => "max",
                     AggFunc::Mean => "mean",
                     AggFunc::Var => "var",
+                    AggFunc::Median => "median",
                 };
                 format!("matrix_profile-{}-{}", l, agg_str)
             }

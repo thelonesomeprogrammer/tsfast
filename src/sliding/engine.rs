@@ -72,7 +72,7 @@ impl<'a> SlidingEngine<'a> {
             .intersects(crate::types::Compute::REOCCUR_RATIOS)
         {
             for &val in new_slice {
-                let bits = val.to_bits();
+                let bits = crate::common::value_key(val);
                 let count = state.value_counts.entry(bits).or_insert(0);
                 *count += 1;
                 if *count == 2 {
@@ -84,7 +84,7 @@ impl<'a> SlidingEngine<'a> {
             }
 
             for &val in old_slice {
-                let old_bits = val.to_bits();
+                let old_bits = crate::common::value_key(val);
                 let count = state.value_counts.entry(old_bits).or_insert(0);
                 if *count == 2 {
                     state.reoccurring_values -= 1;
@@ -144,7 +144,7 @@ impl<'a> SlidingEngine<'a> {
             .compute
             .intersects(crate::types::Compute::REOCCUR_RATIOS)
         {
-            let bits = new_val.to_bits();
+            let bits = crate::common::value_key(new_val);
             let count = state.value_counts.entry(bits).or_insert(0);
             *count += 1;
             if *count == 2 {
@@ -154,7 +154,7 @@ impl<'a> SlidingEngine<'a> {
                 state.reoccurring_datapoints += 1;
             }
 
-            let old_bits = old_val.to_bits();
+            let old_bits = crate::common::value_key(old_val);
             let count = state.value_counts.entry(old_bits).or_insert(0);
             if *count == 2 {
                 state.reoccurring_values -= 1;
@@ -249,7 +249,7 @@ impl<'a> SlidingEngine<'a> {
                 {
                     let arr = chunk.to_array();
                     for &val in &arr {
-                        let bits = val.to_bits();
+                        let bits = crate::common::value_key(val);
                         let count = state.value_counts.entry(bits).or_insert(0);
                         *count += 1;
                         if *count == 2 {
@@ -320,7 +320,7 @@ impl<'a> SlidingEngine<'a> {
                     .compute
                     .intersects(crate::types::Compute::REOCCUR_RATIOS)
             {
-                let bits = val.to_bits();
+                let bits = crate::common::value_key(val);
                 let count = state.value_counts.entry(bits).or_insert(0);
                 *count += 1;
                 if *count == 2 {

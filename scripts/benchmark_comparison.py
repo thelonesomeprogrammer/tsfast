@@ -2,7 +2,7 @@ import time
 import warnings
 import numpy as np
 import pandas as pd
-import tsfast
+import tsrocket
 import tsfel
 from tsfresh.feature_extraction import extract_features
 from sklearn.ensemble import RandomForestClassifier
@@ -62,10 +62,10 @@ def generate_synthetic_data(n_samples=1000, n_points=1000):
     return np.array(X), np.array(y)
 
 
-def benchmark_tsfast_batched(X):
+def benchmark_tsrocket_batched(X):
     """Idiomatic production mode: batch of N series passed to Rust with Rayon parallelism."""
     n_samples, n_points = X.shape
-    extractor = tsfast.Extractor(ALL_TOP)
+    extractor = tsrocket.Extractor(ALL_TOP)
 
     # One series per row
     batch = np.ascontiguousarray(X, dtype=np.float32)
@@ -80,10 +80,10 @@ def benchmark_tsfast_batched(X):
     return extracted, extraction_time
 
 
-def benchmark_tsfast_iterative(X):
+def benchmark_tsrocket_iterative(X):
     """Iterative mode: processing each series individually."""
     n_samples = len(X)
-    extractor = tsfast.Extractor(ALL_TOP)
+    extractor = tsrocket.Extractor(ALL_TOP)
 
     # Pre-build single-series batches to measure extractor throughput
     batches = [
@@ -182,12 +182,12 @@ if __name__ == "__main__":
         f"Dataset Shape: {X_raw.shape} ({len(X_raw)} series of {X_raw.shape[1]} points)"
     )
 
-    print("\n1. Benchmarking tsfast (Batched, Rayon parallel, 21 Top Features)...")
-    feats_tsfast_batch, time_tsfast_batch = benchmark_tsfast_batched(X_raw)
-    acc_tsfast_batch = evaluate_ml(feats_tsfast_batch, y, "tsfast-batched")
+    print("\n1. Benchmarking tsrocket (Batched, Rayon parallel, 21 Top Features)...")
+    feats_tsrocket_batch, time_tsrocket_batch = benchmark_tsrocket_batched(X_raw)
+    acc_tsrocket_batch = evaluate_ml(feats_tsrocket_batch, y, "tsrocket-batched")
 
-    print("\n2. Benchmarking tsfast (Iterative single-batch, 21 Top Features)...")
-    feats_tsfast_iter, time_tsfast_iter = benchmark_tsfast_iterative(X_raw)
+    print("\n2. Benchmarking tsrocket (Iterative single-batch, 21 Top Features)...")
+    feats_tsrocket_iter, time_tsrocket_iter = benchmark_tsrocket_iterative(X_raw)
 
     print("\n3. Benchmarking tsfresh (n_jobs=4, 21 Matching Features)...")
     feats_tsfresh, time_tsfresh = benchmark_tsfresh(X_raw)
@@ -203,15 +203,15 @@ if __name__ == "__main__":
     )
     print("-" * 78)
     print(
-        f"{'tsfast (Batched, Rayon)':<30} | {feats_tsfast_batch.shape[1]:<8} | {time_tsfast_batch:<10.4f} | {acc_tsfast_batch:<8.4f} | {'baseline'}"
+        f"{'tsrocket (Batched, Rayon)':<30} | {feats_tsrocket_batch.shape[1]:<8} | {time_tsrocket_batch:<10.4f} | {acc_tsrocket_batch:<8.4f} | {'baseline'}"
     )
     print(
-        f"{'tsfast (Iterative)':<30} | {feats_tsfast_iter.shape[1]:<8} | {time_tsfast_iter:<10.4f} | {acc_tsfast_batch:<8.4f} | {time_tsfast_iter / time_tsfast_batch:.1f}x slower"
+        f"{'tsrocket (Iterative)':<30} | {feats_tsrocket_iter.shape[1]:<8} | {time_tsrocket_iter:<10.4f} | {acc_tsrocket_batch:<8.4f} | {time_tsrocket_iter / time_tsrocket_batch:.1f}x slower"
     )
     print(
-        f"{'tsfresh (n_jobs=4)':<30} | {feats_tsfresh.shape[1]:<8} | {time_tsfresh:<10.4f} | {acc_tsfresh:<8.4f} | {time_tsfresh / time_tsfast_batch:.1f}x slower"
+        f"{'tsfresh (n_jobs=4)':<30} | {feats_tsfresh.shape[1]:<8} | {time_tsfresh:<10.4f} | {acc_tsfresh:<8.4f} | {time_tsfresh / time_tsrocket_batch:.1f}x slower"
     )
     print(
-        f"{'TSFEL (subsampled 6 feats)':<30} | {feats_tsfel.shape[1]:<8} | {time_tsfel:<10.4f} | {acc_tsfel:<8.4f} | {time_tsfel / time_tsfast_batch:.1f}x slower"
+        f"{'TSFEL (subsampled 6 feats)':<30} | {feats_tsfel.shape[1]:<8} | {time_tsfel:<10.4f} | {acc_tsfel:<8.4f} | {time_tsfel / time_tsrocket_batch:.1f}x slower"
     )
     print("=" * 78)

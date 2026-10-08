@@ -223,7 +223,7 @@ it, because they always run a fresh FFT. In `ExpandingExtractor`,
 wins.
 
 ```python
-from tsfast import SlidingExtractor
+from tsrocket import SlidingExtractor
 
 ext = SlidingExtractor(["spectral_entropy", "fft_coeff-2-angle", "fresh-1"], n_cols=1, window_size=16)
 ext.feature_names  # ['spectral_entropy', 'fft_coeff-2-angle']
@@ -247,10 +247,10 @@ explains every "→ **0**" in tables 1 and 2.
 `fresh-1` makes sliding equal static, not static equal to TSFEL. The static
 engine's `spectral_entropy` has its own known differences from TSFEL on short
 series. TSFEL counts a bin of float residue (~1e-30) as non-zero, and whether
-numpy leaves such a residue depends on its rounding. tsfast predicts the DC
+numpy leaves such a residue depends on its rounding. tsrocket predicts the DC
 bin's residue from whether the f64 mean is exact (`f64_mean_is_exact` in
 `src/spectral.rs`). The cases it can't predict are the strict `xfail` tests in
-`tests/test_tsfast.py` (`test_spectral_entropy_residue_bins_known_misses`).
+`tests/test_static.py` (`test_spectral_entropy_residue_bins_known_misses`).
 
 ## How these numbers were measured
 
