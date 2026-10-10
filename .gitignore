@@ -20,3 +20,4 @@ tsrocket/*.so
 
 # Personal Claude Code settings (the shared ones are .claude/settings.json)
 .claude/settings.local.json
+.coverage
