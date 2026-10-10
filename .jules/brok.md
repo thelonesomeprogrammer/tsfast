@@ -14,3 +14,6 @@
 ## 2026-10-07 - Boundary validations for legacy tsfresh features
 **Learning:** Boundary validation (e.g., checking for `0`) must be applied in both the prefix-based `parse_parameterized` function and the `parse_legacy_format` function in `src/types/parse.rs` to ensure legacy features do not bypass safety checks.
 **Action:** When adding validations for parameterized string parsing at the FFI boundary, search the codebase for alternative parsing pathways (like `parse_legacy_format`) to ensure the validation is universally enforced.
+## 2026-10-08 - Uncovered Python Exceptions in DataFrame Parsing
+**Learning:** During test gap analysis on the Python-facing `extract_features` interface (`tsrocket/_pandas.py`), boundary errors related to missing dataframe columns (e.g., `column_id` not found or no signal columns available) were unexercised by the test suite. If an incorrect column name was passed, the system's intended graceful `ValueError` would be triggered but was never formally asserted, leaving a blind spot for future refactoring.
+**Action:** Always verify that explicit `raise ValueError` guard clauses at user-facing boundary layers (like parsing parameters or matching dataframe columns) have direct, dedicated tests ensuring they trigger correctly with precise error messages.

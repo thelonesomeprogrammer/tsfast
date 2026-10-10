@@ -211,3 +211,27 @@ def test_extract_features_input_formats():
         tsrocket.extract_features(df, ["mean"], column_sort="time")
     with pytest.raises(ValueError, match="column_value"):
         tsrocket.extract_features(long, ["value__mean"], column_kind="kind")
+
+def test_extract_features_edge_cases():
+    df = pd.DataFrame({
+        "id": [1, 1, 2, 2],
+        "time": [1, 2, 1, 2],
+        "temp": [1.0, 2.0, 3.0, 4.0]
+    })
+
+    # Missing column_id
+    with pytest.raises(ValueError, match="is not a column"):
+        tsrocket.extract_features(df, ["mean"], column_id="missing_id")
+
+    # column_value provided but column_kind is not
+    result = tsrocket.extract_features(df, ["mean"], column_id="id", column_sort="time", column_value="temp")
+    assert list(result.columns) == ["mean"]
+    assert len(result) == 2
+
+    # No signal columns
+    df_no_signals = pd.DataFrame({
+        "id": [1, 1],
+        "time": [1, 2]
+    })
+    with pytest.raises(ValueError, match="no signal columns to compute features on"):
+        tsrocket.extract_features(df_no_signals, ["mean"], column_id="id", column_sort="time")
