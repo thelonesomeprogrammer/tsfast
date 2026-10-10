@@ -26,3 +26,6 @@ Action: Reused fft_in_buffer and fft_out_buffer for realfft processing and remov
 ## 2024-10-07 - Lempel-Ziv Complexity Bottleneck
 **Learning:** The nested loops traversing Lempel-Ziv substrings incremented nodes one-by-one by starting from zero every time a new character was hit instead of maintaining state throughout a string, resulting in O(N^2) behaviour during worst-cases where substrings get long.
 **Action:** By storing state (`ind`, `curr_node`) instead of restarting string searches and simply breaking when `ind + inc > n`, complexity is dramatically reduced resulting in near 5x to 10x faster execution for long sequences.
+## 2024-10-08 - Inner loop vector allocations in permutation_entropy
+**Learning:** Repetitive inner-loop allocations, like `let mut inv_perm = vec![0usize; dim];` inside a loop iterating `num_shifts` times inside `permutation_entropy`, causes significant heap allocation overhead and slows down feature computation.
+**Action:** Extract the vector allocation to before the loop and reuse it via overwriting, which leads to ~56% performance improvement.

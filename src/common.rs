@@ -589,6 +589,7 @@ pub fn permutation_entropy(data: &[f32], tau: u32, dimension: u32) -> f32 {
 
     let mut counts = rustc_hash::FxHashMap::default();
     let mut perm_indices = vec![0usize; dim];
+    let mut inv_perm = vec![0usize; dim];
 
     for shift in 0..num_shifts {
         let start = shift * tau;
@@ -610,7 +611,6 @@ pub fn permutation_entropy(data: &[f32], tau: u32, dimension: u32) -> f32 {
             }
         });
 
-        let mut inv_perm = vec![0usize; dim];
         for (rank, &idx) in perm_indices.iter().enumerate() {
             inv_perm[idx] = rank;
         }
